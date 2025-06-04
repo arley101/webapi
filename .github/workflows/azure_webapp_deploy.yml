@@ -1,0 +1,47 @@
+name: Deploy EliteDynamicsAPI to Azure Web App
+
+on:
+  push:
+    branches:
+      - main # Se dispara cuando haces push a la rama 'main'
+  workflow_dispatch: # Permite ejecutarlo manualmente desde la pestaña Actions en GitHub
+
+env:
+  AZURE_WEBAPP_NAME: elitedynamicsapi   # REEMPLAZA con el nombre de tu App Service
+  PYTHON_VERSION: '3.11'                # Versión de Python que usa tu App Service
+  PACKAGE_PATH: '.'                     # Ruta a tu código en el repositorio (raíz en este caso)
+  AZURE_WEBAPP_PACKAGE_PATH: '/tmp/zipdeploy/extracted' # Ruta donde Oryx suele poner las cosas
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment: production # Si tienes un entorno de GitHub configurado para producción
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Create ZIP deployment package
+      # Este paso asume que tu código está en la raíz o en una subcarpeta
+      # y que no necesitas un proceso de build complejo antes de empaquetar.
+      # Si tienes pasos de build (ej. compilar assets de frontend), añádelos aquí.
+      # Para una app FastAPI simple, usualmente es solo empaquetar los archivos.
+      # Asegúrate de que el ZIP contenga la carpeta 'app', 'requirements.txt', etc.
+      # en la estructura correcta que espera tu App Service.
+      # Este ejemplo empaqueta todo el contenido del repositorio.
+      # Si tu app está en una subcarpeta, ej. 'src', cambia el comando de zip.
+      run: zip -r deployment.zip . -x ".git/*" ".github/*" ".venv/*" ".vscode/*" ".env" " EliteDynamicsAPI_NuevoComienzo.zip" "elitedynamicsapi_CORRECT_DEPLOY.zip" # Excluir archivos/carpetas innecesarios
+
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3 # Usa la versión más reciente
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }} # Configurar este secreto en GitHub
+        package: deployment.zip
+        # type: 'zip' # El tipo de despliegue (zip, war, jar) - 'zip' es común para Python con build remoto
+        # startup-command: 'gunicorn -w 4 -k uvicorn.workers.UvicornWorker app.main:app --timeout 120' # Opcional: si necesitas anular el comando de inicio
