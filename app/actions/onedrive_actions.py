@@ -78,12 +78,10 @@ def _internal_onedrive_get_item_metadata(client: AuthenticatedHttpClient, user_i
     response_data = client.get(item_endpoint, scope=files_read_scope, params=query_api_params if query_api_params else None)
     
     if isinstance(response_data, dict):
-        # Propagar el error si http_client ya lo formateó
         if response_data.get("status") == "error" and "http_status" in response_data:
             return response_data
         return {"status": "success", "data": response_data}
     else:
-        # Esto sería un caso inesperado si la API devuelve algo que no es JSON para metadatos
         raise TypeError(f"Respuesta inesperada para metadatos, se esperaba dict pero se recibió {type(response_data)}.")
 
 def _get_item_id_from_path_if_needed_onedrive(client: AuthenticatedHttpClient, user_id: str, item_path_or_id: str) -> Union[str, Dict[str, Any]]:
@@ -95,7 +93,7 @@ def _get_item_id_from_path_if_needed_onedrive(client: AuthenticatedHttpClient, u
         return item_path_or_id
 
     logger.debug(f"'{item_path_or_id}' parece un path. Resolviendo a ID para user '{user_id}'.")
-    metadata_params = {"item_id_or_path": item_path_or_id, "select": "id,name"}
+    metadata_params = {"item_id_or_path": item_path_or_id, "select": "id,name", "user_id": user_id}
     try:
         response = _internal_onedrive_get_item_metadata(client, user_id, metadata_params)
         if response.get("status") == "success" and response.get("data", {}).get("id"):
@@ -120,17 +118,16 @@ def _onedrive_paged_request(
     max_pages = getattr(settings, 'MAX_PAGING_PAGES', 30)
     effective_max_items = float('inf') if max_items_total is None else max_items_total
 
-    logger.debug(f"Iniciando solicitud paginada para '{action_name_for_log}' desde '{url_base.split('?')[0]}...'.")
     try:
+        response_data = {}
         while current_url and len(all_items) < effective_max_items and page_count < max_pages:
             page_count += 1
-            is_first_call = (current_url == url_base and page_count == 1)
-            current_params_for_call = query_api_params_initial if is_first_call else None
+            current_params_for_call = query_api_params_initial if page_count == 1 else None
             
             response_data = client.get(url=current_url, scope=scope, params=current_params_for_call)
             
             if not isinstance(response_data, dict):
-                 return _handle_onedrive_api_error(TypeError(f"Respuesta inesperada, no es un dict: {type(response_data)}"), action_name_for_log, params)
+                 return _handle_onedrive_api_error(TypeError(f"Respuesta inesperada: {type(response_data)}"), action_name_for_log, params)
             if response_data.get("status") == "error": return response_data
 
             page_items = response_data.get('value', [])
@@ -144,8 +141,7 @@ def _onedrive_paged_request(
             current_url = response_data.get('@odata.nextLink')
             if not current_url or len(all_items) >= effective_max_items: break
         
-        logger.info(f"'{action_name_for_log}' recuperó {len(all_items)} items en {page_count} páginas.")
-        total_count = response_data.get("@odata.count", len(all_items)) if 'response_data' in locals() and isinstance(response_data, dict) else len(all_items)
+        total_count = response_data.get("@odata.count", len(all_items))
         return {"status": "success", "data": {"value": all_items, "@odata.count": total_count}, "total_retrieved": len(all_items), "pages_processed": page_count}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name_for_log, params)
@@ -154,31 +150,24 @@ def list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     params = params or {}
     action_name = "onedrive_list_items"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
-
-    user_identifier: Optional[str] = params.get("user_id")
-    if not user_identifier:
-        return _handle_onedrive_api_error(ValueError("'user_id' es requerido."), action_name, params)
-
-    ruta_param: str = params.get("ruta", "/")
-    top_per_page: int = min(int(params.get("top_per_page", 50)), 200)
-    max_items_total: Optional[int] = params.get("max_items_total")
-    select: Optional[str] = params.get("select")
-    filter_query: Optional[str] = params.get("filter_query")
-    order_by: Optional[str] = params.get("order_by")
-
+    
     try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+
+        ruta_param: str = params.get("ruta", "/")
         is_likely_id = not ("/" in ruta_param) and (len(ruta_param) > 40 or '!' in ruta_param or ruta_param.startswith("driveItem_"))
         item_endpoint_base = _get_od_user_item_by_id_endpoint(user_identifier, ruta_param) if is_likely_id else _get_od_user_item_by_path_endpoint(user_identifier, ruta_param)
         
         url_base = f"{item_endpoint_base}/children"
 
-        query_api_params: Dict[str, Any] = {'$top': top_per_page}
-        query_api_params['$select'] = select or "id,name,webUrl,size,file,folder,parentReference,createdDateTime,lastModifiedDateTime"
-        if filter_query: query_api_params['$filter'] = filter_query
-        if order_by: query_api_params['$orderby'] = order_by
+        query_api_params: Dict[str, Any] = {'$top': min(int(params.get("top_per_page", 50)), 200)}
+        query_api_params['$select'] = params.get("select") or "id,name,webUrl,size,file,folder,parentReference,createdDateTime"
+        if params.get("filter_query"): query_api_params['$filter'] = params.get("filter_query")
+        if params.get("order_by"): query_api_params['$orderby'] = params.get("order_by")
         
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        return _onedrive_paged_request(client, url_base, files_read_scope, params, query_api_params, max_items_total, action_name)
+        return _onedrive_paged_request(client, url_base, files_read_scope, params, query_api_params, params.get("max_items_total"), action_name)
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -187,15 +176,10 @@ def get_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     action_name = "onedrive_get_item"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
 
-    user_identifier: Optional[str] = params.get("user_id")
-    if not user_identifier:
-        return _handle_onedrive_api_error(ValueError("'user_id' es requerido."), action_name, params)
-
-    item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
-    if not item_id_or_path_param:
-        return _handle_onedrive_api_error(ValueError("'item_id_or_path' es requerido."), action_name, params)
-
     try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+
         return _internal_onedrive_get_item_metadata(client, user_identifier, params)
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
@@ -206,77 +190,50 @@ def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     log_params = {k:v for k,v in params.items() if k != "contenido_bytes"}
     logger.info(f"Ejecutando {action_name} con params: {log_params}")
 
-    user_identifier: Optional[str] = params.get("user_id")
-    if not user_identifier:
-        return _handle_onedrive_api_error(ValueError("'user_id' es requerido."), action_name, params)
-
-    nombre_archivo: Optional[str] = params.get("nombre_archivo")
-    contenido_bytes: Optional[bytes] = params.get("contenido_bytes")
-    ruta_destino_relativa: str = params.get("ruta_destino_relativa", "/")
-    conflict_behavior: str = params.get("conflict_behavior", "rename")
-
-    if not nombre_archivo or contenido_bytes is None:
-        return _handle_onedrive_api_error(ValueError("'nombre_archivo' y 'contenido_bytes' son requeridos."), action_name, params)
-    if not isinstance(contenido_bytes, bytes):
-        return _handle_onedrive_api_error(TypeError("'contenido_bytes' debe ser de tipo bytes."), action_name, params)
-
     try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+
+        nombre_archivo: Optional[str] = params.get("nombre_archivo")
+        contenido_bytes: Optional[bytes] = params.get("contenido_bytes")
+        if not nombre_archivo or contenido_bytes is None: raise ValueError("'nombre_archivo' y 'contenido_bytes' son requeridos.")
+        if not isinstance(contenido_bytes, bytes): raise TypeError("'contenido_bytes' debe ser de tipo bytes.")
+
+        ruta_destino_relativa: str = params.get("ruta_destino_relativa", "/")
+        conflict_behavior: str = params.get("conflict_behavior", "rename")
+        
         clean_folder_path = ruta_destino_relativa.strip('/')
         target_file_path_for_api = f"{nombre_archivo}" if not clean_folder_path else f"{clean_folder_path}/{nombre_archivo}"
-        
         item_endpoint_for_upload_base = _get_od_user_item_by_path_endpoint(user_identifier, target_file_path_for_api)
 
-        file_size_bytes = len(contenido_bytes)
-        file_size_mb = file_size_bytes / (1024.0 * 1024.0)
-        logger.info(f"Subiendo a OneDrive user '{user_identifier}': path '{target_file_path_for_api}' ({file_size_mb:.2f} MB)")
-        
+        file_size_mb = len(contenido_bytes) / (1024.0 * 1024.0)
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
 
-        if file_size_mb > 4.0:
-            logger.info("Archivo > 4MB. Iniciando sesión de carga.")
-            create_session_url = f"{item_endpoint_for_upload_base}/createUploadSession"
-            if item_endpoint_for_upload_base.endswith(":"): 
-                create_session_url = f"{item_endpoint_for_upload_base.rstrip(':')}/createUploadSession"
-
-            session_body = {"item": {"@microsoft.graph.conflictBehavior": conflict_behavior, "name": nombre_archivo }}
-            response_session_obj = client.post(create_session_url, scope=files_rw_scope, json_data=session_body)
-            session_info = response_session_obj.json()
-            upload_url_from_session = session_info.get("uploadUrl")
-            if not upload_url_from_session: raise ValueError("No se pudo obtener 'uploadUrl' de la sesión.")
-            
-            chunk_size = 5 * 1024 * 1024; start_byte = 0
-            final_item_metadata: Optional[Dict[str, Any]] = None
-            
-            while start_byte < file_size_bytes:
-                end_byte = min(start_byte + chunk_size - 1, file_size_bytes - 1)
-                current_chunk_data = contenido_bytes[start_byte : end_byte + 1]
-                content_range_header = f"bytes {start_byte}-{end_byte}/{file_size_bytes}"
-                chunk_upload_timeout = max(DEFAULT_CHUNK_UPLOAD_TIMEOUT_SECONDS, int(len(current_chunk_data) / (50 * 1024)) + 30)
-                
-                chunk_headers = {'Content-Length': str(len(current_chunk_data)), 'Content-Range': content_range_header}
-                
-                chunk_response = requests.put(upload_url_from_session, headers=chunk_headers, data=current_chunk_data, timeout=chunk_upload_timeout)
-                chunk_response.raise_for_status()
-                start_byte = end_byte + 1
-                if chunk_response.content:
-                    response_json = chunk_response.json()
-                    if chunk_response.status_code in [200, 201] and response_json.get("id"):
-                        final_item_metadata = response_json; break
-                elif start_byte >= file_size_bytes: break
-            
-            if not final_item_metadata and start_byte >= file_size_bytes:
-                return {"status": "warning", "message": "Archivo subido con sesión, pero no se recibió metadata final.", "http_status": 202}
-
-            if not final_item_metadata:
-                 raise ValueError(f"Subida grande finalizada pero sin metadata.")
-            return {"status": "success", "data": final_item_metadata, "message": "Archivo subido con sesión."}
-        else:
-            logger.info("Archivo <= 4MB. Usando subida simple.")
+        if file_size_mb <= 4.0:
             url_put_simple = f"{item_endpoint_for_upload_base}/content"
             query_api_params_put = {"@microsoft.graph.conflictBehavior": conflict_behavior}
             custom_headers_put = {'Content-Type': 'application/octet-stream'}
             response_obj = client.put(url=url_put_simple, scope=files_rw_scope, params=query_api_params_put, data=contenido_bytes, headers=custom_headers_put)
             return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
+        else:
+            create_session_url = f"{item_endpoint_for_upload_base}/createUploadSession"
+            session_body = {"item": {"@microsoft.graph.conflictBehavior": conflict_behavior}}
+            response_session_obj = client.post(create_session_url, scope=files_rw_scope, json_data=session_body)
+            upload_url = response_session_obj.json().get("uploadUrl")
+            if not upload_url: raise ValueError("No se pudo obtener 'uploadUrl' de la sesión.")
+
+            chunk_size = 5 * 1024 * 1024; start_byte = 0
+            while start_byte < len(contenido_bytes):
+                end_byte = min(start_byte + chunk_size - 1, len(contenido_bytes) - 1)
+                chunk_data = contenido_bytes[start_byte : end_byte + 1]
+                headers = {'Content-Length': str(len(chunk_data)), 'Content-Range': f"bytes {start_byte}-{end_byte}/{len(contenido_bytes)}"}
+                chunk_response = requests.put(upload_url, headers=headers, data=chunk_data, timeout=DEFAULT_CHUNK_UPLOAD_TIMEOUT_SECONDS)
+                chunk_response.raise_for_status()
+                start_byte = end_byte + 1
+                if chunk_response.content and chunk_response.status_code in [200, 201]:
+                    return {"status": "success", "data": chunk_response.json(), "message": "Archivo subido con sesión."}
+            return {"status": "success", "message": "Archivo subido con sesión, sin metadata final."}
+            
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -285,28 +242,24 @@ def download_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Un
     action_name = "onedrive_download_file"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
 
-    user_identifier: Optional[str] = params.get("user_id")
-    if not user_identifier:
-        return _handle_onedrive_api_error(ValueError("'user_id' es requerido."), action_name, params)
-
-    item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
-    if not item_id_or_path_param:
-        return _handle_onedrive_api_error(ValueError("'item_id_or_path' es requerido."), action_name, params)
-        
     try:
-        is_path_like = "/" in item_id_or_path_param or ("." in item_id_or_path_param and not item_id_or_path_param.startswith("driveItem_") and len(item_id_or_path_param) < 70)
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+        
+        item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
+        if not item_id_or_path_param: raise ValueError("'item_id_or_path' es requerido.")
+        
+        is_path_like = "/" in item_id_or_path_param or ("." in item_id_or_path_param and not item_id_or_path_param.startswith("driveItem_"))
         item_endpoint_base = _get_od_user_item_by_path_endpoint(user_identifier, item_id_or_path_param) if is_path_like else _get_od_user_item_by_id_endpoint(user_identifier, item_id_or_path_param)
         
         url = f"{item_endpoint_base}/content"
-
-        logger.info(f"Descargando archivo OneDrive para user '{user_identifier}': Item '{item_id_or_path_param}'")
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        
         response_content = client.get(url, scope=files_read_scope, stream=True)
         if isinstance(response_content, bytes):
-            logger.info(f"Archivo descargado ({len(response_content)} bytes).")
             return response_content
         else:
-            return _handle_onedrive_api_error(TypeError(f"Se esperaban bytes pero se recibió {type(response_content)}."), action_name, params)
+            raise TypeError(f"Se esperaban bytes pero se recibió {type(response_content)}.")
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -315,26 +268,194 @@ def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     action_name = "onedrive_delete_item"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
 
-    user_identifier: Optional[str] = params.get("user_id")
-    if not user_identifier:
-        return _handle_onedrive_api_error(ValueError("'user_id' es requerido."), action_name, params)
-
-    item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
-    if not item_id_or_path_param:
-        return _handle_onedrive_api_error(ValueError("'item_id_or_path' es requerido."), action_name, params)
-        
     try:
-        resolved_item_id_or_error = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_param)
-        if isinstance(resolved_item_id_or_error, dict): return resolved_item_id_or_error
-        
-        item_endpoint_for_delete = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id_or_error))
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
 
-        logger.info(f"Eliminando item OneDrive ID '{resolved_item_id_or_error}' de user '{user_identifier}'")
+        item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
+        if not item_id_or_path_param: raise ValueError("'item_id_or_path' es requerido.")
+        
+        resolved_item_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_param)
+        if isinstance(resolved_item_id, dict): return resolved_item_id
+        
+        item_endpoint = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.delete(item_endpoint_for_delete, scope=files_rw_scope)
+        response_obj = client.delete(item_endpoint, scope=files_rw_scope)
         return {"status": "success", "message": "Elemento eliminado.", "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-# --- (El resto de las funciones de OneDrive siguen este mismo patrón corregido) ---
-# ...
+def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "onedrive_create_folder"
+    logger.info(f"Ejecutando {action_name} con params: %s", params)
+
+    try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+
+        nombre_carpeta: Optional[str] = params.get("nombre_carpeta")
+        if not nombre_carpeta: raise ValueError("'nombre_carpeta' es requerido.")
+        
+        ruta_padre_relativa: str = params.get("ruta_padre_relativa", "/")
+        
+        parent_item_endpoint = _get_od_user_item_by_path_endpoint(user_identifier, ruta_padre_relativa)
+        url = f"{parent_item_endpoint}/children"
+        
+        body = {"name": nombre_carpeta, "folder": {}, "@microsoft.graph.conflictBehavior": params.get("conflict_behavior", "fail")}
+        
+        files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response_obj = client.post(url, scope=files_rw_scope, json_data=body)
+        return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
+def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "onedrive_move_item"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+
+    try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+
+        item_id_or_path_origen: Optional[str] = params.get("item_id_or_path_origen")
+        parent_reference_param: Optional[Dict[str, str]] = params.get("parent_reference")
+        if not item_id_or_path_origen or not parent_reference_param:
+            raise ValueError("'item_id_or_path_origen' y 'parent_reference' son requeridos.")
+        
+        resolved_item_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_origen)
+        if isinstance(resolved_item_id, dict): return resolved_item_id
+        
+        item_origen_endpoint = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
+        
+        body: Dict[str, Any] = {"parentReference": parent_reference_param}
+        if params.get("nuevo_nombre"): body["name"] = params["nuevo_nombre"]
+        
+        files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response_obj = client.patch(item_origen_endpoint, scope=files_rw_scope, json_data=body)
+        return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
+def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "onedrive_copy_item"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+
+    try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+
+        item_id_or_path_origen: Optional[str] = params.get("item_id_or_path_origen")
+        parent_reference_param: Optional[Dict[str, str]] = params.get("parent_reference")
+        if not item_id_or_path_origen or not parent_reference_param:
+            raise ValueError("'item_id_or_path_origen' y 'parent_reference' son requeridos.")
+        
+        resolved_item_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_origen)
+        if isinstance(resolved_item_id, dict): return resolved_item_id
+        
+        item_origen_endpoint = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
+        url_copy = f"{item_origen_endpoint}/copy"
+
+        body_copy_payload: Dict[str, Any] = {"parentReference": parent_reference_param}
+        if params.get("nuevo_nombre_copia"): body_copy_payload["name"] = params["nuevo_nombre_copia"]
+        
+        files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response_obj = client.post(url_copy, scope=files_rw_scope, json_data=body_copy_payload)
+        
+        monitor_url = response_obj.headers.get('Location')
+        if response_obj.status_code == 202 and monitor_url:
+            return {"status": "pending", "message": "Solicitud de copia aceptada.", "monitor_url": monitor_url, "http_status": 202}
+        else:
+            return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
+            
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
+def update_item_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "onedrive_update_item_metadata"
+    logger.info(f"Ejecutando {action_name}")
+
+    try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+
+        item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
+        nuevos_valores_payload: Optional[Dict[str, Any]] = params.get("nuevos_valores")
+        if not item_id_or_path_param or not nuevos_valores_payload:
+            raise ValueError("'item_id_or_path' y 'nuevos_valores' (dict) son requeridos.")
+            
+        resolved_item_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_param)
+        if isinstance(resolved_item_id, dict): return resolved_item_id
+        
+        item_endpoint_for_update = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
+        
+        files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response_obj = client.patch(item_endpoint_for_update, scope=files_rw_scope, json_data=nuevos_valores_payload)
+        return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
+def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "onedrive_search_items"
+    logger.info(f"Ejecutando {action_name} con params: %s", params)
+
+    try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+
+        query_text: Optional[str] = params.get("query_text")
+        if not query_text: raise ValueError("'query_text' es requerido.")
+
+        base_drive_endpoint = _get_od_user_drive_base_endpoint(user_identifier)
+        url_search = f"{base_drive_endpoint}/root/search(q='{query_text}')"
+
+        api_query_params: Dict[str, Any] = {}
+        if params.get("top"): api_query_params['$top'] = params["top"]
+        if params.get("select"): api_query_params['$select'] = params["select"]
+        
+        files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response_data = client.get(url_search, scope=files_read_scope, params=api_query_params)
+
+        if isinstance(response_data, dict):
+            if response_data.get("status") == "error": return response_data
+            return {"status": "success", "data": response_data.get("value", [])}
+        else:
+            raise TypeError(f"Respuesta inesperada: {type(response_data)}")
+            
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
+def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "onedrive_get_sharing_link"
+    logger.info(f"Ejecutando {action_name}")
+
+    try:
+        user_identifier: Optional[str] = params.get("user_id")
+        if not user_identifier: raise ValueError("'user_id' es requerido.")
+        
+        item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
+        if not item_id_or_path_param: raise ValueError("'item_id_or_path' es requerido.")
+            
+        resolved_item_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_param)
+        if isinstance(resolved_item_id, dict): return resolved_item_id
+
+        item_endpoint = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
+        url_create_link = f"{item_endpoint}/createLink"
+
+        body: Dict[str, Any] = {
+            "type": params.get("type", "view"),
+            "scope": params.get("scope", "organization")
+        }
+        if params.get("password"): body["password"] = params["password"]
+        if params.get("expirationDateTime"): body["expirationDateTime"] = params["expirationDateTime"]
+        
+        files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response_obj = client.post(url_create_link, scope=files_rw_scope, json_data=body)
+        return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
