@@ -118,6 +118,7 @@ dmypy.json
 *.code-workspace
 
 # Terraform
+preflight_check.py
 .terraform/
 *.tfstate
 *.tfstate.*
