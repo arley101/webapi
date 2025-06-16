@@ -3,7 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.dependencies import get_authenticated_http_client # Asegúrate que esta importación sea correcta
+from app.dependencies import initialize_http_client # <--- Importamos la nueva función
 
 # Importación masiva de todos los routers generados
 from app.api.routes import (
@@ -28,6 +28,13 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
+# --- Evento de Arranque Corregido ---
+@app.on_event("startup")
+async def startup_event():
+    logger.info(f"Iniciando {settings.APP_NAME} v{settings.APP_VERSION}...")
+    await initialize_http_client() # Llamamos a la inicialización asíncrona
+
+# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://app.elitedynamics.ai", "http://localhost:3000", "http://127.0.0.1:8000"],
@@ -36,7 +43,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Lista de todos los módulos de routers a incluir
 routers = [
     azuremgmt_router, bookings_router, calendario_router, correo_router,
     forms_router, github_router, googleads_router, graph_router,
@@ -46,8 +52,6 @@ routers = [
     teams_router, tiktok_ads_router, todo_router, userprofile_router,
     users_router, vivainsights_router, youtube_ads_router
 ]
-
-# Inclusión masiva de todos los routers en la aplicación
 for router_module in routers:
     app.include_router(router_module.router, prefix="/api/v1")
 
@@ -55,9 +59,8 @@ logger.info(f"✅ Se han cargado {len(routers)} routers de servicios explícitos
 
 @app.get("/health", tags=["General"])
 async def health_check():
-    return {"status": "ok", "appName": settings.APP_NAME}
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
-    # Este bloque no se ejecutará en Azure, es solo para pruebas locales.
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
