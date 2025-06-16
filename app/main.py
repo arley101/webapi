@@ -1,12 +1,11 @@
-# app/main.py
 import logging
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
+from app.dependencies import get_authenticated_http_client # Asegúrate que esta importación sea correcta
 
 # Importación masiva de todos los routers generados
-# Asegúrate de que los archivos generados por el script estén en esta carpeta
 from app.api.routes import (
     azuremgmt_router, bookings_router, calendario_router, correo_router,
     forms_router, github_router, googleads_router, graph_router,
@@ -17,11 +16,9 @@ from app.api.routes import (
     users_router, vivainsights_router, youtube_ads_router
 )
 
-# Configuración de Logging
 logging.basicConfig(level=settings.LOG_LEVEL.upper(), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-# Creación de la App FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
@@ -31,16 +28,15 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://app.elitedynamics.ai", "http://localhost:3000"],
+    allow_origins=["https://app.elitedynamics.ai", "http://localhost:3000", "http://127.0.0.1:8000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Inclusión masiva de todos los routers en la aplicación
+# Lista de todos los módulos de routers a incluir
 routers = [
     azuremgmt_router, bookings_router, calendario_router, correo_router,
     forms_router, github_router, googleads_router, graph_router,
@@ -51,6 +47,7 @@ routers = [
     users_router, vivainsights_router, youtube_ads_router
 ]
 
+# Inclusión masiva de todos los routers en la aplicación
 for router_module in routers:
     app.include_router(router_module.router, prefix="/api/v1")
 
@@ -62,4 +59,5 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+    # Este bloque no se ejecutará en Azure, es solo para pruebas locales.
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)

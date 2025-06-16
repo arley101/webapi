@@ -121,4 +121,27 @@ dmypy.json
 preflight_check.py
 .terraform/
 *.tfstate
-*.tfstate.*
+*.tfstate.# Entornos Virtuales
+antenv/
+.venv/
+venv/
+
+# Archivos de caché de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración local (si los tuvieras)
+.env
+local.settings.json
+
+# Carpetas de herramientas y salidas
+refactor_output/
+
+# Archivos de logs
+*.log*
