@@ -142,6 +142,20 @@ local.settings.json
 
 # Carpetas de herramientas y salidas
 refactor_output/
+# Entornos Virtuales
+antenv/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Archivos de sistema operativo
+.DS_Store
+
+# Archivos de herramientas
+refactor_output/
+refactor_final.py
+cleanup.sh
 
 # Archivos de logs
 *.log*

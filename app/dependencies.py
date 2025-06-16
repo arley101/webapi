@@ -1,34 +1,39 @@
 # app/dependencies.py
-
 from fastapi import HTTPException, status
-from azure.identity import DefaultAzureCredential
+from azure.identity.aio import DefaultAzureCredential # Se importa la versión asíncrona
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 import logging
 
 logger = logging.getLogger(__name__)
 
-# Se crea una única instancia del cliente al iniciar la aplicación.
-# Esto es mucho más eficiente que crear uno nuevo para cada solicitud,
-# ya que aprovecha la caché de tokens de DefaultAzureCredential y las conexiones de red.
-try:
-    logger.info("Inicializando DefaultAzureCredential para el cliente HTTP...")
-    credential = DefaultAzureCredential()
-    http_client_instance = AuthenticatedHttpClient(credential)
-    logger.info("✅ Cliente HTTP autenticado creado exitosamente.")
-except Exception as e:
-    # Si la app no puede crear la credencial al inicio, no puede funcionar.
-    # Es mejor que falle rápido y claramente.
-    logger.error(f"FATAL: No se pudo inicializar DefaultAzureCredential: {e}")
-    raise RuntimeError(f"Fallo crítico al inicializar DefaultAzureCredential: {e}") from e
+# La instancia se inicializa como None. Se creará durante el evento de arranque.
+http_client_instance: AuthenticatedHttpClient = None
+
+async def initialize_http_client():
+    """
+    Esta función se llamará durante el startup de FastAPI para crear
+    de forma asíncrona la credencial y el cliente.
+    """
+    global http_client_instance
+    if http_client_instance is None:
+        try:
+            logger.info("Inicializando DefaultAzureCredential de forma asíncrona...")
+            credential = DefaultAzureCredential()
+            http_client_instance = AuthenticatedHttpClient(credential)
+            logger.info("✅ Cliente HTTP autenticado creado exitosamente.")
+        except Exception as e:
+            logger.error(f"FATAL: No se pudo inicializar DefaultAzureCredential: {e}")
+            http_client_instance = None
+
 
 def get_authenticated_http_client() -> AuthenticatedHttpClient:
     """
     Dependencia de FastAPI que provee la instancia compartida
-    del cliente HTTP autenticado a cada endpoint que lo necesite.
+    del cliente HTTP autenticado a los endpoints.
     """
-    if not http_client_instance:
+    if http_client_instance is None:
          raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="El cliente HTTP autenticado no está disponible."
+            detail="El cliente HTTP autenticado no está disponible. Revisa los logs de arranque para ver errores de inicialización de credenciales."
         )
     return http_client_instance
