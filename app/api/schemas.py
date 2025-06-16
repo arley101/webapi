@@ -1,45 +1,142 @@
 # app/api/schemas.py
-from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional, List, Union
+from pydantic import BaseModel, Field, EmailStr
+from typing import Dict, Any, Optional, List
 
-
-class ActionRequest(BaseModel):
-    action: str = Field(..., example="calendar_list_events", description="Nombre de la acción a ejecutar.")
-    params: Dict[str, Any] = Field(default_factory=dict, example={"start_datetime": "2025-05-20T08:00:00Z", "end_datetime": "2025-05-20T17:00:00Z"}, description="Parámetros para la acción.")
-
-class ErrorDetail(BaseModel):
-    code: Optional[str] = None
-    message: Optional[str] = None
-    target: Optional[str] = None
-    details: Optional[List[Any]] = None 
-
+# --- Modelos Genéricos ---
 class ErrorResponse(BaseModel):
-    status: str = "error"
-    action: Optional[str] = Field(default=None, description="La acción que se intentó ejecutar.")
-    message: str = Field(..., example="Descripción del error.", description="Mensaje legible por humanos describiendo el error.")
-    http_status: Optional[int] = Field(default=500, example=500, description="El código de estado HTTP asociado con este error.")
-    details: Optional[Union[str, Dict[str, Any], List[Dict[str, Any]], ErrorDetail]] = Field(default=None, description="Detalles técnicos adicionales sobre el error.")
-    graph_error_code: Optional[str] = Field(default=None, description="Código de error específico devuelto por Microsoft Graph, si aplica.")
+    detail: Any
 
-    model_config = {
-        "json_schema_extra": {
-            "examples": [
-                {
-                    "status": "error",
-                    "action": "calendar_list_events",
-                    "message": "Error de autenticación: Credencial de Azure no disponible.",
-                    "http_status": 500,
-                    "details": "CredentialUnavailableError: DefaultAzureCredential DefaultAzureCredential انواع اعتبارنامه موجود را امتحان کرد اما هیچکدام کار نکردند.",
-                    "graph_error_code": None
-                },
-                {
-                    "status": "error",
-                    "action": "graph_generic_get",
-                    "message": "'graph_path' es requerido dentro de 'params' (ej. {'graph_path': 'organization'}).",
-                    "http_status": 400,
-                    "details": "Params recibidos: {}",
-                    "graph_error_code": None
-                }
-            ]
-        }
-    }
+# --- Modelos Específicos de Correo ---
+class EmailAddress(BaseModel):
+    address: EmailStr
+    name: Optional[str] = None
+
+class Recipient(BaseModel):
+    emailAddress: EmailAddress
+
+class EmailBody(BaseModel):
+    contentType: str = "HTML"
+    content: str
+
+class Attachment(BaseModel):
+    odata_type: str = Field(alias="@odata.type", default="#microsoft.graph.fileAttachment")
+    name: str
+    contentBytes: str # Base64 encoded content
+
+class EmailMessage(BaseModel):
+    id: Optional[str] = None
+    subject: Optional[str] = None
+    bodyPreview: Optional[str] = None
+    body: Optional[EmailBody] = None
+    toRecipients: Optional[List[Recipient]] = []
+    ccRecipients: Optional[List[Recipient]] = []
+    from_prop: Optional[Recipient] = Field(None, alias="from")
+    sender: Optional[Recipient] = None
+    receivedDateTime: Optional[str] = None
+    webLink: Optional[str] = None
+    
+    class Config:
+        populate_by_name = True
+
+class SendMessagePayload(BaseModel):
+    to_recipients: List[Recipient]
+    subject: str
+    body_content: str
+    body_type: str = "HTML"
+    cc_recipients: Optional[List[Recipient]] = None
+    bcc_recipients: Optional[List[Recipient]] = None
+    attachments: Optional[List[Attachment]] = None
+    save_to_sent_items: bool = True
+
+class ReplyMessagePayload(BaseModel):
+    comment: str
+    reply_all: bool = False
+
+class ForwardMessagePayload(BaseModel):
+    to_recipients: List[Recipient]
+    comment: Optional[str] = None
+
+class MoveMessagePayload(BaseModel):
+    destination_folder_id: str
+
+class MailFolder(BaseModel):
+    id: Optional[str] = None
+    displayName: Optional[str] = None
+    parentFolderId: Optional[str] = None
+    childFolderCount: Optional[int] = None
+    unreadItemCount: Optional[int] = None
+    totalItemCount: Optional[int] = None
+
+class CreateFolderPayload(BaseModel):
+    folder_name: str
+
+# --- Modelos Específicos de Calendario ---
+class DateTimeTimeZone(BaseModel):
+    dateTime: str
+    timeZone: str = "UTC"
+
+class Location(BaseModel):
+    displayName: str
+    locationType: Optional[str] = None
+    uniqueId: Optional[str] = None
+    uniqueIdType: Optional[str] = None
+
+class Event(BaseModel):
+    id: Optional[str] = None
+    subject: Optional[str] = None
+    bodyPreview: Optional[str] = None
+    body: Optional[EmailBody] = None
+    start: Optional[DateTimeTimeZone] = None
+    end: Optional[DateTimeTimeZone] = None
+    location: Optional[Location] = None
+    locations: Optional[List[Location]] = []
+    attendees: Optional[List[Recipient]] = []
+    organizer: Optional[Recipient] = None
+    webLink: Optional[str] = None
+
+class CreateEventPayload(BaseModel):
+    subject: str
+    body: EmailBody
+    start: DateTimeTimeZone
+    end: DateTimeTimeZone
+    attendees: Optional[List[Recipient]] = None
+    location: Optional[Location] = None
+
+class UpdateEventPayload(BaseModel):
+    subject: Optional[str] = None
+    body: Optional[EmailBody] = None
+    start: Optional[DateTimeTimeZone] = None
+    end: Optional[DateTimeTimeZone] = None
+    attendees: Optional[List[Recipient]] = None
+    location: Optional[Location] = None
+
+class TimeConstraint(BaseModel):
+    start: DateTimeTimeZone
+    end: DateTimeTimeZone
+
+class FindMeetingTimesPayload(BaseModel):
+    attendees: List[Recipient]
+    timeConstraint: TimeConstraint
+    meetingDuration: str = "PT30M" # Formato ISO 8601 de duración
+    maxCandidates: int = 15
+
+class MeetingTimeSuggestion(BaseModel):
+    meetingTimeSlot: Optional[dict] = None # El objeto TimeSlot es complejo, lo dejamos como dict
+    confidence: Optional[float] = None
+    organizerAvailability: Optional[str] = None
+    attendeeAvailability: Optional[List[dict]] = []
+
+class MeetingTimeSuggestionResult(BaseModel):
+    meetingTimeSuggestions: Optional[List[MeetingTimeSuggestion]] = []
+    emptySuggestionsReason: Optional[str] = None
+
+class GetSchedulePayload(BaseModel):
+    schedules: List[str] # Lista de correos de los usuarios
+    startTime: DateTimeTimeZone
+    endTime: DateTimeTimeZone
+    availabilityViewInterval: int = 30
+
+class ScheduleInformation(BaseModel):
+    scheduleId: Optional[str] = None
+    availabilityView: Optional[str] = None
+    scheduleItems: Optional[List[dict]] = []
