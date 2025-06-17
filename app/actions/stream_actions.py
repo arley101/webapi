@@ -15,11 +15,11 @@ try:
 except ImportError:
     logger.error("CRÍTICO: Error al importar helpers de sharepoint_actions.py. Las funciones de Stream que dependen de ellos fallarán.")
     # Definir placeholders para que el módulo cargue, pero las funciones fallarán si se llaman.
-    def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
+    async def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
         raise NotImplementedError("Helper _obtener_site_id_sp no disponible/importado en stream_actions.")
-    def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str] = None) -> str:
+    async def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str] = None) -> str:
         raise NotImplementedError("Helper _get_drive_id no disponible/importado en stream_actions.")
-    def _get_item_id_from_path_if_needed_sp(client: AuthenticatedHttpClient, item_path_or_id: str, site_id: str, drive_id: str, params_for_metadata: Optional[Dict[str, Any]] = None) -> Any: # El tipo de retorno puede ser str o Dict de error
+    async def _get_item_id_from_path_if_needed_sp(client: AuthenticatedHttpClient, item_path_or_id: str, site_id: str, drive_id: str, params_for_metadata: Optional[Dict[str, Any]] = None) -> Any: # El tipo de retorno puede ser str o Dict de error
         raise NotImplementedError("Helper _get_item_id_from_path_if_needed_sp no disponible/importado en stream_actions.")
 
 
@@ -58,7 +58,7 @@ def _handle_stream_api_error(e: Exception, action_name: str, params_for_log: Opt
     }
 
 
-def listar_videos(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def listar_videos(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "stream_listar_videos"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -173,7 +173,7 @@ def listar_videos(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
         return _handle_stream_api_error(e, action_name, params)
 
 
-def obtener_metadatos_video(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def obtener_metadatos_video(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "stream_obtener_metadatos_video"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -251,7 +251,7 @@ def obtener_metadatos_video(client: AuthenticatedHttpClient, params: Dict[str, A
         return _handle_stream_api_error(e, action_name, params)
 
 
-def get_video_playback_url(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_video_playback_url(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "stream_get_video_playback_url"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -306,7 +306,7 @@ def get_video_playback_url(client: AuthenticatedHttpClient, params: Dict[str, An
     except Exception as e: # Captura cualquier excepción no manejada por obtener_metadatos_video
         return _handle_stream_api_error(e, action_name, params)
 
-def obtener_transcripcion_video(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def obtener_transcripcion_video(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "stream_obtener_transcripcion_video"
     logger.info(f"Ejecutando {action_name} con params: {params}")

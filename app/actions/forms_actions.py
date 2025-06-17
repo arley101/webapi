@@ -13,9 +13,9 @@ try:
 except ImportError:
     logger.error("Error al importar helpers de sharepoint_actions.py. La búsqueda de Forms en SharePoint podría fallar.")
     # Definir placeholders para que el módulo cargue, pero las funciones fallarán si se llaman.
-    def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
+    async def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
         raise NotImplementedError("Helper _obtener_site_id_sp no disponible desde forms_actions.")
-    def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str] = None) -> str:
+    async def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str] = None) -> str:
         raise NotImplementedError("Helper _get_drive_id no disponible desde forms_actions.")
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def _handle_forms_api_error(e: Exception, action_name: str, params_for_log: Opti
     }
 
 
-def list_forms(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_forms(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "forms_list_forms"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -145,7 +145,7 @@ def list_forms(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
         return _handle_forms_api_error(e, action_name, params)
 
 
-def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "forms_get_form"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -207,7 +207,7 @@ def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
         return _handle_forms_api_error(e, action_name, params)
 
 
-def get_form_responses(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_form_responses(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "forms_get_form_responses"
     logger.info(f"Ejecutando {action_name} con params: {params}")

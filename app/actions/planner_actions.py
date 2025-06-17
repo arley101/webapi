@@ -68,7 +68,7 @@ def _handle_planner_api_error(e: Exception, action_name: str, params_for_log: Op
         "graph_error_code": graph_error_code
     }
 
-def _planner_paged_request(client: AuthenticatedHttpClient, url_base: str, scope: List[str], params_input: Dict[str, Any], query_api_params_initial: Dict[str, Any], max_items_total: Optional[int], action_name_for_log: str) -> Dict[str, Any]:
+async def _planner_paged_request(client: AuthenticatedHttpClient, url_base: str, scope: List[str], params_input: Dict[str, Any], query_api_params_initial: Dict[str, Any], max_items_total: Optional[int], action_name_for_log: str) -> Dict[str, Any]:
     all_items = []
     current_url = url_base
     page_count = 0
@@ -104,7 +104,7 @@ def _planner_paged_request(client: AuthenticatedHttpClient, url_base: str, scope
     except Exception as e:
         return _handle_planner_api_error(e, action_name_for_log, params_input)
 
-def list_plans(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_plans(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_list_plans"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -140,7 +140,7 @@ def list_plans(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
-def get_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_get_plan"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -169,7 +169,7 @@ def get_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
-def list_tasks(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_tasks(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_list_tasks"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -196,7 +196,7 @@ def list_tasks(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
         return _handle_planner_api_error(e, action_name, params)
 
 
-def create_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def create_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_create_task"
     logger.info(f"Ejecutando {action_name}")
@@ -239,7 +239,7 @@ def create_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
-def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_get_task"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -265,7 +265,7 @@ def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
-def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_update_task"
     logger.info(f"Ejecutando {action_name}")
@@ -306,7 +306,7 @@ def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
-def delete_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def delete_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_delete_task"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -331,7 +331,7 @@ def delete_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
-def list_buckets(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_buckets(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_list_buckets"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -355,7 +355,7 @@ def list_buckets(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
-def create_bucket(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def create_bucket(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "planner_create_bucket"
     logger.info(f"Ejecutando {action_name} con params: {params}")

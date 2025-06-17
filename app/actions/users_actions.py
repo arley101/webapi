@@ -60,7 +60,7 @@ def _directory_paged_request(
     except Exception as e: return _handle_users_directory_api_error(e, action_name_for_log, params_input)
 
 
-def list_users(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_users(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando list_users: %s", params); action_name = "user_list_users"
     url_base = f"{settings.GRAPH_API_BASE_URL}/users"
     api_query_params: Dict[str, Any] = {}
@@ -76,7 +76,7 @@ def list_users(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     scope_to_use = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
     return _directory_paged_request(client, url_base, scope_to_use, params, api_query_params, max_items, action_name, custom_headers_first_call=custom_headers)
 
-def get_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando get_user: %s", params); action_name = "user_get_user"
     user_id_or_upn: Optional[str] = params.get("user_id") or params.get("user_principal_name")
     if not user_id_or_upn: return {"status": "error", "action":action_name, "message": "Se requiere 'user_id' o 'user_principal_name'.", "http_status": 400}
@@ -95,7 +95,7 @@ def get_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
         return _handle_users_directory_api_error(http_err, action_name, params)
     except Exception as e: return _handle_users_directory_api_error(e, action_name, params)
 
-def create_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def create_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando create_user (payload omitido del log)"); action_name = "user_create_user"
     user_payload: Optional[Dict[str, Any]] = params.get("user_payload")
     if not user_payload or not isinstance(user_payload, dict): return {"status": "error", "action":action_name, "message": "'user_payload' (dict) requerido.", "http_status": 400}
@@ -109,7 +109,7 @@ def create_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         return {"status": "success", "data": response_obj.json(), "message": "Usuario creado."}
     except Exception as e: return _handle_users_directory_api_error(e, action_name, params)
 
-def update_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def update_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando update_user (payload omitido del log)"); action_name = "user_update_user"
     user_id_or_upn: Optional[str] = params.get("user_id") or params.get("user_principal_name")
     update_payload: Optional[Dict[str, Any]] = params.get("update_payload")
@@ -130,7 +130,7 @@ def update_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         return {"status": "success", "message": f"Usuario actualizado con status {response_obj.status_code}.", "data": data_to_return, "http_status": response_obj.status_code}
     except Exception as e: return _handle_users_directory_api_error(e, action_name, params)
 
-def delete_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def delete_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando delete_user: %s", params); action_name = "user_delete_user"
     user_id_or_upn: Optional[str] = params.get("user_id") or params.get("user_principal_name")
     if not user_id_or_upn: return {"status": "error", "action":action_name, "message": "Se requiere 'user_id' o 'user_principal_name'.", "http_status": 400}
@@ -141,7 +141,7 @@ def delete_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         return {"status": "success", "message": f"Usuario '{user_id_or_upn}' eliminado.", "http_status": response_obj.status_code}
     except Exception as e: return _handle_users_directory_api_error(e, action_name, params)
 
-def list_groups(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_groups(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando list_groups: %s", params); action_name = "user_list_groups"
     url_base = f"{settings.GRAPH_API_BASE_URL}/groups"
     api_query_params: Dict[str, Any] = {}
@@ -157,7 +157,7 @@ def list_groups(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     scope_to_use = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
     return _directory_paged_request(client, url_base, scope_to_use, params, api_query_params, max_items, action_name, custom_headers_first_call=custom_headers)
 
-def get_group(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_group(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando get_group: %s", params); action_name = "user_get_group"
     group_id: Optional[str] = params.get("group_id")
     if not group_id: return {"status": "error", "action":action_name, "message": "Se requiere 'group_id'.", "http_status": 400}
@@ -176,7 +176,7 @@ def get_group(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
         return _handle_users_directory_api_error(http_err, action_name, params)
     except Exception as e: return _handle_users_directory_api_error(e, action_name, params)
 
-def list_group_members(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_group_members(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando list_group_members: %s", params); action_name = "user_list_group_members"
     group_id: Optional[str] = params.get("group_id")
     if not group_id: return {"status": "error", "action":action_name, "message": "Se requiere 'group_id'.", "http_status": 400}
@@ -195,7 +195,7 @@ def list_group_members(client: AuthenticatedHttpClient, params: Dict[str, Any]) 
     scope_to_use = getattr(settings, 'GRAPH_SCOPE_GROUPMEMBER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
     return _directory_paged_request(client, url_base, scope_to_use, params, api_query_params, max_items, f"{action_name} for group {group_id}")
 
-def add_group_member(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def add_group_member(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando add_group_member: %s", params); action_name = "user_add_group_member"
     group_id: Optional[str] = params.get("group_id"); member_id: Optional[str] = params.get("member_id")
     if not group_id or not member_id: return {"status": "error", "action":action_name, "message": "Se requieren 'group_id' y 'member_id'.", "http_status": 400}
@@ -207,7 +207,7 @@ def add_group_member(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
         return {"status": "success", "message": f"Miembro '{member_id}' añadido al grupo '{group_id}'.", "http_status": response_obj.status_code}
     except Exception as e: return _handle_users_directory_api_error(e, action_name, params)
 
-def remove_group_member(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def remove_group_member(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando remove_group_member: %s", params); action_name = "user_remove_group_member"
     group_id: Optional[str] = params.get("group_id"); member_id: Optional[str] = params.get("member_id")
     if not group_id or not member_id: return {"status": "error", "action":action_name, "message": "Se requieren 'group_id' y 'member_id'.", "http_status": 400}
@@ -218,7 +218,7 @@ def remove_group_member(client: AuthenticatedHttpClient, params: Dict[str, Any])
         return {"status": "success", "message": f"Miembro '{member_id}' eliminado del grupo '{group_id}'.", "http_status": response_obj.status_code}
     except Exception as e: return _handle_users_directory_api_error(e, action_name, params)
 
-def check_group_membership(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def check_group_membership(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; logger.info("Ejecutando check_group_membership: %s", params); action_name = "user_check_group_membership"
     user_id: Optional[str] = params.get("user_id"); group_ids_input: Optional[Union[str, List[str]]] = params.get("group_ids")
     if not user_id or not group_ids_input: return {"status": "error", "action":action_name, "message": "Se requieren 'user_id' y 'group_ids'.", "http_status": 400}
