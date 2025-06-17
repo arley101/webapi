@@ -1,5 +1,5 @@
-# Archivo generado automáticamente
-from fastapi import APIRouter, Depends, Body, HTTPException, status, Response
+# Archivo generado automáticamente por refactor_maestro.py
+from fastapi import APIRouter, Depends, Body, HTTPException
 from typing import Dict, Any, Optional
 from app.actions import onedrive_actions
 from app.dependencies import get_authenticated_http_client
@@ -8,90 +8,145 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient
 router = APIRouter(prefix="/onedrive", tags=["Onedrive"])
 
 # Endpoint para: onedrive_list_items
-@router.post("/list_items")
-def onedrive_list_items(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.list_items(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.get("/list_items", status_code=200)
+async def onedrive_list_items(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_list_items."""
+    try:
+        result = await onedrive_actions.list_items(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_get_item
-@router.post("/get_item")
-def onedrive_get_item(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.get_item(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.get("/get_item", status_code=200)
+async def onedrive_get_item(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_get_item."""
+    try:
+        result = await onedrive_actions.get_item(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_upload_file
-@router.post("/upload_file")
-def onedrive_upload_file(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.upload_file(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.put("/upload_file", status_code=200)
+async def onedrive_upload_file(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_upload_file."""
+    try:
+        result = await onedrive_actions.upload_file(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_download_file
-@router.post("/download_file")
-def onedrive_download_file(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.download_file(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.get("/download_file", status_code=200)
+async def onedrive_download_file(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_download_file."""
+    try:
+        result = await onedrive_actions.download_file(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_delete_item
-@router.post("/delete_item")
-def onedrive_delete_item(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.delete_item(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.delete("/delete_item", status_code=200)
+async def onedrive_delete_item(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_delete_item."""
+    try:
+        result = await onedrive_actions.delete_item(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_create_folder
-@router.post("/create_folder")
-def onedrive_create_folder(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.create_folder(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.post("/create_folder", status_code=200)
+async def onedrive_create_folder(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_create_folder."""
+    try:
+        result = await onedrive_actions.create_folder(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_move_item
-@router.post("/move_item")
-def onedrive_move_item(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.move_item(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.patch("/move_item", status_code=200)
+async def onedrive_move_item(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_move_item."""
+    try:
+        result = await onedrive_actions.move_item(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_copy_item
-@router.post("/copy_item")
-def onedrive_copy_item(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.copy_item(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.patch("/copy_item", status_code=200)
+async def onedrive_copy_item(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_copy_item."""
+    try:
+        result = await onedrive_actions.copy_item(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_search_items
-@router.post("/search_items")
-def onedrive_search_items(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.search_items(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.get("/search_items", status_code=200)
+async def onedrive_search_items(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_search_items."""
+    try:
+        result = await onedrive_actions.search_items(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_get_sharing_link
-@router.post("/get_sharing_link")
-def onedrive_get_sharing_link(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.get_sharing_link(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.get("/get_sharing_link", status_code=200)
+async def onedrive_get_sharing_link(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_get_sharing_link."""
+    try:
+        result = await onedrive_actions.get_sharing_link(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Endpoint para: onedrive_update_item_metadata
-@router.post("/update_item_metadata")
-def onedrive_update_item_metadata(client: AuthenticatedHttpClient = Depends(get_authenticated_http_client), params: Optional[Dict[str, Any]] = Body(None)):
-    result = onedrive_actions.update_item_metadata(client=client, params=params or {})
-    if isinstance(result, dict) and result.get('status') == 'error':
-        raise HTTPException(status_code=result.get('http_status', 500), detail=result)
-    return result
+@router.patch("/update_item_metadata", status_code=200)
+async def onedrive_update_item_metadata(
+    client: AuthenticatedHttpClient = Depends(get_authenticated_http_client),
+    params: Dict[str, Any] = Body(None)
+):
+    """Ruta autogenerada para onedrive_update_item_metadata."""
+    try:
+        result = await onedrive_actions.update_item_metadata(client=client, params=params or {})
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
