@@ -29,7 +29,7 @@ def _handle_pa_api_error(e: Exception, action_name: str, params_for_log: Optiona
     return {"status": "error", "action": action_name, "message": f"Error en {action_name}: {details_str}", 
             "details": str(e), "http_status": status_code_int, "api_error_code": error_code_api}
 
-def listar_flows(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def listar_flows(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "pa_listar_flows"; logger.info(f"Ejecutando {action_name}: {params}")
     suscripcion_id = params.get('suscripcion_id', settings.AZURE_SUBSCRIPTION_ID)
     grupo_recurso = params.get('grupo_recurso', settings.AZURE_RESOURCE_GROUP)
@@ -47,7 +47,7 @@ def listar_flows(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
         return {"status": "success", "data": response_data.get("value", [])}
     except Exception as e: return _handle_pa_api_error(e, action_name, params)
 
-def obtener_flow(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def obtener_flow(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "pa_obtener_flow"; logger.info(f"Ejecutando {action_name}: {params}")
     nombre_flow: Optional[str] = params.get("nombre_flow")
     if not nombre_flow: return {"status": "error", "action": action_name, "message": "'nombre_flow' requerido.", "http_status": 400}
@@ -95,7 +95,7 @@ def ejecutar_flow(client_unused: Optional[AuthenticatedHttpClient], params: Dict
         return {"status": "error", "action": action_name, "message": f"Error API/Red: {type(e).__name__}", "details": error_body, "http_status": status_code_err}
     except Exception as e: return {"status": "error", "action": action_name, "message": f"Error inesperado: {type(e).__name__}", "details": str(e), "http_status":500}
 
-def obtener_estado_ejecucion_flow(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def obtener_estado_ejecucion_flow(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "pa_obtener_estado_ejecucion_flow"; logger.info(f"Ejecutando {action_name}: {params}")
     nombre_flow = params.get("nombre_flow"); run_id = params.get("run_id")
     if not nombre_flow or not run_id: return {"status": "error", "action": action_name, "message": "'nombre_flow' y 'run_id' requeridos.", "http_status": 400}

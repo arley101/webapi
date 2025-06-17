@@ -52,7 +52,7 @@ def _handle_onedrive_api_error(e: Exception, action_name: str, params_for_log: O
         "graph_error_code": error_code_graph
     }
 
-def _internal_onedrive_get_item_metadata(client: AuthenticatedHttpClient, user_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
+async def _internal_onedrive_get_item_metadata(client: AuthenticatedHttpClient, user_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
     item_path_or_id: Optional[str] = params.get("item_id_or_path")
     if not item_path_or_id:
         raise ValueError("'item_id_or_path' es requerido.")
@@ -84,7 +84,7 @@ def _internal_onedrive_get_item_metadata(client: AuthenticatedHttpClient, user_i
     else:
         raise TypeError(f"Respuesta inesperada para metadatos, se esperaba dict pero se recibió {type(response_data)}.")
 
-def _get_item_id_from_path_if_needed_onedrive(client: AuthenticatedHttpClient, user_id: str, item_path_or_id: str) -> Union[str, Dict[str, Any]]:
+async def _get_item_id_from_path_if_needed_onedrive(client: AuthenticatedHttpClient, user_id: str, item_path_or_id: str) -> Union[str, Dict[str, Any]]:
     is_likely_id = '!' in item_path_or_id or \
                    (len(item_path_or_id) > 40 and '/' not in item_path_or_id and '.' not in item_path_or_id) or \
                    item_path_or_id.startswith("driveItem_")
@@ -146,7 +146,7 @@ def _onedrive_paged_request(
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name_for_log, params)
 
-def list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_list_items"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -171,7 +171,7 @@ def list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def get_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_get_item"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -184,7 +184,7 @@ def get_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_upload_file"
     log_params = {k:v for k,v in params.items() if k != "contenido_bytes"}
@@ -237,7 +237,7 @@ def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def download_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[bytes, Dict[str, Any]]:
+async def download_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[bytes, Dict[str, Any]]:
     params = params or {}
     action_name = "onedrive_download_file"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -263,7 +263,7 @@ def download_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Un
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_delete_item"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -285,7 +285,7 @@ def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_create_folder"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -310,7 +310,7 @@ def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_move_item"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -338,7 +338,7 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_copy_item"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -373,7 +373,7 @@ def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def update_item_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def update_item_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_update_item_metadata"
     logger.info(f"Ejecutando {action_name}")
@@ -398,7 +398,7 @@ def update_item_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_search_items"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -429,7 +429,7 @@ def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
-def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "onedrive_get_sharing_link"
     logger.info(f"Ejecutando {action_name}")

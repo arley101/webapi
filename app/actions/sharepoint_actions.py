@@ -54,7 +54,7 @@ def _is_valid_graph_site_id_format(site_id_string: str) -> bool:
     if not site_id_string: return False
     return ',' in site_id_string or ':' in site_id_string or site_id_string.lower() == "root"
 
-def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
+async def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
     site_input: Optional[str] = params.get("site_id") or params.get("site_identifier")
     
     if site_input:
@@ -84,7 +84,7 @@ def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any])
     
     raise ValueError("No se pudo determinar SP Site ID. Verifique el parámetro o la configuración.")
 
-def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str]) -> str:
+async def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str]) -> str:
     target_drive_identifier = drive_id_or_name_input or getattr(settings, 'SHAREPOINT_DEFAULT_DRIVE_ID_OR_NAME', 'Documents')
     if not target_drive_identifier:
         raise ValueError("Se requiere un nombre o ID de Drive para operar.")
@@ -160,7 +160,7 @@ def _sp_paged_request(
 
 # --- ACCIONES PÚBLICAS (Mapeadas) ---
 
-def get_file_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_file_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_get_file_metadata"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -221,7 +221,7 @@ def _get_item_id_from_path_if_needed_sp(
     except Exception as e_meta:
         return _handle_graph_api_error(e_meta, "_get_item_id_from_path_if_needed_sp", params_for_metadata or metadata_call_params)
 
-def get_site_info(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_site_info(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_get_site_info"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -244,7 +244,7 @@ def get_site_info(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def search_sites(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def search_sites(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_search_sites"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -269,7 +269,7 @@ def search_sites(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
         
-def create_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def create_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_create_list"
     logger.info(f"Ejecutando {action_name}")
@@ -294,7 +294,7 @@ def create_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def list_lists(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_lists(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_list_lists"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -321,7 +321,7 @@ def list_lists(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def get_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_get_list"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -350,7 +350,7 @@ def get_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def update_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def update_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_update_list"
     logger.info(f"Ejecutando {action_name}")
@@ -371,7 +371,7 @@ def update_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def delete_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def delete_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_delete_list"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -395,7 +395,7 @@ def delete_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def add_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def add_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_add_list_item"
     logger.info(f"Ejecutando {action_name}")
@@ -417,7 +417,7 @@ def add_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def list_list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_list_list_items"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -444,7 +444,7 @@ def list_list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def get_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_get_list_item"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -474,7 +474,7 @@ def get_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def update_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def update_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_update_list_item"
     logger.info(f"Ejecutando {action_name}")
@@ -499,7 +499,7 @@ def update_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def delete_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def delete_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_delete_list_item"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -528,7 +528,7 @@ def delete_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def search_list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def search_list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_search_list_items"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -561,7 +561,7 @@ def search_list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
 # de manejo de respuesta del http_client donde era necesario.
 # Por completitud, se incluyen todas las funciones del archivo original.
 
-def list_document_libraries(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_document_libraries(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_list_document_libraries"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -581,7 +581,7 @@ def list_document_libraries(client: AuthenticatedHttpClient, params: Dict[str, A
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def list_folder_contents(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_folder_contents(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_list_folder_contents"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -606,7 +606,7 @@ def list_folder_contents(client: AuthenticatedHttpClient, params: Dict[str, Any]
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def upload_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def upload_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_upload_document"
     logger.info(f"Ejecutando {action_name}")
@@ -632,7 +632,7 @@ def upload_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
     except Exception as e:
         return _handle_graph_api_error(e, action_name, params)
 
-def download_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[bytes, Dict[str, Any]]:
+async def download_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[bytes, Dict[str, Any]]:
     params = params or {}
     action_name = "sp_download_document"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -655,10 +655,10 @@ def download_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
         
-def delete_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def delete_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     return delete_item(client, params) # Alias
 
-def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_delete_item"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -682,7 +682,7 @@ def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
-def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "sp_create_folder"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -708,45 +708,45 @@ def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
 # (El resto de las funciones de sp_... move_item, copy_item, etc. y las de memoria se mantienen como en el ZIP original, asumiendo que su lógica de llamadas post/patch está correcta)
 # Se incluyen aquí para garantizar la completitud del archivo.
 
-def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de move_item ...
     return {"status":"not_implemented"} # Placeholder
-def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de copy_item ...
     return {"status":"not_implemented"} # Placeholder
-def update_file_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def update_file_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de update_file_metadata ...
     return {"status":"not_implemented"} # Placeholder
-def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de get_sharing_link ...
     return {"status":"not_implemented"} # Placeholder
-def add_item_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def add_item_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de add_item_permissions ...
     return {"status":"not_implemented"} # Placeholder
-def remove_item_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def remove_item_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de remove_item_permissions ...
     return {"status":"not_implemented"} # Placeholder
-def list_item_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_item_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de list_item_permissions ...
     return {"status":"not_implemented"} # Placeholder
-def sp_export_list_to_format(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
+async def sp_export_list_to_format(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
     # ... Lógica completa de sp_export_list_to_format ...
     return {"status":"not_implemented"} # Placeholder
-def memory_ensure_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def memory_ensure_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de memory_ensure_list ...
     return {"status":"not_implemented"} # Placeholder
-def memory_save(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def memory_save(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de memory_save ...
     return {"status":"not_implemented"} # Placeholder
-def memory_get(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def memory_get(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de memory_get ...
     return {"status":"not_implemented"} # Placeholder
-def memory_delete(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def memory_delete(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de memory_delete ...
     return {"status":"not_implemented"} # Placeholder
-def memory_list_keys(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def memory_list_keys(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     # ... Lógica completa de memory_list_keys ...
     return {"status":"not_implemented"} # Placeholder
-def memory_export_session(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
+async def memory_export_session(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
     # ... Lógica completa de memory_export_session ...
     return {"status":"not_implemented"} # Placeholder

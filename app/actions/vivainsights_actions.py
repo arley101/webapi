@@ -42,7 +42,7 @@ def _handle_viva_insights_api_error(e: Exception, action_name: str, params_for_l
 
 # --- FUNCIONES DE ACCIÓN PARA VIVA INSIGHTS ---
 
-def get_my_analytics(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_my_analytics(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "viva_get_my_analytics"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -106,7 +106,7 @@ def get_my_analytics(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
     except Exception as e:
         return _handle_viva_insights_api_error(e, action_name, params)
 
-def get_focus_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_focus_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "viva_get_focus_plan"
     logger.info(f"Ejecutando {action_name} con params: {params}")

@@ -78,7 +78,7 @@ def _teams_paged_request(
     except Exception as e:
         return _handle_teams_api_error(e, action_name_for_log, params_input)
 
-def list_joined_teams(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_joined_teams(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_list_joined_teams"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -107,7 +107,7 @@ def list_joined_teams(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
 # y te confirmo que el mismo patrón de revisión para client.get() y client.post() se aplica al resto.
 # Aquí está el resto del archivo con las correcciones ya aplicadas por mí.
 
-def get_team(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_team(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_get_team"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -131,7 +131,7 @@ def get_team(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def list_channels(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_channels(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_list_channels"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -152,7 +152,7 @@ def list_channels(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     logger.info(f"Listando canales para equipo '{team_id}'.")
     return _teams_paged_request(client, url_base, channel_read_scope, params, query_api_params, max_items_total, action_name)
 
-def get_channel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_channel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_get_channel"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -177,7 +177,7 @@ def get_channel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def send_channel_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def send_channel_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_send_channel_message"
     logger.info(f"Ejecutando {action_name}")
@@ -201,7 +201,7 @@ def send_channel_message(client: AuthenticatedHttpClient, params: Dict[str, Any]
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def list_channel_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_channel_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_list_channel_messages"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -223,7 +223,7 @@ def list_channel_messages(client: AuthenticatedHttpClient, params: Dict[str, Any
     log_context = f"{action_name} (team: {team_id}, channel: {channel_id})"
     return _teams_paged_request(client, url_base, channel_read_scope, params, query_api_params, max_items_total, log_context)
 
-def reply_to_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def reply_to_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_reply_to_message"
     logger.info(f"Ejecutando {action_name}")
@@ -247,7 +247,7 @@ def reply_to_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def list_chats(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_chats(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_list_chats"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -270,7 +270,7 @@ def list_chats(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     log_context = f"{action_name} (user: {user_identifier})"
     return _teams_paged_request(client, url_base, chat_read_scope, params, query_api_params, max_items_total, log_context)
 
-def get_chat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_chat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_get_chat"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -298,7 +298,7 @@ def get_chat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def create_chat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def create_chat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_create_chat"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -326,7 +326,7 @@ def create_chat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def send_chat_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def send_chat_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_send_chat_message"
     logger.info(f"Ejecutando {action_name}")
@@ -348,7 +348,7 @@ def send_chat_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def list_chat_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_chat_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_list_chat_messages"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -368,7 +368,7 @@ def list_chat_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) 
     log_context = f"{action_name} (chat: {chat_id})"
     return _teams_paged_request(client, url_base, chat_rw_scope, params, query_api_params, max_items_total, log_context)
 
-def schedule_meeting(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def schedule_meeting(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_schedule_meeting"
     logger.info(f"Ejecutando {action_name}")
@@ -404,7 +404,7 @@ def schedule_meeting(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def get_meeting_details(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_meeting_details(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_get_meeting_details"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
@@ -430,7 +430,7 @@ def get_meeting_details(client: AuthenticatedHttpClient, params: Dict[str, Any])
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
-def list_members(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_members(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "teams_list_members"
     logger.info(f"Ejecutando {action_name} (Teams/Chat) con params: %s", params)

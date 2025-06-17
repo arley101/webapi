@@ -107,7 +107,7 @@ def _normalize_recipients(rec_input: Optional[Union[str, List[str], List[Dict[st
         logger.warning(f"Entrada '{rec_input}' para '{type_name}' no resultó en destinatarios válidos.")
     return recipients_list
 
-def list_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_list_messages"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -141,7 +141,7 @@ def list_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     # _email_paged_request maneja la excepción y los params originales para el log de error
     return _email_paged_request(client, url_base, MAIL_READ_SCOPE, params, query_api_params, max_items_total, action_name)
 
-def get_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def get_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_get_message"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -178,7 +178,7 @@ def get_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
-def send_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def send_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_send_message"
     # Omitir el contenido del mensaje y adjuntos del log principal
@@ -244,7 +244,7 @@ def send_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
 # que no habrá cuerpo (ej. 204 No Content) o si el cuerpo no es JSON.
 
 # Ejemplo para delete_message:
-def delete_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def delete_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_delete_message"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -278,7 +278,7 @@ def delete_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> D
 
 # --- COMPLETANDO EL RESTO DE FUNCIONES DE correo_actions.py CON EL PATRÓN ---
 
-def reply_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def reply_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_reply_message"
     log_params = {k:v for k,v in params.items() if k not in ['comment', 'message_payload_override']}
@@ -318,7 +318,7 @@ def reply_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
-def forward_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def forward_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_forward_message"
     log_params = {k:v for k,v in params.items() if k not in ['comment', 'message_payload_override']}
@@ -360,7 +360,7 @@ def forward_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
-def move_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def move_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_move_message"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -394,7 +394,7 @@ def move_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
-def list_folders(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def list_folders(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_list_folders"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -423,7 +423,7 @@ def list_folders(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     logger.info(f"{action_name}: Listando {log_ctx}")
     return _email_paged_request(client, url_base, MAIL_READ_SCOPE, params, query_api_params, max_items_total, f"{action_name} ({log_ctx})")
 
-def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_create_folder"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -462,7 +462,7 @@ def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
-def search_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def search_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "email_search_messages"
     logger.info(f"Ejecutando {action_name} con params: {params}")

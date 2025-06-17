@@ -32,7 +32,7 @@ def _handle_generic_graph_api_error(e: Exception, action_name: str, params_for_l
         "graph_error_code": graph_error_code
     }
 
-def generic_get(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def generic_get(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "graph_generic_get (internal)"
     log_params = {k: v for k, v in params.items() if k not in ['custom_headers']}
@@ -55,7 +55,7 @@ def generic_get(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         return {"status": "success", "data": response_data, "http_status": http_status}
     except Exception as e: return _handle_generic_graph_api_error(e, action_name, params)
 
-def generic_post(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def generic_post(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "generic_post (internal)"
     log_params = {k: v for k, v in params.items() if k not in ['payload', 'json_data', 'data', 'custom_headers']}
@@ -81,12 +81,12 @@ def generic_post(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
         return {"status": "success", "data": data, "http_status": http_status}
     except Exception as e: return _handle_generic_graph_api_error(e, action_name, params)
 
-def generic_get_compat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def generic_get_compat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name_log = "graph_generic_get_compat (wrapper)"
     logger.info(f"Ejecutando {action_name_log} con params: {params}")
     return generic_get(client, params)
 
-def generic_post_compat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async def generic_post_compat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name_log = "graph_generic_post_compat (wrapper)"
     logger.info(f"Ejecutando {action_name_log} con params: {params}")
     return generic_post(client, params)
