@@ -1,19 +1,13 @@
 # app/dependencies.py
 from fastapi import HTTPException, status
-from azure.identity.aio import DefaultAzureCredential # Se importa la versión asíncrona
+from azure.identity.aio import DefaultAzureCredential
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 import logging
 
 logger = logging.getLogger(__name__)
-
-# La instancia se inicializa como None. Se creará durante el evento de arranque.
 http_client_instance: AuthenticatedHttpClient = None
 
 async def initialize_http_client():
-    """
-    Esta función se llamará durante el startup de FastAPI para crear
-    de forma asíncrona la credencial y el cliente.
-    """
     global http_client_instance
     if http_client_instance is None:
         try:
@@ -25,15 +19,10 @@ async def initialize_http_client():
             logger.error(f"FATAL: No se pudo inicializar DefaultAzureCredential: {e}")
             http_client_instance = None
 
-
 def get_authenticated_http_client() -> AuthenticatedHttpClient:
-    """
-    Dependencia de FastAPI que provee la instancia compartida
-    del cliente HTTP autenticado a los endpoints.
-    """
     if http_client_instance is None:
-         raise HTTPException(
+        raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="El cliente HTTP autenticado no está disponible. Revisa los logs de arranque para ver errores de inicialización de credenciales."
+            detail="El cliente HTTP autenticado no está disponible. Revisa los logs de arranque."
         )
     return http_client_instance
