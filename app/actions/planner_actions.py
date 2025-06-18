@@ -81,7 +81,7 @@ async async def _planner_paged_request(client: AuthenticatedHttpClient, url_base
             page_count += 1
             current_params = query_api_params_initial if page_count == 1 else None
             
-            response_data = client.get(url=current_url, scope=scope, params=current_params)
+            response_data = await client.get(url=current_url, scope=scope, params=current_params)
             
             if not isinstance(response_data, dict):
                 raise TypeError(f"Respuesta inesperada durante la paginación: se esperaba dict, se recibió {type(response_data)}")
@@ -129,7 +129,7 @@ async async def list_plans(client: AuthenticatedHttpClient, params: Dict[str, An
         
         planner_scope = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         
-        response_data = client.get(url_base, scope=planner_scope, params=odata_params)
+        response_data = await client.get(url_base, scope=planner_scope, params=odata_params)
         
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -158,7 +158,7 @@ async async def get_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]
         }
 
         planner_scope = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_data = client.get(url, scope=planner_scope, params=odata_params)
+        response_data = await client.get(url, scope=planner_scope, params=odata_params)
         
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -215,7 +215,7 @@ async async def create_task(client: AuthenticatedHttpClient, params: Dict[str, A
         
         planner_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', settings.GRAPH_API_DEFAULT_SCOPE)
         
-        response_task_obj = client.post(url_task, scope=planner_rw_scope, json_data=body)
+        response_task_obj = await client.post(url_task, scope=planner_rw_scope, json_data=body)
         task_data = response_task_obj.json()
         task_id = task_data.get("id")
 
@@ -226,13 +226,13 @@ async async def create_task(client: AuthenticatedHttpClient, params: Dict[str, A
 
             if not etag_details:
                 try:
-                    get_details_resp = client.get(details_url, scope=planner_rw_scope, params={"$select": "@odata.etag"})
+                    get_details_resp = await client.get(details_url, scope=planner_rw_scope, params={"$select": "@odata.etag"})
                     if isinstance(get_details_resp, dict): etag_details = get_details_resp.get("@odata.etag")
                 except Exception as get_etag_err:
                     logger.warning(f"No se pudo obtener ETag para detalles de nueva tarea: {get_etag_err}")
 
             headers_details = {'If-Match': etag_details} if etag_details else {}
-            details_resp_obj = client.patch(details_url, scope=planner_rw_scope, json_data=details_payload, headers=headers_details)
+            details_resp_obj = await client.patch(details_url, scope=planner_rw_scope, json_data=details_payload, headers=headers_details)
             task_data["details_update_response"] = details_resp_obj.json()
 
         return {"status": "success", "data": task_data, "http_status": response_task_obj.status_code}
@@ -254,7 +254,7 @@ async async def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]
             odata_params['$expand'] = 'details'
 
         planner_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READ', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_data = client.get(url, scope=planner_scope, params=odata_params)
+        response_data = await client.get(url, scope=planner_scope, params=odata_params)
         
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -291,14 +291,14 @@ async async def update_task(client: AuthenticatedHttpClient, params: Dict[str, A
             if "dueDateTime" in update_payload_task and update_payload_task["dueDateTime"] is not None:
                 update_payload_task["dueDateTime"] = _parse_and_utc_datetime_str(update_payload_task["dueDateTime"], "dueDateTime")
             
-            resp_task_obj = client.patch(url_task, scope=planner_rw_scope, json_data=update_payload_task, headers=headers_task)
+            resp_task_obj = await client.patch(url_task, scope=planner_rw_scope, json_data=update_payload_task, headers=headers_task)
             final_response_data.update(resp_task_obj.json())
             final_response_data["task_update_status"] = "success"
 
         if update_payload_details:
             url_details = f"{settings.GRAPH_API_BASE_URL}/planner/tasks/{task_id}/details"
             headers_details = {'If-Match': etag_details or update_payload_details.pop('@odata.etag', None)}
-            resp_details_obj = client.patch(url_details, scope=planner_rw_scope, json_data=update_payload_details, headers=headers_details)
+            resp_details_obj = await client.patch(url_details, scope=planner_rw_scope, json_data=update_payload_details, headers=headers_details)
             final_response_data.setdefault("details", {}).update(resp_details_obj.json())
             final_response_data["details_update_status"] = "success"
 
@@ -321,7 +321,7 @@ async async def delete_task(client: AuthenticatedHttpClient, params: Dict[str, A
         if not etag: logger.warning(f"Eliminando tarea Planner '{task_id}' sin ETag.")
             
         planner_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.delete(url, scope=planner_rw_scope, headers=headers)
+        response_obj = await client.delete(url, scope=planner_rw_scope, headers=headers)
         
         if response_obj.status_code == 204:
             return {"status": "success", "message": f"Tarea '{task_id}' eliminada.", "http_status": 204}
@@ -344,7 +344,7 @@ async async def list_buckets(client: AuthenticatedHttpClient, params: Dict[str, 
         odata_params: Dict[str, Any] = {'$select': params.get('select', "id,name,orderHint,planId")}
 
         planner_scope = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_data = client.get(url, scope=planner_scope, params=odata_params)
+        response_data = await client.get(url, scope=planner_scope, params=odata_params)
         
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -371,7 +371,7 @@ async async def create_bucket(client: AuthenticatedHttpClient, params: Dict[str,
         if params.get("orderHint"): body["orderHint"] = params["orderHint"]
         
         planner_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url, scope=planner_rw_scope, json_data=body)
+        response_obj = await client.post(url, scope=planner_rw_scope, json_data=body)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)

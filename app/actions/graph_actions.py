@@ -47,7 +47,7 @@ async async def generic_get(client: AuthenticatedHttpClient, params: Dict[str, A
     scope_to_use = custom_scope_list if custom_scope_list else settings.GRAPH_API_DEFAULT_SCOPE
     custom_headers: Optional[Dict[str, str]] = params.get("custom_headers")
     try:
-        response_data = client.get(full_url, scope=scope_to_use, params=query_api_params, headers=custom_headers)
+        response_data = await client.get(full_url, scope=scope_to_use, params=query_api_params, headers=custom_headers)
         # client.get ya devuelve dict, str, o bytes. Para generic_get, esperamos dict o str.
         http_status = 200 # Asumir 200 si no es un error ya formateado por el client
         if isinstance(response_data, dict) and response_data.get("status") == "error" and "http_status" in response_data:
@@ -71,7 +71,7 @@ async async def generic_post(client: AuthenticatedHttpClient, params: Dict[str, 
     scope_to_use = custom_scope_list if custom_scope_list else settings.GRAPH_API_DEFAULT_SCOPE
     custom_headers: Optional[Dict[str, str]] = params.get("custom_headers")
     try:
-        response = client.post(full_url, scope=scope_to_use, json_data=payload, headers=custom_headers) # client.post devuelve requests.Response
+        response = await client.post(full_url, scope=scope_to_use, json_data=payload, headers=custom_headers) # client.post devuelve requests.Response
         data: Any = None; http_status = response.status_code
         if response.content:
             try: data = response.json()

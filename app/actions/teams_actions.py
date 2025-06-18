@@ -54,7 +54,7 @@ def _teams_paged_request(
             is_first_call = (page_count == 1 and current_url == url_base)
             current_call_params = query_api_params_initial if is_first_call else None
             
-            response_data = client.get(url=current_url, scope=scope, params=current_call_params)
+            response_data = await client.get(url=current_url, scope=scope, params=current_call_params)
             
             if not isinstance(response_data, dict):
                  return _handle_teams_api_error(Exception(f"Respuesta inesperada: {type(response_data)}"), action_name_for_log, params_input)
@@ -104,7 +104,7 @@ async async def list_joined_teams(client: AuthenticatedHttpClient, params: Dict[
 
 # --- (El resto de las funciones de teams_actions.py deben seguir el mismo patrón de corrección) ---
 # Por brevedad y para evitar un mensaje excesivamente largo, te entrego la función corregida de arriba
-# y te confirmo que el mismo patrón de revisión para client.get() y client.post() se aplica al resto.
+# y te confirmo que el mismo patrón de revisión para await client.get() y client.post() se aplica al resto.
 # Aquí está el resto del archivo con las correcciones ya aplicadas por mí.
 
 async async def get_team(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -122,7 +122,7 @@ async async def get_team(client: AuthenticatedHttpClient, params: Dict[str, Any]
     logger.info(f"Obteniendo detalles del equipo '{team_id}'")
     teams_read_scope = getattr(settings, 'GRAPH_SCOPE_TEAMS_READ_BASIC_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_data = client.get(url, scope=teams_read_scope, params=query_params)
+        response_data = await client.get(url, scope=teams_read_scope, params=query_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
             return {"status": "success", "data": response_data}
@@ -168,7 +168,7 @@ async async def get_channel(client: AuthenticatedHttpClient, params: Dict[str, A
     logger.info(f"Obteniendo detalles del canal '{channel_id}' en equipo '{team_id}'")
     channel_read_scope = getattr(settings, 'GRAPH_SCOPE_CHANNEL_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_data = client.get(url, scope=channel_read_scope, params=query_params)
+        response_data = await client.get(url, scope=channel_read_scope, params=query_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
             return {"status": "success", "data": response_data}
@@ -196,7 +196,7 @@ async async def send_channel_message(client: AuthenticatedHttpClient, params: Di
     logger.info(f"Enviando mensaje al canal '{channel_id}' del equipo '{team_id}'")
     message_send_scope = getattr(settings, 'GRAPH_SCOPE_CHANNEL_MESSAGE_SEND', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_obj = client.post(url, scope=message_send_scope, json_data=payload)
+        response_obj = await client.post(url, scope=message_send_scope, json_data=payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
@@ -242,7 +242,7 @@ async async def reply_to_message(client: AuthenticatedHttpClient, params: Dict[s
     logger.info(f"Enviando respuesta al mensaje '{message_id}'")
     message_send_scope = getattr(settings, 'GRAPH_SCOPE_CHANNEL_MESSAGE_SEND', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_obj = client.post(url, scope=message_send_scope, json_data=payload)
+        response_obj = await client.post(url, scope=message_send_scope, json_data=payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
@@ -289,7 +289,7 @@ async async def get_chat(client: AuthenticatedHttpClient, params: Dict[str, Any]
     logger.info(f"Obteniendo detalles del chat '{chat_id}'")
     chat_rw_scope = getattr(settings, 'GRAPH_SCOPE_CHAT_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_data = client.get(url, scope=chat_rw_scope, params=query_api_params if query_api_params else None)
+        response_data = await client.get(url, scope=chat_rw_scope, params=query_api_params if query_api_params else None)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
             return {"status": "success", "data": response_data}
@@ -321,7 +321,7 @@ async async def create_chat(client: AuthenticatedHttpClient, params: Dict[str, A
     logger.info(f"Creando chat tipo '{chat_type}'")
     chat_create_scope = getattr(settings, 'GRAPH_SCOPE_CHAT_CREATE', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_obj = client.post(url, scope=chat_create_scope, json_data=payload)
+        response_obj = await client.post(url, scope=chat_create_scope, json_data=payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
@@ -343,7 +343,7 @@ async async def send_chat_message(client: AuthenticatedHttpClient, params: Dict[
     logger.info(f"Enviando mensaje al chat '{chat_id}'")
     chat_send_scope = getattr(settings, 'GRAPH_SCOPE_CHAT_SEND', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_obj = client.post(url, scope=chat_send_scope, json_data=payload)
+        response_obj = await client.post(url, scope=chat_send_scope, json_data=payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
@@ -399,7 +399,7 @@ async async def schedule_meeting(client: AuthenticatedHttpClient, params: Dict[s
     logger.info(f"Programando reunión para organizador '{organizer_id}': '{subject}'")
     meeting_rw_scope = getattr(settings, 'GRAPH_SCOPE_CALENDARS_READ_WRITE', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_obj = client.post(url, scope=meeting_rw_scope, json_data=payload)
+        response_obj = await client.post(url, scope=meeting_rw_scope, json_data=payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
@@ -420,7 +420,7 @@ async async def get_meeting_details(client: AuthenticatedHttpClient, params: Dic
     logger.info(f"Obteniendo detalles de reunión (evento) '{event_id}'")
     meeting_read_scope = getattr(settings, 'GRAPH_SCOPE_CALENDARS_READ', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        event_data = client.get(url, scope=meeting_read_scope, params=query_params)
+        event_data = await client.get(url, scope=meeting_read_scope, params=query_params)
         if not isinstance(event_data, dict):
             return _handle_teams_api_error(Exception(f"Respuesta inesperada: {type(event_data)}"), action_name, params)
 

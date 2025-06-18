@@ -35,7 +35,7 @@ async async def list_businesses(client: AuthenticatedHttpClient, params: Dict[st
     
     scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
     try:
-        response_data = client.get(url, scope=scope, params=query_params if query_params else None)
+        response_data = await client.get(url, scope=scope, params=query_params if query_params else None)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data
         return {"status": "success", "data": response_data.get("value", [])}
@@ -49,7 +49,7 @@ async async def get_business(client: AuthenticatedHttpClient, params: Dict[str, 
     odata_params = {'$select': params['$select']} if params.get("$select") else {}
     scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
     try:
-        response_data = client.get(url, scope=scope, params=odata_params if odata_params else None)
+        response_data = await client.get(url, scope=scope, params=odata_params if odata_params else None)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data
         return {"status": "success", "data": response_data}
@@ -63,7 +63,7 @@ async async def list_services(client: AuthenticatedHttpClient, params: Dict[str,
     odata_params: Dict[str, Any] = {k:v for k,v in params.items() if k in ["$select", "$top", "$filter"]}
     scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
     try:
-        response_data = client.get(url, scope=scope, params=odata_params if odata_params else None)
+        response_data = await client.get(url, scope=scope, params=odata_params if odata_params else None)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data
         return {"status": "success", "data": response_data.get("value", [])}
@@ -77,7 +77,7 @@ async async def list_staff(client: AuthenticatedHttpClient, params: Dict[str, An
     odata_params: Dict[str, Any] = {k:v for k,v in params.items() if k in ["$select", "$top"]}
     scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
     try:
-        response_data = client.get(url, scope=scope, params=odata_params if odata_params else None)
+        response_data = await client.get(url, scope=scope, params=odata_params if odata_params else None)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data
         return {"status": "success", "data": response_data.get("value", [])}
@@ -96,7 +96,7 @@ async async def create_appointment(client: AuthenticatedHttpClient, params: Dict
     url = f"{settings.GRAPH_API_BASE_URL}/solutions/bookingBusinesses/{business_id}/appointments"
     scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READWRITE_ALL', getattr(settings, 'GRAPH_SCOPE_BOOKINGS_APPOINTMENT_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)) # type: ignore
     try:
-        response_obj = client.post(url, scope=scope, json_data=appointment_payload) # client.post devuelve requests.Response
+        response_obj = await client.post(url, scope=scope, json_data=appointment_payload) # client.post devuelve requests.Response
         return {"status": "success", "data": response_obj.json()}
     except Exception as e: return _handle_bookings_api_error(e, action_name, params)
 
@@ -116,7 +116,7 @@ async async def list_appointments(client: AuthenticatedHttpClient, params: Dict[
     if params.get("$orderby"): odata_params["$orderby"] = params["$orderby"]
     scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', getattr(settings, 'GRAPH_SCOPE_BOOKINGS_APPOINTMENT_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)) # type: ignore
     try:
-        response_data = client.get(url, scope=scope, params=odata_params)
+        response_data = await client.get(url, scope=scope, params=odata_params)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data
         return {"status": "success", "data": response_data.get("value", [])}
@@ -130,7 +130,7 @@ async async def get_appointment(client: AuthenticatedHttpClient, params: Dict[st
     odata_params = {'$select': params['$select']} if params.get("$select") else {}
     scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', getattr(settings, 'GRAPH_SCOPE_BOOKINGS_APPOINTMENT_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)) # type: ignore
     try:
-        response_data = client.get(url, scope=scope, params=odata_params if odata_params else None)
+        response_data = await client.get(url, scope=scope, params=odata_params if odata_params else None)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data
         return {"status": "success", "data": response_data}
@@ -144,7 +144,7 @@ async async def cancel_appointment(client: AuthenticatedHttpClient, params: Dict
     payload = {"cancellationMessage": params.get("cancellation_message", "Esta cita ha sido cancelada.")}
     scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READWRITE_ALL', getattr(settings, 'GRAPH_SCOPE_BOOKINGS_APPOINTMENT_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)) # type: ignore
     try:
-        response_obj = client.post(url, scope=scope, json_data=payload) # client.post devuelve requests.Response
+        response_obj = await client.post(url, scope=scope, json_data=payload) # client.post devuelve requests.Response
         if response_obj.status_code == 204:
             return {"status": "success", "message": f"Cita '{appointment_id}' cancelada.", "http_status": 204}
         else: 

@@ -69,7 +69,7 @@ def _calendar_paged_request(
             
             current_params_for_call = query_api_params_initial if is_first_call else None
             
-            response_data = client.get(url=current_url, scope=scope_list, params=current_params_for_call)
+            response_data = await client.get(url=current_url, scope=scope_list, params=current_params_for_call)
             
             if not isinstance(response_data, dict):
                 return _handle_calendar_api_error(Exception(f"Respuesta inesperada: {type(response_data)}"), action_name_for_log, params)
@@ -169,7 +169,7 @@ async async def calendar_create_event(client: AuthenticatedHttpClient, params: D
     
     logger.info(f"Creando evento para '{user_identifier}'. Asunto: {event_payload.get('subject')}")
     try:
-        response_obj = client.post(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=event_payload)
+        response_obj = await client.post(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=event_payload)
         created_event = response_obj.json()
         logger.info(f"Evento creado con ID: {created_event.get('id')}")
         return {"status": "success", "data": created_event, "http_status": response_obj.status_code}
@@ -196,7 +196,7 @@ async async def get_event(client: AuthenticatedHttpClient, params: Dict[str, Any
     query_api_params = {'$select': select_fields} if select_fields else None
     logger.info(f"Obteniendo evento ID '{event_id}' para '{user_identifier}'")
     try:
-        response_data = client.get(url, scope=CALENDARS_READ_SCOPE, params=query_api_params)
+        response_data = await client.get(url, scope=CALENDARS_READ_SCOPE, params=query_api_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
             return {"status": "success", "data": response_data}
@@ -234,7 +234,7 @@ async async def update_event(client: AuthenticatedHttpClient, params: Dict[str, 
     
     logger.info(f"Actualizando evento ID '{event_id}' para '{user_identifier}'")
     try:
-        response_obj = client.patch(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=update_payload)
+        response_obj = await client.patch(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=update_payload)
         updated_event = response_obj.json()
         return {"status": "success", "data": updated_event, "http_status": response_obj.status_code}
     except Exception as e:
@@ -258,7 +258,7 @@ async async def delete_event(client: AuthenticatedHttpClient, params: Dict[str, 
     
     logger.info(f"Eliminando evento ID '{event_id}' para '{user_identifier}'")
     try:
-        response_obj = client.delete(url, scope=CALENDARS_READ_WRITE_SCOPE)
+        response_obj = await client.delete(url, scope=CALENDARS_READ_WRITE_SCOPE)
         if response_obj.status_code == 204:
             return {"status": "success", "message": f"Evento '{event_id}' eliminado exitosamente.", "http_status": 204}
         else:
@@ -289,7 +289,7 @@ async async def find_meeting_times(client: AuthenticatedHttpClient, params: Dict
     
     logger.info(f"Buscando horarios de reunión para usuario '{user_identifier}'")
     try:
-        response_obj = client.post(url, scope=CALENDARS_READ_SHARED_SCOPE, json_data=meeting_time_suggestion_payload)
+        response_obj = await client.post(url, scope=CALENDARS_READ_SHARED_SCOPE, json_data=meeting_time_suggestion_payload)
         response_data = response_obj.json()
         return {"status": "success", "data": response_data, "http_status": response_obj.status_code}
     except Exception as e:
@@ -320,7 +320,7 @@ async async def get_schedule(client: AuthenticatedHttpClient, params: Dict[str, 
     
     logger.info("Consultando disponibilidad para usuarios en payload.")
     try:
-        response_obj = client.post(url, scope=CALENDARS_READ_SHARED_SCOPE, json_data=schedule_information_payload)
+        response_obj = await client.post(url, scope=CALENDARS_READ_SHARED_SCOPE, json_data=schedule_information_payload)
         response_data = response_obj.json()
         return {"status": "success", "data": response_data.get("value", []), "http_status": response_obj.status_code}
     except Exception as e:

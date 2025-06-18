@@ -61,7 +61,7 @@ async async def list_resource_groups(client: AuthenticatedHttpClient, params: Di
     
     logger.info(f"Listando grupos de recursos para la suscripción '{subscription_id}' con OData params: {odata_params}")
     try:
-        response_data = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
+        response_data = await client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error" and "http_status" in response_data: # Error del http_client
                 response_data["action"] = action_name
@@ -95,7 +95,7 @@ async async def list_resources_in_rg(client: AuthenticatedHttpClient, params: Di
     
     logger.info(f"Listando recursos en RG '{resource_group_name}', suscripción '{subscription_id}'. Filtro: {odata_params.get('$filter')}")
     try:
-        response_data = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
+        response_data = await client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error" and "http_status" in response_data:
                 response_data["action"] = action_name
@@ -126,7 +126,7 @@ async async def get_resource(client: AuthenticatedHttpClient, params: Dict[str, 
     
     logger.info(f"Obteniendo detalles del recurso ARM ID: '{resource_id}' con api-version '{api_version}'")
     try:
-        response_data = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE)
+        response_data = await client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error" and "http_status" in response_data:
                 response_data["action"] = action_name
@@ -160,7 +160,7 @@ async async def restart_function_app(client: AuthenticatedHttpClient, params: Di
     logger.info(f"Reiniciando Function App '{function_app_name}' en RG '{resource_group_name}'")
     try:
         # client.post devuelve un objeto requests.Response
-        response_obj = client.post(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE) # No necesita json_data
+        response_obj = await client.post(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE) # No necesita json_data
         
         # Verificar el status code del objeto Response
         if response_obj.status_code == 204:
@@ -201,7 +201,7 @@ async async def list_functions(client: AuthenticatedHttpClient, params: Dict[str
     
     logger.info(f"Listando funciones para la Function App '{function_app_name}'")
     try:
-        response_data = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE)
+        response_data = await client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error" and "http_status" in response_data:
                 response_data["action"] = action_name
@@ -231,7 +231,7 @@ async async def get_function_status(client: AuthenticatedHttpClient, params: Dic
     
     logger.info(f"Obteniendo estado de la función '{function_name}' en Function App '{function_app_name}'")
     try:
-        function_data = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE)
+        function_data = await client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE)
         if isinstance(function_data, dict):
             if function_data.get("status") == "error" and "http_status" in function_data:
                 function_data["action"] = action_name
@@ -281,7 +281,7 @@ async async def create_deployment(client: AuthenticatedHttpClient, params: Dict[
     logger.info(f"Creando/Actualizando despliegue ARM '{deployment_name}' en RG '{resource_group_name}'. Modo: {deployment_properties.get('mode', 'Incremental')}")
     try:
         # client.put devuelve un objeto requests.Response
-        response_obj = client.put(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, json_data=payload)
+        response_obj = await client.put(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, json_data=payload)
         
         # PUT para deployment puede devolver 200 OK o 201 Created.
         # La respuesta contiene el estado del despliegue.
@@ -333,7 +333,7 @@ async async def list_logic_apps(client: AuthenticatedHttpClient, params: Dict[st
 
     logger.info(f"Listando Logic Apps en {log_context}")
     try:
-        response_data = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
+        response_data = await client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error" and "http_status" in response_data:
                 response_data["action"] = action_name
@@ -381,7 +381,7 @@ async async def get_logic_app_run_history(client: AuthenticatedHttpClient, param
 
     logger.info(f"Obteniendo historial de ejecuciones para Logic App '{workflow_name}' en RG '{resource_group_name}'")
     try:
-        response_data = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
+        response_data = await client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error" and "http_status" in response_data:
                 response_data["action"] = action_name

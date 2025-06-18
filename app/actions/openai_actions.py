@@ -51,7 +51,7 @@ async async def chat_completion(client: AuthenticatedHttpClient, params: Dict[st
     for pk, val in params.items():
         if pk in allowed_api_params and val is not None: payload[pk] = val
     try:
-        response_obj = client.post(url=url, scope=settings.OPENAI_API_DEFAULT_SCOPE, json_data=payload, timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)) # type: ignore
+        response_obj = await client.post(url=url, scope=settings.OPENAI_API_DEFAULT_SCOPE, json_data=payload, timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)) # type: ignore
         return {"status": "success", "data": response_obj.json()} # client.post devuelve requests.Response
     except Exception as e: return _handle_openai_api_error(e, action_name, params)
 
@@ -71,7 +71,7 @@ async async def get_embedding(client: AuthenticatedHttpClient, params: Dict[str,
     if params.get("input_type"): payload["input_type"] = params["input_type"]
     if params.get("dimensions") is not None and isinstance(params["dimensions"], int): payload["dimensions"] = params["dimensions"]
     try:
-        response_obj = client.post(url=url, scope=settings.OPENAI_API_DEFAULT_SCOPE, json_data=payload, timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)) # type: ignore
+        response_obj = await client.post(url=url, scope=settings.OPENAI_API_DEFAULT_SCOPE, json_data=payload, timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)) # type: ignore
         return {"status": "success", "data": response_obj.json()}
     except Exception as e: return _handle_openai_api_error(e, action_name, params)
 
@@ -91,7 +91,7 @@ async async def completion(client: AuthenticatedHttpClient, params: Dict[str, An
     for pk, val in params.items():
         if pk in allowed_api_params and val is not None: payload[pk] = val
     try:
-        response_obj = client.post(url=url, scope=settings.OPENAI_API_DEFAULT_SCOPE, json_data=payload, timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)) # type: ignore
+        response_obj = await client.post(url=url, scope=settings.OPENAI_API_DEFAULT_SCOPE, json_data=payload, timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)) # type: ignore
         return {"status": "success", "data": response_obj.json()}
     except Exception as e: return _handle_openai_api_error(e, action_name, params)
 
@@ -102,8 +102,8 @@ async async def list_models(client: AuthenticatedHttpClient, params: Dict[str, A
     base_url = str(settings.AZURE_OPENAI_RESOURCE_ENDPOINT).rstrip('/')
     url = f"{base_url}/openai/models?api-version={settings.AZURE_OPENAI_API_VERSION}"
     try:
-        # client.get() ya devuelve dict o str
-        response_data = client.get(url=url, scope=settings.OPENAI_API_DEFAULT_SCOPE, timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)) # type: ignore
+        # await client.get() ya devuelve dict o str
+        response_data = await client.get(url=url, scope=settings.OPENAI_API_DEFAULT_SCOPE, timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)) # type: ignore
         if not isinstance(response_data, dict):
             raise Exception(f"Respuesta inesperada de http_client.get para {action_name}: tipo {type(response_data)}. Contenido: {str(response_data)[:200]}")
         if response_data.get("status") == "error" and "http_status" in response_data: return response_data

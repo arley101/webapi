@@ -45,7 +45,7 @@ async async def profile_get_my_profile(client: AuthenticatedHttpClient, params: 
     query_api_params = {"$select": select_fields}
     try:
         profile_scope = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
-        response_data = client.get(url, scope=profile_scope, params=query_api_params)
+        response_data = await client.get(url, scope=profile_scope, params=query_api_params)
         if not isinstance(response_data, dict):
             raise Exception(f"Respuesta inesperada de client.get (se esperaba dict): {type(response_data)}. Contenido: {str(response_data)[:200]}")
         if response_data.get("status") == "error" and "http_status" in response_data: return response_data # Propagar error de http_client
@@ -64,7 +64,7 @@ async async def profile_get_my_manager(client: AuthenticatedHttpClient, params: 
     query_api_params = {"$select": select_fields}
     try:
         manager_scope = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
-        response_data = client.get(url, scope=manager_scope, params=query_api_params)
+        response_data = await client.get(url, scope=manager_scope, params=query_api_params)
         if not isinstance(response_data, dict):
             raise Exception(f"Respuesta inesperada de client.get para manager: {type(response_data)}")
         if response_data.get("status") == "error" and "http_status" in response_data: return response_data
@@ -88,7 +88,7 @@ async async def profile_get_my_direct_reports(client: AuthenticatedHttpClient, p
     if params.get("$top"): query_api_params["$top"] = params["$top"] 
     try:
         reports_scope = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
-        response_data = client.get(url, scope=reports_scope, params=query_api_params)
+        response_data = await client.get(url, scope=reports_scope, params=query_api_params)
         if not isinstance(response_data, dict):
             raise Exception(f"Respuesta inesperada de client.get para direct reports: {type(response_data)}")
         if response_data.get("status") == "error" and "http_status" in response_data: return response_data
@@ -106,7 +106,7 @@ async async def profile_get_my_photo(client: AuthenticatedHttpClient, params: Di
     url = f"{settings.GRAPH_API_BASE_URL}/users/{user_id}/{url_photo_segment}/$value"
     try:
         photo_scope = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
-        response_content = client.get(url, scope=photo_scope, stream=True) # client.get devuelve bytes si stream=True y es exitoso
+        response_content = await client.get(url, scope=photo_scope, stream=True) # client.get devuelve bytes si stream=True y es exitoso
         if isinstance(response_content, bytes):
             return response_content 
         elif isinstance(response_content, dict) and response_content.get("status") == "error":
@@ -131,7 +131,7 @@ async async def profile_update_my_profile(client: AuthenticatedHttpClient, param
     url = f"{settings.GRAPH_API_BASE_URL}/users/{user_id}"
     try:
         update_scope = getattr(settings, 'GRAPH_SCOPE_USER_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # type: ignore
-        response_obj = client.patch(url, scope=update_scope, json_data=update_payload) # client.patch devuelve requests.Response
+        response_obj = await client.patch(url, scope=update_scope, json_data=update_payload) # client.patch devuelve requests.Response
         if response_obj.status_code == 204:
             get_params = {"user_id": user_id}
             if params.get("select_after_update"): get_params["select"] = params["select_after_update"] # type: ignore
