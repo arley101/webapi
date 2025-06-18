@@ -43,7 +43,7 @@ def _handle_azure_mgmt_api_error(e: Exception, action_name: str, params_for_log:
         "arm_error_code": arm_error_code
     }
 
-async def list_resource_groups(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_resource_groups(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "azure_list_resource_groups"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -73,7 +73,7 @@ async def list_resource_groups(client: AuthenticatedHttpClient, params: Dict[str
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-async def list_resources_in_rg(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_resources_in_rg(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "azure_list_resources_in_rg"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -107,7 +107,7 @@ async def list_resources_in_rg(client: AuthenticatedHttpClient, params: Dict[str
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-async def get_resource(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def get_resource(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "azure_get_resource"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -138,7 +138,7 @@ async def get_resource(client: AuthenticatedHttpClient, params: Dict[str, Any]) 
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-async def restart_function_app(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def restart_function_app(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "azure_restart_function_app"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -184,7 +184,7 @@ async def restart_function_app(client: AuthenticatedHttpClient, params: Dict[str
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-async def list_functions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_functions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "azure_list_functions"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -213,7 +213,7 @@ async def list_functions(client: AuthenticatedHttpClient, params: Dict[str, Any]
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-async def get_function_status(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def get_function_status(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "azure_get_function_status"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -256,7 +256,7 @@ async def get_function_status(client: AuthenticatedHttpClient, params: Dict[str,
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-async def create_deployment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
+async async def create_deployment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
     params = params or {}
     action_name = "azure_create_deployment"
     log_params_display = {k:v for k,v in params.items() if k not in ['template', 'parameters', 'deployment_properties']}
@@ -303,7 +303,7 @@ async def create_deployment(client: AuthenticatedHttpClient, params: Dict[str, A
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
 
-async def list_logic_apps(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
+async async def list_logic_apps(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
     params = params or {}
     action_name = "azure_list_logic_apps"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -346,7 +346,7 @@ async def list_logic_apps(client: AuthenticatedHttpClient, params: Dict[str, Any
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
 
-async def trigger_logic_app(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
+async async def trigger_logic_app(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
     params = params or {}
     action_name = "azure_trigger_logic_app"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -360,7 +360,7 @@ async def trigger_logic_app(client: AuthenticatedHttpClient, params: Dict[str, A
         "http_status": 501
     }
 
-async def get_logic_app_run_history(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
+async async def get_logic_app_run_history(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
     params = params or {}
     action_name = "azure_get_logic_app_run_history"
     logger.info(f"Ejecutando {action_name} con params: {params}")

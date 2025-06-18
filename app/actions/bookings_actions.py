@@ -25,7 +25,7 @@ def _handle_bookings_api_error(e: Exception, action_name: str, params_for_log: O
             "http_status": status_code_int, "details": str(e) if not isinstance(e, requests.exceptions.HTTPError) else details_str,
             "graph_error_code": graph_error_code}
 
-async def list_businesses(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_businesses(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "bookings_list_businesses"; logger.info(f"Ejecutando {action_name}: {params}")
     url = f"{settings.GRAPH_API_BASE_URL}/solutions/bookingBusinesses"
     query_params: Dict[str, Any] = {}
@@ -41,7 +41,7 @@ async def list_businesses(client: AuthenticatedHttpClient, params: Dict[str, Any
         return {"status": "success", "data": response_data.get("value", [])}
     except Exception as e: return _handle_bookings_api_error(e, action_name, params)
 
-async def get_business(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def get_business(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "bookings_get_business"; logger.info(f"Ejecutando {action_name}: {params}")
     business_id = params.get("business_id")
     if not business_id: return {"status": "error", "action": action_name, "message": "'business_id' es requerido.", "http_status": 400}
@@ -55,7 +55,7 @@ async def get_business(client: AuthenticatedHttpClient, params: Dict[str, Any]) 
         return {"status": "success", "data": response_data}
     except Exception as e: return _handle_bookings_api_error(e, action_name, params)
 
-async def list_services(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_services(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "bookings_list_services"; logger.info(f"Ejecutando {action_name}: {params}")
     business_id = params.get("business_id")
     if not business_id: return {"status": "error", "action": action_name, "message": "'business_id' es requerido.", "http_status": 400}
@@ -69,7 +69,7 @@ async def list_services(client: AuthenticatedHttpClient, params: Dict[str, Any])
         return {"status": "success", "data": response_data.get("value", [])}
     except Exception as e: return _handle_bookings_api_error(e, action_name, params)
 
-async def list_staff(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_staff(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "bookings_list_staff"; logger.info(f"Ejecutando {action_name}: {params}")
     business_id = params.get("business_id")
     if not business_id: return {"status": "error", "action": action_name, "message": "'business_id' es requerido.", "http_status": 400}
@@ -83,7 +83,7 @@ async def list_staff(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
         return {"status": "success", "data": response_data.get("value", [])}
     except Exception as e: return _handle_bookings_api_error(e, action_name, params)
 
-async def create_appointment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def create_appointment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "bookings_create_appointment"; log_safe = {k:v for k,v in params.items() if k != 'appointment_payload'}
     logger.info(f"Ejecutando {action_name} (payload omitido): %s", log_safe)
     business_id = params.get("business_id"); appointment_payload = params.get("appointment_payload")
@@ -100,7 +100,7 @@ async def create_appointment(client: AuthenticatedHttpClient, params: Dict[str, 
         return {"status": "success", "data": response_obj.json()}
     except Exception as e: return _handle_bookings_api_error(e, action_name, params)
 
-async def list_appointments(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_appointments(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "bookings_list_appointments"; logger.info(f"Ejecutando {action_name}: {params}")
     business_id = params.get("business_id"); start_dt = params.get("start_datetime_str"); end_dt = params.get("end_datetime_str")     
     if not business_id: return {"status": "error", "action": action_name, "message": "'business_id' requerido.", "http_status": 400}
@@ -122,7 +122,7 @@ async def list_appointments(client: AuthenticatedHttpClient, params: Dict[str, A
         return {"status": "success", "data": response_data.get("value", [])}
     except Exception as e: return _handle_bookings_api_error(e, action_name, params)
 
-async def get_appointment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def get_appointment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "bookings_get_appointment"; logger.info(f"Ejecutando {action_name}: {params}")
     business_id = params.get("business_id"); appointment_id = params.get("appointment_id")
     if not business_id or not appointment_id: return {"status": "error", "action": action_name, "message": "'business_id' y 'appointment_id' requeridos.", "http_status": 400}
@@ -136,7 +136,7 @@ async def get_appointment(client: AuthenticatedHttpClient, params: Dict[str, Any
         return {"status": "success", "data": response_data}
     except Exception as e: return _handle_bookings_api_error(e, action_name, params)
 
-async def cancel_appointment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def cancel_appointment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "bookings_cancel_appointment"; logger.info(f"Ejecutando {action_name}: {params}")
     business_id = params.get("business_id"); appointment_id = params.get("appointment_id")
     if not business_id or not appointment_id: return {"status": "error", "action": action_name, "message": "'business_id' y 'appointment_id' requeridos.", "http_status": 400}

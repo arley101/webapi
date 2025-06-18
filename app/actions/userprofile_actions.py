@@ -33,7 +33,7 @@ def _handle_userprofile_api_error(e: Exception, action_name: str, params_for_log
         "http_status": status_code_int, "graph_error_code": graph_error_code
     }
 
-async def profile_get_my_profile(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def profile_get_my_profile(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "profile_get_my_profile"
     logger.info(f"Ejecutando {action_name} con params: {params}")
     user_id: Optional[str] = params.get("user_id") 
@@ -53,7 +53,7 @@ async def profile_get_my_profile(client: AuthenticatedHttpClient, params: Dict[s
     except ValueError as ve: return _handle_userprofile_api_error(ve, action_name, params)
     except Exception as e: return _handle_userprofile_api_error(e, action_name, params)
 
-async def profile_get_my_manager(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def profile_get_my_manager(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "profile_get_my_manager"
     logger.info(f"Ejecutando {action_name} con params: {params}")
     user_id: Optional[str] = params.get("user_id")
@@ -76,7 +76,7 @@ async def profile_get_my_manager(client: AuthenticatedHttpClient, params: Dict[s
     except ValueError as ve: return _handle_userprofile_api_error(ve, action_name, params)
     except Exception as e: return _handle_userprofile_api_error(e, action_name, params)
 
-async def profile_get_my_direct_reports(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def profile_get_my_direct_reports(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "profile_get_my_direct_reports"
     logger.info(f"Ejecutando {action_name} con params: {params}")
     user_id: Optional[str] = params.get("user_id")
@@ -96,7 +96,7 @@ async def profile_get_my_direct_reports(client: AuthenticatedHttpClient, params:
     except ValueError as ve: return _handle_userprofile_api_error(ve, action_name, params)
     except Exception as e: return _handle_userprofile_api_error(e, action_name, params)
 
-async def profile_get_my_photo(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Any: 
+async async def profile_get_my_photo(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Any: 
     params = params or {}; action_name = "profile_get_my_photo"
     logger.info(f"Ejecutando {action_name} con params: {params}")
     user_id: Optional[str] = params.get("user_id")
@@ -120,7 +120,7 @@ async def profile_get_my_photo(client: AuthenticatedHttpClient, params: Dict[str
     except ValueError as ve: return _handle_userprofile_api_error(ve, action_name, params)
     except Exception as e: return _handle_userprofile_api_error(e, action_name, params)
 
-async def profile_update_my_profile(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def profile_update_my_profile(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "profile_update_my_profile"
     log_params = {k:v for k,v in params.items() if k != 'update_payload'}
     logger.info(f"Ejecutando {action_name} con params: {log_params}")

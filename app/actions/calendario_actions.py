@@ -94,7 +94,7 @@ def _calendar_paged_request(
     except Exception as e:
         return _handle_calendar_api_error(e, action_name_for_log, params)
 
-async def calendar_list_events(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def calendar_list_events(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "calendar_list_events"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -137,7 +137,7 @@ async def calendar_list_events(client: AuthenticatedHttpClient, params: Dict[str
     logger.info(f"Listando {log_action_detail}. Query: {query_api_params}")
     return _calendar_paged_request(client, url_base, CALENDARS_READ_SCOPE, params, query_api_params, max_items_total, action_name)
 
-async def calendar_create_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def calendar_create_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "calendar_create_event"
     log_params = {k:v for k,v in params.items() if k not in ['event_payload']}
@@ -176,7 +176,7 @@ async def calendar_create_event(client: AuthenticatedHttpClient, params: Dict[st
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 
-async def get_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def get_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "get_event"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -205,7 +205,7 @@ async def get_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 
-async def update_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def update_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "calendar_update_event"
     log_params = {k:v for k,v in params.items() if k not in ['update_payload']}
@@ -240,7 +240,7 @@ async def update_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) 
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 
-async def delete_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def delete_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "calendar_delete_event"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -267,7 +267,7 @@ async def delete_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) 
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 
-async def find_meeting_times(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def find_meeting_times(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "calendar_find_meeting_times"
     log_params = {k:v for k,v in params.items() if k not in ['meeting_time_suggestion_payload']}
@@ -295,7 +295,7 @@ async def find_meeting_times(client: AuthenticatedHttpClient, params: Dict[str, 
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 
-async def get_schedule(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def get_schedule(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "calendar_get_schedule"
     log_params = {k:v for k,v in params.items() if k not in ['schedule_information_payload']}

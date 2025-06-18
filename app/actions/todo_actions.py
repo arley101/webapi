@@ -56,7 +56,7 @@ def _handle_todo_api_error(e: Exception, action_name: str, params_for_log: Optio
         "details": str(e)
     }
 
-async def _todo_paged_request(client: AuthenticatedHttpClient, url_base: str, scope: List[str], params_input: Dict[str, Any], query_api_params_initial: Dict[str, Any], max_items_total: Optional[int], action_name_for_log: str) -> Dict[str, Any]:
+async async def _todo_paged_request(client: AuthenticatedHttpClient, url_base: str, scope: List[str], params_input: Dict[str, Any], query_api_params_initial: Dict[str, Any], max_items_total: Optional[int], action_name_for_log: str) -> Dict[str, Any]:
     all_items = []
     current_url = url_base
     page_count = 0
@@ -89,7 +89,7 @@ async def _todo_paged_request(client: AuthenticatedHttpClient, url_base: str, sc
     except Exception as e:
         return _handle_todo_api_error(e, action_name_for_log, params_input)
 
-async def list_task_lists(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_task_lists(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "todo_list_task_lists"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -113,7 +113,7 @@ async def list_task_lists(client: AuthenticatedHttpClient, params: Dict[str, Any
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
 
-async def create_task_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def create_task_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "todo_create_task_list"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -134,7 +134,7 @@ async def create_task_list(client: AuthenticatedHttpClient, params: Dict[str, An
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
 
-async def list_tasks(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_tasks(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "todo_list_tasks"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -161,7 +161,7 @@ async def list_tasks(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
 
-async def create_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def create_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "todo_create_task"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -186,7 +186,7 @@ async def create_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
 
-async def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "todo_get_task"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -215,7 +215,7 @@ async def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> D
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
 
-async def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "todo_update_task"
     logger.info(f"Ejecutando {action_name}")
@@ -242,7 +242,7 @@ async def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
 
-async def delete_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def delete_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "todo_delete_task"
     logger.info(f"Ejecutando {action_name} con params: {params}")
