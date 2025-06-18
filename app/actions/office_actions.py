@@ -63,7 +63,7 @@ def _handle_office_api_error(e: Exception, action_name: str, params_for_log: Opt
         "graph_error_code": graph_error_code
     }
 
-async def crear_documento_word(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def crear_documento_word(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "office_crear_documento_word"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -92,7 +92,7 @@ async def crear_documento_word(client: AuthenticatedHttpClient, params: Dict[str
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
 
-async def reemplazar_contenido_word(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def reemplazar_contenido_word(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "office_reemplazar_contenido_word"
     logger.info(f"Ejecutando {action_name}")
@@ -124,7 +124,7 @@ async def reemplazar_contenido_word(client: AuthenticatedHttpClient, params: Dic
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
 
-async def obtener_documento_word_binario(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[bytes, Dict[str, Any]]:
+async async def obtener_documento_word_binario(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[bytes, Dict[str, Any]]:
     params = params or {}
     action_name = "office_obtener_documento_word_binario"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -147,7 +147,7 @@ async def obtener_documento_word_binario(client: AuthenticatedHttpClient, params
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
 
-async def crear_libro_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def crear_libro_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "office_crear_libro_excel"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -175,7 +175,7 @@ async def crear_libro_excel(client: AuthenticatedHttpClient, params: Dict[str, A
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
 
-async def leer_celda_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def leer_celda_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "office_leer_celda_excel"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -206,7 +206,7 @@ async def leer_celda_excel(client: AuthenticatedHttpClient, params: Dict[str, An
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
 
-async def escribir_celda_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def escribir_celda_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "office_escribir_celda_excel"
     logger.info(f"Ejecutando {action_name}")
@@ -236,7 +236,7 @@ async def escribir_celda_excel(client: AuthenticatedHttpClient, params: Dict[str
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
 
-async def crear_tabla_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def crear_tabla_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "office_crear_tabla_excel"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -266,7 +266,7 @@ async def crear_tabla_excel(client: AuthenticatedHttpClient, params: Dict[str, A
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
 
-async def agregar_filas_tabla_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def agregar_filas_tabla_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "office_agregar_filas_tabla_excel"
     logger.info(f"Ejecutando {action_name}")

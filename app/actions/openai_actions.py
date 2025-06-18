@@ -34,7 +34,7 @@ def _check_openai_config(action_name_for_log: str) -> bool:
         logger.critical(f"CRÍTICO ({action_name_for_log}): 'OPENAI_API_DEFAULT_SCOPE' no construido."); return False
     return True
 
-async def chat_completion(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def chat_completion(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "openai_chat_completion"
     log_params = {k:v for k,v in params.items() if k != 'messages'}; 
     if 'messages' in params: log_params['messages_count'] = len(params['messages']) if isinstance(params.get('messages'), list) else 'Invalid' # type: ignore
@@ -55,7 +55,7 @@ async def chat_completion(client: AuthenticatedHttpClient, params: Dict[str, Any
         return {"status": "success", "data": response_obj.json()} # client.post devuelve requests.Response
     except Exception as e: return _handle_openai_api_error(e, action_name, params)
 
-async def get_embedding(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def get_embedding(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "openai_get_embedding"
     log_params = {k:v for k,v in params.items() if k != 'input'}; 
     if 'input' in params: log_params['input_type'] = type(params['input']).__name__
@@ -75,7 +75,7 @@ async def get_embedding(client: AuthenticatedHttpClient, params: Dict[str, Any])
         return {"status": "success", "data": response_obj.json()}
     except Exception as e: return _handle_openai_api_error(e, action_name, params)
 
-async def completion(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def completion(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "openai_completion"
     log_params = {k:v for k,v in params.items() if k != 'prompt'}; 
     if 'prompt' in params: log_params['prompt_provided'] = True
@@ -95,7 +95,7 @@ async def completion(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
         return {"status": "success", "data": response_obj.json()}
     except Exception as e: return _handle_openai_api_error(e, action_name, params)
 
-async def list_models(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+async async def list_models(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}; action_name = "openai_list_models"
     logger.info(f"Ejecutando {action_name} con params: %s", params)
     if not _check_openai_config(action_name): return {"status": "error", "message": "Configuración Azure OpenAI incompleta.", "http_status": 500}
