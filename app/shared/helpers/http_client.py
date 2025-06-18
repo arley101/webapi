@@ -12,7 +12,6 @@ class AuthenticatedHttpClient:
         self._client = httpx.AsyncClient(timeout=30.0)
 
     async def _get_token(self) -> str:
-        # En el futuro, se puede añadir lógica para refrescar el token si expira.
         if not self._token or self._token.is_expired:
             self._token = await self._credential.get_token("https://graph.microsoft.com/.default")
         return self._token.token
@@ -21,11 +20,12 @@ class AuthenticatedHttpClient:
         token = await self._get_token()
         headers = kwargs.pop('headers', {})
         headers.setdefault("Authorization", f"Bearer {token}")
-        headers.setdefault("Content-Type", "application/json")
+        if method in ["POST", "PATCH", "PUT"] and "Content-Type" not in headers:
+            headers["Content-Type"] = "application/json"
         
         return await self._client.request(method, url, headers=headers, **kwargs)
 
-    # --- MÉTODOS DE CONVENIENCIA AÑADIDOS ---
+    # --- MÉTODOS DE CONVENIENCIA QUE FALTABAN ---
     async def get(self, url: str, params: Optional[Dict[str, Any]] = None) -> httpx.Response:
         return await self.request("GET", url, params=params)
 
