@@ -69,7 +69,7 @@ async async def _todo_paged_request(client: AuthenticatedHttpClient, url_base: s
             page_count += 1
             current_params = query_api_params_initial if page_count == 1 else None
             
-            response_data = client.get(url=current_url, scope=scope, params=current_params)
+            response_data = await client.get(url=current_url, scope=scope, params=current_params)
             
             if not isinstance(response_data, dict): raise TypeError(f"Respuesta inesperada: {type(response_data)}")
             if response_data.get("status") == "error": return response_data
@@ -129,7 +129,7 @@ async async def create_task_list(client: AuthenticatedHttpClient, params: Dict[s
         body = {"displayName": displayName}
         
         todo_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url, scope=todo_rw_scope, json_data=body)
+        response_obj = await client.post(url, scope=todo_rw_scope, json_data=body)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
@@ -181,7 +181,7 @@ async async def create_task(client: AuthenticatedHttpClient, params: Dict[str, A
             body["dueDateTime"] = {"dateTime": _parse_and_utc_datetime_str(params["dueDateTime"], "dueDateTime"), "timeZone": "UTC"}
 
         todo_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url, scope=todo_rw_scope, json_data=body)
+        response_obj = await client.post(url, scope=todo_rw_scope, json_data=body)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
@@ -204,7 +204,7 @@ async async def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]
         if params.get('select'): query_api_params['$select'] = params.get('select')
         
         todo_read_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READ', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_data = client.get(url, scope=todo_read_scope, params=query_api_params if query_api_params else None)
+        response_data = await client.get(url, scope=todo_read_scope, params=query_api_params if query_api_params else None)
 
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -237,7 +237,7 @@ async async def update_task(client: AuthenticatedHttpClient, params: Dict[str, A
             body_update["dueDateTime"] = {"dateTime": _parse_and_utc_datetime_str(body_update["dueDateTime"], "dueDateTime"), "timeZone": "UTC"}
         
         todo_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.patch(url, scope=todo_rw_scope, json_data=body_update)
+        response_obj = await client.patch(url, scope=todo_rw_scope, json_data=body_update)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_todo_api_error(e, action_name, params)
@@ -258,7 +258,7 @@ async async def delete_task(client: AuthenticatedHttpClient, params: Dict[str, A
         url = f"{settings.GRAPH_API_BASE_URL}/users/{user_identifier}/todo/lists/{list_id}/tasks/{task_id}"
         
         todo_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.delete(url, scope=todo_rw_scope)
+        response_obj = await client.delete(url, scope=todo_rw_scope)
         
         if response_obj.status_code == 204:
             return {"status": "success", "message": f"Tarea '{task_id}' eliminada.", "http_status": 204}

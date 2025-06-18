@@ -75,7 +75,7 @@ async async def _internal_onedrive_get_item_metadata(client: AuthenticatedHttpCl
     logger.debug(f"Interno: Obteniendo metadatos OneDrive para user '{user_id}', item '{item_path_or_id}'")
     files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     
-    response_data = client.get(item_endpoint, scope=files_read_scope, params=query_api_params if query_api_params else None)
+    response_data = await client.get(item_endpoint, scope=files_read_scope, params=query_api_params if query_api_params else None)
     
     if isinstance(response_data, dict):
         if response_data.get("status") == "error" and "http_status" in response_data:
@@ -124,7 +124,7 @@ def _onedrive_paged_request(
             page_count += 1
             current_params_for_call = query_api_params_initial if page_count == 1 else None
             
-            response_data = client.get(url=current_url, scope=scope, params=current_params_for_call)
+            response_data = await client.get(url=current_url, scope=scope, params=current_params_for_call)
             
             if not isinstance(response_data, dict):
                  return _handle_onedrive_api_error(TypeError(f"Respuesta inesperada: {type(response_data)}"), action_name_for_log, params)
@@ -213,12 +213,12 @@ async async def upload_file(client: AuthenticatedHttpClient, params: Dict[str, A
             url_put_simple = f"{item_endpoint_for_upload_base}/content"
             query_api_params_put = {"@microsoft.graph.conflictBehavior": conflict_behavior}
             custom_headers_put = {'Content-Type': 'application/octet-stream'}
-            response_obj = client.put(url=url_put_simple, scope=files_rw_scope, params=query_api_params_put, data=contenido_bytes, headers=custom_headers_put)
+            response_obj = await client.put(url=url_put_simple, scope=files_rw_scope, params=query_api_params_put, data=contenido_bytes, headers=custom_headers_put)
             return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
         else:
             create_session_url = f"{item_endpoint_for_upload_base}/createUploadSession"
             session_body = {"item": {"@microsoft.graph.conflictBehavior": conflict_behavior}}
-            response_session_obj = client.post(create_session_url, scope=files_rw_scope, json_data=session_body)
+            response_session_obj = await client.post(create_session_url, scope=files_rw_scope, json_data=session_body)
             upload_url = response_session_obj.json().get("uploadUrl")
             if not upload_url: raise ValueError("No se pudo obtener 'uploadUrl' de la sesión.")
 
@@ -255,7 +255,7 @@ async async def download_file(client: AuthenticatedHttpClient, params: Dict[str,
         url = f"{item_endpoint_base}/content"
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         
-        response_content = client.get(url, scope=files_read_scope, stream=True)
+        response_content = await client.get(url, scope=files_read_scope, stream=True)
         if isinstance(response_content, bytes):
             return response_content
         else:
@@ -280,7 +280,7 @@ async async def delete_item(client: AuthenticatedHttpClient, params: Dict[str, A
         
         item_endpoint = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.delete(item_endpoint, scope=files_rw_scope)
+        response_obj = await client.delete(item_endpoint, scope=files_rw_scope)
         return {"status": "success", "message": "Elemento eliminado.", "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
@@ -305,7 +305,7 @@ async async def create_folder(client: AuthenticatedHttpClient, params: Dict[str,
         body = {"name": nombre_carpeta, "folder": {}, "@microsoft.graph.conflictBehavior": params.get("conflict_behavior", "fail")}
         
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url, scope=files_rw_scope, json_data=body)
+        response_obj = await client.post(url, scope=files_rw_scope, json_data=body)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
@@ -333,7 +333,7 @@ async async def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any
         if params.get("nuevo_nombre"): body["name"] = params["nuevo_nombre"]
         
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.patch(item_origen_endpoint, scope=files_rw_scope, json_data=body)
+        response_obj = await client.patch(item_origen_endpoint, scope=files_rw_scope, json_data=body)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
@@ -362,7 +362,7 @@ async async def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any
         if params.get("nuevo_nombre_copia"): body_copy_payload["name"] = params["nuevo_nombre_copia"]
         
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url_copy, scope=files_rw_scope, json_data=body_copy_payload)
+        response_obj = await client.post(url_copy, scope=files_rw_scope, json_data=body_copy_payload)
         
         monitor_url = response_obj.headers.get('Location')
         if response_obj.status_code == 202 and monitor_url:
@@ -393,7 +393,7 @@ async async def update_item_metadata(client: AuthenticatedHttpClient, params: Di
         item_endpoint_for_update = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
         
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.patch(item_endpoint_for_update, scope=files_rw_scope, json_data=nuevos_valores_payload)
+        response_obj = await client.patch(item_endpoint_for_update, scope=files_rw_scope, json_data=nuevos_valores_payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
@@ -418,7 +418,7 @@ async async def search_items(client: AuthenticatedHttpClient, params: Dict[str, 
         if params.get("select"): api_query_params['$select'] = params["select"]
         
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_data = client.get(url_search, scope=files_read_scope, params=api_query_params)
+        response_data = await client.get(url_search, scope=files_read_scope, params=api_query_params)
 
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -455,7 +455,7 @@ async async def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[s
         if params.get("expirationDateTime"): body["expirationDateTime"] = params["expirationDateTime"]
         
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url_create_link, scope=files_rw_scope, json_data=body)
+        response_obj = await client.post(url_create_link, scope=files_rw_scope, json_data=body)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)

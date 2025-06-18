@@ -41,7 +41,7 @@ async async def listar_flows(client: AuthenticatedHttpClient, params: Dict[str, 
     try:
         mgmt_scope = settings.AZURE_MGMT_DEFAULT_SCOPE
         if not mgmt_scope: raise ValueError("AZURE_MGMT_DEFAULT_SCOPE no configurado.")
-        response_data = client.get(url, scope=mgmt_scope, params=odata_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        response_data = await client.get(url, scope=mgmt_scope, params=odata_params, timeout=settings.DEFAULT_API_TIMEOUT)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data
         return {"status": "success", "data": response_data.get("value", [])}
@@ -60,7 +60,7 @@ async async def obtener_flow(client: AuthenticatedHttpClient, params: Dict[str, 
     try:
         mgmt_scope = settings.AZURE_MGMT_DEFAULT_SCOPE
         if not mgmt_scope: raise ValueError("AZURE_MGMT_DEFAULT_SCOPE no configurado.")
-        response_data = client.get(url, scope=mgmt_scope, params=odata_params if odata_params else None, timeout=settings.DEFAULT_API_TIMEOUT)
+        response_data = await client.get(url, scope=mgmt_scope, params=odata_params if odata_params else None, timeout=settings.DEFAULT_API_TIMEOUT)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data # Propagar error de http_client
         return {"status": "success", "data": response_data}
@@ -108,7 +108,7 @@ async async def obtener_estado_ejecucion_flow(client: AuthenticatedHttpClient, p
     try:
         mgmt_scope = settings.AZURE_MGMT_DEFAULT_SCOPE
         if not mgmt_scope: raise ValueError("AZURE_MGMT_DEFAULT_SCOPE no configurado.")
-        response_data = client.get(url, scope=mgmt_scope, params=odata_params if odata_params else None, timeout=settings.DEFAULT_API_TIMEOUT)
+        response_data = await client.get(url, scope=mgmt_scope, params=odata_params if odata_params else None, timeout=settings.DEFAULT_API_TIMEOUT)
         if not isinstance(response_data, dict): raise Exception(f"Respuesta inesperada: {type(response_data)}")
         if response_data.get("status") == "error": return response_data
         return {"status": "success", "data": response_data}

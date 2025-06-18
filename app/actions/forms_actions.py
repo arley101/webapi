@@ -111,7 +111,7 @@ async async def list_forms(client: AuthenticatedHttpClient, params: Dict[str, An
         logger.info(f"Buscando Formularios (Query Graph: '{effective_search_query}') en {log_location_description}")
         
         forms_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.get(url=url, scope=forms_read_scope, params=api_query_odata_params) 
+        response = await client.get(url=url, scope=forms_read_scope, params=api_query_odata_params) 
         search_results_data = response.json()
         
         items_found: List[Dict[str, Any]] = []
@@ -183,7 +183,7 @@ async async def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]
     logger.info(f"Obteniendo metadatos del archivo de Formulario: {log_target}")
     forms_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response = client.get(url=url_base_item, scope=forms_read_scope, params=api_query_odata_params)
+        response = await client.get(url=url_base_item, scope=forms_read_scope, params=api_query_odata_params)
         form_file_metadata = response.json()
         
         is_confirmed_form_file = False

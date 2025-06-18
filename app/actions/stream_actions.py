@@ -144,7 +144,7 @@ async async def listar_videos(client: AuthenticatedHttpClient, params: Dict[str,
         logger.info(f"Buscando videos (KQL Query='{final_search_kql_query}') en {log_location_description}. URL: {search_api_url.split('?')[0]}... OData Params: {api_query_odata_params}")
         
         stream_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # Files.Read.All
-        response = client.get(url=search_api_url, scope=stream_read_scope, params=api_query_odata_params, timeout=VIDEO_ACTION_TIMEOUT)
+        response = await client.get(url=search_api_url, scope=stream_read_scope, params=api_query_odata_params, timeout=VIDEO_ACTION_TIMEOUT)
         search_results = response.json()
         
         items_found: List[Dict[str, Any]] = []
@@ -233,7 +233,7 @@ async async def obtener_metadatos_video(client: AuthenticatedHttpClient, params:
         logger.info(f"Obteniendo metadatos de video para {log_item_description}. Select: {select_fields}")
         
         stream_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.get(url=item_url, scope=stream_read_scope, params=api_query_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        response = await client.get(url=item_url, scope=stream_read_scope, params=api_query_params, timeout=settings.DEFAULT_API_TIMEOUT)
         video_metadata = response.json()
         
         if not video_metadata.get('video') and not video_metadata.get('file', {}).get('mimeType','').startswith('video/'):

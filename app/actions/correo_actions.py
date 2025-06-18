@@ -58,7 +58,7 @@ def _email_paged_request(
             current_params_for_call = query_api_params_initial if is_first_call else None
             logger.debug(f"Página {page_count} para '{action_name_for_log}': GET {current_url.split('?')[0]} con params: {current_params_for_call}")
             
-            response_data = client.get(url=current_url, scope=scope_list, params=current_params_for_call)
+            response_data = await client.get(url=current_url, scope=scope_list, params=current_params_for_call)
             
             if not isinstance(response_data, dict): # Si no es dict, es un error o tipo inesperado
                 logger.error(f"{action_name_for_log}: Paginación falló, client.get devolvió tipo {type(response_data)}")
@@ -166,7 +166,7 @@ async async def get_message(client: AuthenticatedHttpClient, params: Dict[str, A
     
     logger.info(f"{action_name}: Leyendo correo '{message_id}' para usuario '{user_identifier}'")
     try:
-        response_data = client.get(url, scope=MAIL_READ_SCOPE, params=query_api_params)
+        response_data = await client.get(url, scope=MAIL_READ_SCOPE, params=query_api_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error" and "http_status" in response_data:
                 response_data["action"] = action_name
@@ -226,7 +226,7 @@ async async def send_message(client: AuthenticatedHttpClient, params: Dict[str, 
     logger.info(f"{action_name}: Enviando correo desde '{user_identifier}'. Asunto: '{subject}'")
     try:
         # client.post devuelve un objeto requests.Response
-        response_obj = client.post(url, scope=MAIL_SEND_SCOPE, json_data=sendmail_payload)
+        response_obj = await client.post(url, scope=MAIL_SEND_SCOPE, json_data=sendmail_payload)
         # sendMail devuelve 202 Accepted
         # El cuerpo de la respuesta de un 202 es usualmente vacío.
         if response_obj.status_code == 202:
@@ -262,7 +262,7 @@ async async def delete_message(client: AuthenticatedHttpClient, params: Dict[str
     
     logger.info(f"{action_name}: Eliminando correo '{message_id}' para usuario '{user_identifier}'")
     try:
-        response_obj = client.delete(url, scope=MAIL_READ_WRITE_SCOPE)
+        response_obj = await client.delete(url, scope=MAIL_READ_WRITE_SCOPE)
         # DELETE devuelve 204 No Content
         if response_obj.status_code == 204:
             return {"status": "success", "message": "Correo movido a elementos eliminados.", "http_status": response_obj.status_code}
@@ -308,7 +308,7 @@ async async def reply_message(client: AuthenticatedHttpClient, params: Dict[str,
     log_operation = "Respondiendo a todos" if reply_all else "Respondiendo"
     logger.info(f"{action_name}: {log_operation} al correo '{message_id}' para usuario '{user_identifier}'")
     try:
-        response_obj = client.post(url, scope=MAIL_SEND_SCOPE, json_data=payload_reply)
+        response_obj = await client.post(url, scope=MAIL_SEND_SCOPE, json_data=payload_reply)
         if response_obj.status_code == 202: # Accepted
             return {"status": "success", "message": f"Solicitud de {log_operation.lower()} aceptada.", "http_status": response_obj.status_code, "data": None}
         else:
@@ -350,7 +350,7 @@ async async def forward_message(client: AuthenticatedHttpClient, params: Dict[st
 
     logger.info(f"{action_name}: Reenviando correo '{message_id}' para usuario '{user_identifier}'")
     try:
-        response_obj = client.post(url, scope=MAIL_SEND_SCOPE, json_data=payload_forward)
+        response_obj = await client.post(url, scope=MAIL_SEND_SCOPE, json_data=payload_forward)
         if response_obj.status_code == 202: # Accepted
             return {"status": "success", "message": "Solicitud de reenvío aceptada.", "http_status": response_obj.status_code, "data": None}
         else:
@@ -380,7 +380,7 @@ async async def move_message(client: AuthenticatedHttpClient, params: Dict[str, 
     
     logger.info(f"{action_name}: Moviendo correo '{message_id}' para usuario '{user_identifier}' a carpeta '{destination_folder_id}'")
     try:
-        response_data = client.post(url, scope=MAIL_READ_WRITE_SCOPE, json_data=payload) # client.post devuelve un objeto Response
+        response_data = await client.post(url, scope=MAIL_READ_WRITE_SCOPE, json_data=payload) # client.post devuelve un objeto Response
         # move devuelve el mensaje movido (201 Created o 200 OK) con el cuerpo del mensaje.
         # Aquí asumimos que http_client.post devolvió el cuerpo procesado (dict)
         if isinstance(response_data, dict):
@@ -450,7 +450,7 @@ async async def create_folder(client: AuthenticatedHttpClient, params: Dict[str,
     log_ctx = f"carpeta de correo '{folder_name}' para usuario '{user_identifier}'" + (f" bajo '{parent_folder_id}'" if parent_folder_id else " (raíz)")
     logger.info(f"{action_name}: Creando {log_ctx}")
     try:
-        response_data = client.post(url, scope=MAIL_READ_WRITE_SCOPE, json_data=payload) # client.post devuelve un objeto Response
+        response_data = await client.post(url, scope=MAIL_READ_WRITE_SCOPE, json_data=payload) # client.post devuelve un objeto Response
         if isinstance(response_data, dict):
             if response_data.get("status") == "error" and "http_status" in response_data:
                 response_data["action"] = action_name
@@ -505,7 +505,7 @@ async async def search_messages(client: AuthenticatedHttpClient, params: Dict[st
             current_call_params = query_api_params if is_first_call else None
             
             logger.debug(f"Página {page_count} para '{action_name}': GET {current_url.split('?')[0]} con params: {current_call_params}")
-            response_data = client.get(url=current_url, scope=MAIL_READ_SCOPE, params=current_call_params, headers=custom_headers_for_search)
+            response_data = await client.get(url=current_url, scope=MAIL_READ_SCOPE, params=current_call_params, headers=custom_headers_for_search)
             
             if not isinstance(response_data, dict):
                 logger.error(f"{action_name}: Paginación falló, client.get devolvió tipo {type(response_data)}")

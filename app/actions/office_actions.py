@@ -87,7 +87,7 @@ async async def crear_documento_word(client: AuthenticatedHttpClient, params: Di
         headers_upload = {'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'}
         
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.put(url, scope=files_rw_scope, params=query_api_params, data=b'', headers=headers_upload)
+        response_obj = await client.put(url, scope=files_rw_scope, params=query_api_params, data=b'', headers=headers_upload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
@@ -119,7 +119,7 @@ async async def reemplazar_contenido_word(client: AuthenticatedHttpClient, param
             raise TypeError("'nuevo_contenido' debe ser string o bytes.")
 
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.put(url, scope=files_rw_scope, data=data_to_send, headers=headers_upload)
+        response_obj = await client.put(url, scope=files_rw_scope, data=data_to_send, headers=headers_upload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
@@ -139,7 +139,7 @@ async async def obtener_documento_word_binario(client: AuthenticatedHttpClient, 
         url = _get_user_drive_item_content_url(user_identifier, item_id_o_ruta)
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         
-        response_content = client.get(url, scope=files_read_scope, stream=True)
+        response_content = await client.get(url, scope=files_read_scope, stream=True)
         if isinstance(response_content, bytes):
             return response_content 
         else:
@@ -170,7 +170,7 @@ async async def crear_libro_excel(client: AuthenticatedHttpClient, params: Dict[
         headers_upload = {'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}
 
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.put(url, scope=files_rw_scope, params=query_api_params, data=b'', headers=headers_upload)
+        response_obj = await client.put(url, scope=files_rw_scope, params=query_api_params, data=b'', headers=headers_upload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
@@ -196,7 +196,7 @@ async async def leer_celda_excel(client: AuthenticatedHttpClient, params: Dict[s
         url_range_api = f"{_get_user_drive_item_workbook_url_base(user_identifier, item_id)}/range(address='{address_param}')"
         
         workbook_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE) 
-        response_data = client.get(url_range_api, scope=workbook_scope)
+        response_data = await client.get(url_range_api, scope=workbook_scope)
         
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -231,7 +231,7 @@ async async def escribir_celda_excel(client: AuthenticatedHttpClient, params: Di
         payload = {"values": valores}
 
         workbook_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.patch(url_range_api, scope=workbook_scope, json_data=payload) 
+        response_obj = await client.patch(url_range_api, scope=workbook_scope, json_data=payload) 
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
@@ -261,7 +261,7 @@ async async def crear_tabla_excel(client: AuthenticatedHttpClient, params: Dict[
         if params.get("nombre_tabla"): payload["name"] = params["nombre_tabla"]
 
         workbook_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url_create_table, scope=workbook_scope, json_data=payload)
+        response_obj = await client.post(url_create_table, scope=workbook_scope, json_data=payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
@@ -292,7 +292,7 @@ async async def agregar_filas_tabla_excel(client: AuthenticatedHttpClient, param
         payload = {"values": valores_filas, "index": None}
 
         workbook_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url_add_rows, scope=workbook_scope, json_data=payload)
+        response_obj = await client.post(url_add_rows, scope=workbook_scope, json_data=payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)

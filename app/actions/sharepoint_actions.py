@@ -64,7 +64,7 @@ async async def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dic
         lookup_path = site_input
         if not ':' in site_input and (site_input.startswith("/sites/") or site_input.startswith("/teams/")):
             try:
-                root_site_info_resp = client.get(f"{settings.GRAPH_API_BASE_URL}/sites/root?$select=siteCollection", scope=getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
+                root_site_info_resp = await client.get(f"{settings.GRAPH_API_BASE_URL}/sites/root?$select=siteCollection", scope=getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
                 if isinstance(root_site_info_resp, dict):
                     root_site_hostname = root_site_info_resp.get("siteCollection", {}).get("hostname")
                     if root_site_hostname: lookup_path = f"{root_site_hostname}:{site_input}"
@@ -73,7 +73,7 @@ async async def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dic
         
         url_lookup = f"{settings.GRAPH_API_BASE_URL}/sites/{lookup_path}?$select=id"
         try:
-            response_data = client.get(url_lookup, scope=getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
+            response_data = await client.get(url_lookup, scope=getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
             if isinstance(response_data, dict) and response_data.get("id"):
                 return response_data["id"]
         except Exception as e:
@@ -96,14 +96,14 @@ async async def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, dri
     if is_likely_id:
         url_drive_by_id = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives/{target_drive_identifier}?$select=id"
         try:
-            response = client.get(url_drive_by_id, scope=files_read_scope)
+            response = await client.get(url_drive_by_id, scope=files_read_scope)
             if isinstance(response, dict) and response.get("id"): return response["id"]
         except Exception as e: 
             logger.warning(f"Error obteniendo SP Drive por ID '{target_drive_identifier}', buscando por nombre. Error: {e}")
 
     url_list_drives = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives?$select=id,name"
     try:
-        response_drives = client.get(url_list_drives, scope=files_read_scope)
+        response_drives = await client.get(url_list_drives, scope=files_read_scope)
         if isinstance(response_drives, dict) and "value" in response_drives:
             for drive_obj in response_drives["value"]:
                 if drive_obj.get("name", "").lower() == target_drive_identifier.lower():
@@ -137,7 +137,7 @@ def _sp_paged_request(
         while current_url and len(all_items) < effective_max_items and page_count < max_pages_to_fetch:
             page_count += 1
             current_params = query_api_params_initial if page_count == 1 else None
-            response_data = client.get(url=current_url, scope=scope, params=current_params)
+            response_data = await client.get(url=current_url, scope=scope, params=current_params)
             
             if not isinstance(response_data, dict):
                 return _handle_graph_api_error(TypeError(f"Respuesta inesperada en paginación: {type(response_data)}"), action_name_for_log, params_input)
@@ -180,7 +180,7 @@ async async def get_file_metadata(client: AuthenticatedHttpClient, params: Dict[
         query_api_params["$select"] = params.get("select", "id,name,webUrl,size,createdDateTime,lastModifiedDateTime,file,folder,package,parentReference,listItem,@microsoft.graph.downloadUrl")
         if params.get("expand"): query_api_params["$expand"] = params.get("expand")
 
-        response_data = client.get(base_url_item, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE), params=query_api_params)
+        response_data = await client.get(base_url_item, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE), params=query_api_params)
         
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -234,7 +234,7 @@ async async def get_site_info(client: AuthenticatedHttpClient, params: Dict[str,
         query_api_params['$select'] = params.get("select", "id,displayName,name,webUrl,siteCollection")
         
         sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_data = client.get(url, scope=sites_read_scope, params=query_api_params)
+        response_data = await client.get(url, scope=sites_read_scope, params=query_api_params)
 
         if isinstance(response_data, dict):
              if response_data.get("status") == "error": return response_data
@@ -260,7 +260,7 @@ async async def search_sites(client: AuthenticatedHttpClient, params: Dict[str, 
 
     sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response_data = client.get(url, scope=sites_read_scope, params=api_query_params)
+        response_data = await client.get(url, scope=sites_read_scope, params=api_query_params)
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
             return {"status": "success", "data": response_data.get("value", [])}
@@ -289,7 +289,7 @@ async async def create_list(client: AuthenticatedHttpClient, params: Dict[str, A
         if columns_definition: body_payload["columns"] = columns_definition
         
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url, scope=sites_manage_scope, json_data=body_payload)
+        response_obj = await client.post(url, scope=sites_manage_scope, json_data=body_payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
@@ -340,7 +340,7 @@ async async def get_list(client: AuthenticatedHttpClient, params: Dict[str, Any]
         if params.get("expand"): query_api_params['$expand'] = params["expand"]
         
         sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_data = client.get(url, scope=sites_read_scope, params=query_api_params)
+        response_data = await client.get(url, scope=sites_read_scope, params=query_api_params)
         
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -366,7 +366,7 @@ async async def update_list(client: AuthenticatedHttpClient, params: Dict[str, A
         url = f"{settings.GRAPH_API_BASE_URL}/sites/{target_site_id}/lists/{list_id_or_name}"
         
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.patch(url, scope=sites_manage_scope, json_data=update_payload)
+        response_obj = await client.patch(url, scope=sites_manage_scope, json_data=update_payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
@@ -385,7 +385,7 @@ async async def delete_list(client: AuthenticatedHttpClient, params: Dict[str, A
         url = f"{settings.GRAPH_API_BASE_URL}/sites/{target_site_id}/lists/{list_id_or_name}"
         
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.delete(url, scope=sites_manage_scope)
+        response_obj = await client.delete(url, scope=sites_manage_scope)
         
         if response_obj.status_code == 204:
             return {"status": "success", "message": f"Lista '{list_id_or_name}' eliminada.", "http_status": 204}
@@ -412,7 +412,7 @@ async async def add_list_item(client: AuthenticatedHttpClient, params: Dict[str,
         url = f"{settings.GRAPH_API_BASE_URL}/sites/{target_site_id}/lists/{list_id_or_name}/items"
         
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.post(url, scope=sites_manage_scope, json_data=body_payload)
+        response_obj = await client.post(url, scope=sites_manage_scope, json_data=body_payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
@@ -464,7 +464,7 @@ async async def get_list_item(client: AuthenticatedHttpClient, params: Dict[str,
         if params.get("expand", "fields(select=*)"): query_api_params["$expand"] = params.get("expand", "fields(select=*)")
         
         sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_data = client.get(url, scope=sites_read_scope, params=query_api_params)
+        response_data = await client.get(url, scope=sites_read_scope, params=query_api_params)
         
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
@@ -494,7 +494,7 @@ async async def update_list_item(client: AuthenticatedHttpClient, params: Dict[s
         request_headers = {'If-Match': etag} if etag else {}
         
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.patch(url, scope=sites_manage_scope, json_data=fields_to_update, headers=request_headers)
+        response_obj = await client.patch(url, scope=sites_manage_scope, json_data=fields_to_update, headers=request_headers)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
@@ -518,7 +518,7 @@ async async def delete_list_item(client: AuthenticatedHttpClient, params: Dict[s
         request_headers = {'If-Match': etag} if etag else {}
         
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.delete(url, scope=sites_manage_scope, headers=request_headers)
+        response_obj = await client.delete(url, scope=sites_manage_scope, headers=request_headers)
         
         if response_obj.status_code == 204:
             return {"status": "success", "message": "Item eliminado.", "http_status": 204}
@@ -624,7 +624,7 @@ async async def upload_document(client: AuthenticatedHttpClient, params: Dict[st
         
         if len(content_bytes) <= 4 * 1024 * 1024:
             upload_url = f"{item_upload_base_url}/content"
-            response_obj = client.put(upload_url, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE), data=content_bytes, headers={"Content-Type": "application/octet-stream"})
+            response_obj = await client.put(upload_url, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE), data=content_bytes, headers={"Content-Type": "application/octet-stream"})
             return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
         else:
             # Lógica de sesión de carga (se mantiene la del ZIP original)
@@ -647,7 +647,7 @@ async async def download_document(client: AuthenticatedHttpClient, params: Dict[
         
         url_content = f"{_get_sp_item_endpoint_by_id(target_site_id, target_drive_id, str(item_actual_id))}/content"
         
-        response_content = client.get(url_content, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE), stream=True)
+        response_content = await client.get(url_content, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE), stream=True)
         if isinstance(response_content, bytes):
             return response_content
         else:
@@ -673,7 +673,7 @@ async async def delete_item(client: AuthenticatedHttpClient, params: Dict[str, A
         
         url_item = _get_sp_item_endpoint_by_id(target_site_id, target_drive_id, str(item_actual_id))
         
-        response_obj = client.delete(url_item, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
+        response_obj = await client.delete(url_item, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
         if response_obj.status_code == 204:
             return {"status": "success", "message": "Item eliminado.", "http_status": 204}
         else:
@@ -700,7 +700,7 @@ async async def create_folder(client: AuthenticatedHttpClient, params: Dict[str,
         url_create_folder = f"{parent_endpoint}/children"
         body_payload = {"name": nombre_carpeta, "folder": {}, "@microsoft.graph.conflictBehavior": params.get("conflict_behavior", "fail")}
         
-        response_obj = client.post(url_create_folder, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE), json_data=body_payload)
+        response_obj = await client.post(url_create_folder, scope=getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE), json_data=body_payload)
         return {"status": "success", "data": response_obj.json(), "http_status": response_obj.status_code}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
