@@ -1,11 +1,11 @@
-# app/shared/helpers/http_client.py
 import httpx
 from azure.identity.aio import DefaultAzureCredential
 from typing import Any, Dict, Optional
 
 class AuthenticatedHttpClient:
     def __init__(self, credential: DefaultAzureCredential):
-        self._credential = credential; self._token = None
+        self._credential = credential
+        self._token = None
         self._client = httpx.AsyncClient(timeout=30.0)
 
     async def _get_token(self) -> str:
@@ -19,7 +19,10 @@ class AuthenticatedHttpClient:
         headers.setdefault("Authorization", f"Bearer {token}")
         if method in ["POST", "PATCH", "PUT"] and "Content-Type" not in headers:
             headers["Content-Type"] = "application/json"
-        return await self._client.request(method, url, headers=headers, **kwargs)
+        
+        response = await self._client.request(method, url, headers=headers, **kwargs)
+        response.raise_for_status()
+        return response
 
     async def get(self, url: str, params: Optional[Dict[str, Any]] = None, **kwargs) -> httpx.Response:
         return await self.request("GET", url, params=params, **kwargs)
@@ -32,3 +35,6 @@ class AuthenticatedHttpClient:
 
     async def delete(self, url: str, **kwargs) -> httpx.Response:
         return await self.request("DELETE", url, **kwargs)
+
+    async def close(self):
+        await self._client.aclose()
