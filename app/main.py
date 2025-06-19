@@ -3,9 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.dependencies import initialize_http_client # <--- Importamos la nueva función
-
-# Importación masiva de todos los routers generados
+from app.dependencies import initialize_http_client, shutdown_http_client
 from app.api.routes import (
     azuremgmt_router, bookings_router, calendario_router, correo_router,
     forms_router, github_router, googleads_router, graph_router,
@@ -16,33 +14,40 @@ from app.api.routes import (
     users_router, vivainsights_router, youtube_ads_router
 )
 
+# Configuración del logging
 logging.basicConfig(level=settings.LOG_LEVEL.upper(), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+# Creación de la aplicación FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description=f"API para Elite Dynamics (Arquitectura Explícita). Entorno: {os.getenv('AZURE_ENV', 'Desconocido')}",
     openapi_url="/api/v1/openapi.json",
     docs_url="/docs",
     redoc_url="/redoc"
 )
 
-# --- Evento de Arranque Corregido ---
+# Eventos de ciclo de vida de la aplicación
 @app.on_event("startup")
 async def startup_event():
-    logger.info(f"Iniciando {settings.APP_NAME} v{settings.APP_VERSION}...")
-    await initialize_http_client() # Llamamos a la inicialización asíncrona
+    logger.info("Iniciando la aplicación y el cliente HTTP...")
+    await initialize_http_client()
 
-# Configuración de CORS
+@app.on_event("shutdown")
+async def shutdown_event():
+    logger.info("Cerrando el cliente HTTP y la aplicación...")
+    await shutdown_http_client()
+
+# Middlewares (CORS)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://app.elitedynamics.ai", "http://localhost:3000", "http://127.0.0.1:8000"],
+    allow_origins=["*"],  # En producción, esto debería ser más restrictivo
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# Lista de todos los routers a incluir
 routers = [
     azuremgmt_router, bookings_router, calendario_router, correo_router,
     forms_router, github_router, googleads_router, graph_router,
@@ -52,15 +57,14 @@ routers = [
     teams_router, tiktok_ads_router, todo_router, userprofile_router,
     users_router, vivainsights_router, youtube_ads_router
 ]
+
+# Inclusión masiva de todos los routers en la aplicación
 for router_module in routers:
     app.include_router(router_module.router, prefix="/api/v1")
 
 logger.info(f"✅ Se han cargado {len(routers)} routers de servicios explícitos.")
 
+# Endpoint de verificación de salud
 @app.get("/health", tags=["General"])
 async def health_check():
-    return {"status": "ok"}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    return {"status": "ok", "appName": settings.APP_NAME, "appVersion": settings.APP_VERSION}
