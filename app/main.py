@@ -1,22 +1,15 @@
 # app/main.py
 import logging
-import os # <--- LÍNEA AÑADIDA PARA CORREGIR EL NameError
-from fastapi import FastAPI, Request, status as http_status 
-# from fastapi.responses import JSONResponse # No se usa directamente aquí
-# from azure.identity import DefaultAzureCredential # No se usa directamente aquí
+import os
+from fastapi import FastAPI, Request
 import uvicorn
 
-# Importar el router de acciones
+# Importar los routers
 from app.api.routes.dynamics_actions import router as dynamics_router
-
-# Importar la configuración de la aplicación
+# ¡AÑADIR ESTE NUEVO IMPORT!
+from app.api.routes.facade_routes import router as facade_router
 from app.core.config import settings
 
-# El cliente HTTP no se usa directamente en main.py
-
-# Configuración básica de logging.
-# En un entorno de producción como Azure App Service, esto podría ser manejado
-# o complementado por la configuración de logging de Azure.
 logging.basicConfig(
     level=settings.LOG_LEVEL.upper(),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -24,70 +17,45 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Crear la instancia de la aplicación FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description=f"API para Elite Dynamics, potenciando la automatización y la integración de servicios. Entorno: {os.getenv('AZURE_ENV', 'Desconocido')}", # Esta línea ahora funcionará
-    openapi_url=f"{settings.API_PREFIX}/openapi.json",
-    docs_url=f"{settings.API_PREFIX}/docs", # Swagger UI
-    redoc_url=f"{settings.API_PREFIX}/redoc" # ReDoc
+    description=f"API para Elite Dynamics. Entorno: {os.getenv('AZURE_ENV', 'Desconocido')}",
+    # La URL del openapi para la fachada será diferente
+    # openapi_url=f"{settings.API_PREFIX}/openapi.json", # Este es el de la API interna
+    docs_url=None, # Deshabilitamos docs globales para evitar confusión
+    redoc_url=None
 )
 
-# --- Eventos de la Aplicación (Opcional) ---
 @app.on_event("startup")
 async def startup_event():
     logger.info(f"Iniciando {settings.APP_NAME} v{settings.APP_VERSION}...")
-    logger.info(f"Nivel de Logging configurado: {settings.LOG_LEVEL}")
-    # Aquí se podrían añadir otras tareas de inicialización si fueran necesarias.
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info(f"Apagando {settings.APP_NAME}...")
-    # Aquí se podrían añadir tareas de limpieza si fueran necesarias.
+@app.get("/health", tags=["General"], summary="Verifica el estado de salud de la API.")
+async def health_check():
+    logger.info("Health check solicitado.")
+    return {"status": "ok", "appName": settings.APP_NAME}
 
-# --- Endpoints Globales (Ej. Health Check) ---
-@app.get(
-    "/health", 
-    tags=["General"], 
-    summary="Verifica el estado de salud de la API.",
-    response_description="Devuelve el estado actual de la aplicación."
-)
-async def health_check(request: Request): # request puede ser útil para logs o info
-    client_host = request.client.host if request.client else "N/A"
-    logger.info(f"Health check solicitado por: {client_host}")
-    return {
-        "status": "ok", 
-        "appName": settings.APP_NAME, 
-        "appVersion": settings.APP_VERSION,
-        "message": "Servicio EliteDynamicsAPI operativo."
-    }
-
-# --- Inclusión de Routers de la API ---
-# Todas las acciones dinámicas se manejan a través de este router.
+# Router para la API interna (la original)
 app.include_router(
     dynamics_router, 
     prefix=settings.API_PREFIX,
-    tags=["Acciones Dinámicas"] # Etiqueta para agrupar en la documentación OpenAPI
+    tags=["API Interna Dinámica"]
 )
 
-logger.info(f"Router de acciones dinámicas incluido bajo el prefijo: {settings.API_PREFIX}")
-logger.info(f"Documentación OpenAPI (Swagger UI) disponible en: {settings.API_PREFIX}/docs")
-logger.info(f"Documentación ReDoc disponible en: {settings.API_PREFIX}/redoc")
+# ¡AÑADIR ESTE NUEVO ROUTER!
+# Este es el router que expondrás a tu asistente de OpenAI
+app.include_router(
+    facade_router,
+    prefix="/facade", # Usamos un prefijo distinto para no colisionar
+    tags=["Fachada para Asistente OpenAI"]
+)
 
-# --- Configuración para Ejecución Local (uvicorn) ---
+logger.info(f"API Interna disponible en: {settings.API_PREFIX}")
+logger.info(f"API Fachada para Asistente disponible en: /facade")
+logger.info(f"Documentación para la fachada disponible en: /facade/docs")
+
 if __name__ == "__main__":
-    # Esta sección solo se ejecuta cuando se corre el script directamente (ej. python app/main.py)
-    # Para producción, se usa un servidor ASGI como Gunicorn + Uvicorn workers.
     host_dev = os.getenv("HOST", "127.0.0.1")
-    port_dev = int(os.getenv("PORT", "8000")) # Azure App Service puede setear PORT
-    log_level_dev = settings.LOG_LEVEL.lower()
-
-    logger.info(f"Iniciando servidor de desarrollo Uvicorn en http://{host_dev}:{port_dev}")
-    uvicorn.run(
-        "app.main:app", # Referencia a la instancia 'app' en este archivo
-        host=host_dev, 
-        port=port_dev, 
-        log_level=log_level_dev,
-        reload=True # Habilitar auto-reload para desarrollo (no usar en producción directa así)
-    )
+    port_dev = int(os.getenv("PORT", "8000"))
+    uvicorn.run("app.main:app", host=host_dev, port=port_dev, reload=True)

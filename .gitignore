@@ -156,6 +156,5 @@ __pycache__/
 refactor_output/
 refactor_final.py
 cleanup.sh
-action_mapper.py
 # Archivos de logs
 *.log*
