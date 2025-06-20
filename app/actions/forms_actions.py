@@ -13,9 +13,9 @@ try:
 except ImportError:
     logger.error("Error al importar helpers de sharepoint_actions.py. La búsqueda de Forms en SharePoint podría fallar.")
     # Definir placeholders para que el módulo cargue, pero las funciones fallarán si se llaman.
-    async async def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
+    def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
         raise NotImplementedError("Helper _obtener_site_id_sp no disponible desde forms_actions.")
-    async async def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str] = None) -> str:
+    def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str] = None) -> str:
         raise NotImplementedError("Helper _get_drive_id no disponible desde forms_actions.")
 
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def _handle_forms_api_error(e: Exception, action_name: str, params_for_log: Opti
     }
 
 
-async async def list_forms(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def list_forms(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "forms_list_forms"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -111,7 +111,7 @@ async async def list_forms(client: AuthenticatedHttpClient, params: Dict[str, An
         logger.info(f"Buscando Formularios (Query Graph: '{effective_search_query}') en {log_location_description}")
         
         forms_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = await client.get(url=url, scope=forms_read_scope, params=api_query_odata_params) 
+        response = client.get(url=url, scope=forms_read_scope, params=api_query_odata_params) 
         search_results_data = response.json()
         
         items_found: List[Dict[str, Any]] = []
@@ -145,7 +145,7 @@ async async def list_forms(client: AuthenticatedHttpClient, params: Dict[str, An
         return _handle_forms_api_error(e, action_name, params)
 
 
-async async def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "forms_get_form"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -183,7 +183,7 @@ async async def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]
     logger.info(f"Obteniendo metadatos del archivo de Formulario: {log_target}")
     forms_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
-        response = await client.get(url=url_base_item, scope=forms_read_scope, params=api_query_odata_params)
+        response = client.get(url=url_base_item, scope=forms_read_scope, params=api_query_odata_params)
         form_file_metadata = response.json()
         
         is_confirmed_form_file = False
@@ -207,7 +207,7 @@ async async def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]
         return _handle_forms_api_error(e, action_name, params)
 
 
-async async def get_form_responses(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def get_form_responses(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "forms_get_form_responses"
     logger.info(f"Ejecutando {action_name} con params: {params}")

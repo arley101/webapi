@@ -30,7 +30,7 @@ class TikTokAdsCredentials(BaseSettings):
 
 class Settings(BaseSettings):
     APP_NAME: str = "EliteDynamicsAPI"
-    APP_VERSION: str = "1.1.0" 
+    APP_VERSION: str = "1.0.0" 
     API_PREFIX: str = "/api/v1"
     LOG_LEVEL: str = "INFO" 
 
@@ -74,13 +74,10 @@ class Settings(BaseSettings):
     NOTION_API_TOKEN: Optional[str] = None 
     NOTION_API_VERSION: str = "2022-06-28" 
     
-    HUBSPOT_PRIVATE_APP_TOKEN: Optional[str] = None 
+    HUBSPOT_PRIVATE_APP_TOKEN: Optional[str] = None # Token de App Privada de HubSpot
     
     YOUTUBE_API_KEY: Optional[str] = None 
     YOUTUBE_ACCESS_TOKEN: Optional[str] = None
-    YOUTUBE_CLIENT_ID: Optional[str] = None # Añadido para consistencia con tus datos
-    YOUTUBE_CLIENT_SECRET: Optional[str] = None # Añadido para consistencia con tus datos
-
 
     @field_validator("OPENAI_API_DEFAULT_SCOPE", mode='before')
     @classmethod
@@ -108,3 +105,9 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
+
+if __name__ == "__main__":
+    print(f"App Name: {settings.APP_NAME}")
+    # ... (otros prints) ...
+    print(f"--- HubSpot Config ---")
+    print(f"  Private App Token: {'Presente' if settings.HUBSPOT_PRIVATE_APP_TOKEN else 'No configurado'}")
