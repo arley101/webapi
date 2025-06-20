@@ -1,70 +1,93 @@
+# app/main.py
 import logging
-import os
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from app.core.config import settings
-from app.dependencies import initialize_http_client, shutdown_http_client
-from app.api.routes import (
-    azuremgmt_router, bookings_router, calendario_router, correo_router,
-    forms_router, github_router, googleads_router, graph_router,
-    hubspot_router, linkedin_ads_router, metaads_router, notion_router,
-    office_router, onedrive_router, openai_router, planner_router,
-    power_automate_router, powerbi_router, sharepoint_router, stream_router,
-    teams_router, tiktok_ads_router, todo_router, userprofile_router,
-    users_router, vivainsights_router, youtube_ads_router
-)
+import os # <--- LÍNEA AÑADIDA PARA CORREGIR EL NameError
+from fastapi import FastAPI, Request, status as http_status 
+# from fastapi.responses import JSONResponse # No se usa directamente aquí
+# from azure.identity import DefaultAzureCredential # No se usa directamente aquí
+import uvicorn
 
-# Configuración del logging
-logging.basicConfig(level=settings.LOG_LEVEL.upper(), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+# Importar el router de acciones
+from app.api.routes.dynamics_actions import router as dynamics_router
+
+# Importar la configuración de la aplicación
+from app.core.config import settings
+
+# El cliente HTTP no se usa directamente en main.py
+
+# Configuración básica de logging.
+# En un entorno de producción como Azure App Service, esto podría ser manejado
+# o complementado por la configuración de logging de Azure.
+logging.basicConfig(
+    level=settings.LOG_LEVEL.upper(),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
 logger = logging.getLogger(__name__)
 
-# Creación de la aplicación FastAPI
+# Crear la instancia de la aplicación FastAPI
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    openapi_url="/api/v1/openapi.json",
-    docs_url="/docs",
-    redoc_url="/redoc"
+    description=f"API para Elite Dynamics, potenciando la automatización y la integración de servicios. Entorno: {os.getenv('AZURE_ENV', 'Desconocido')}", # Esta línea ahora funcionará
+    openapi_url=f"{settings.API_PREFIX}/openapi.json",
+    docs_url=f"{settings.API_PREFIX}/docs", # Swagger UI
+    redoc_url=f"{settings.API_PREFIX}/redoc" # ReDoc
 )
 
-# Eventos de ciclo de vida de la aplicación
+# --- Eventos de la Aplicación (Opcional) ---
 @app.on_event("startup")
 async def startup_event():
-    logger.info("Iniciando la aplicación y el cliente HTTP...")
-    await initialize_http_client()
+    logger.info(f"Iniciando {settings.APP_NAME} v{settings.APP_VERSION}...")
+    logger.info(f"Nivel de Logging configurado: {settings.LOG_LEVEL}")
+    # Aquí se podrían añadir otras tareas de inicialización si fueran necesarias.
 
 @app.on_event("shutdown")
 async def shutdown_event():
-    logger.info("Cerrando el cliente HTTP y la aplicación...")
-    await shutdown_http_client()
+    logger.info(f"Apagando {settings.APP_NAME}...")
+    # Aquí se podrían añadir tareas de limpieza si fueran necesarias.
 
-# Middlewares (CORS)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # En producción, esto debería ser más restrictivo
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+# --- Endpoints Globales (Ej. Health Check) ---
+@app.get(
+    "/health", 
+    tags=["General"], 
+    summary="Verifica el estado de salud de la API.",
+    response_description="Devuelve el estado actual de la aplicación."
+)
+async def health_check(request: Request): # request puede ser útil para logs o info
+    client_host = request.client.host if request.client else "N/A"
+    logger.info(f"Health check solicitado por: {client_host}")
+    return {
+        "status": "ok", 
+        "appName": settings.APP_NAME, 
+        "appVersion": settings.APP_VERSION,
+        "message": "Servicio EliteDynamicsAPI operativo."
+    }
+
+# --- Inclusión de Routers de la API ---
+# Todas las acciones dinámicas se manejan a través de este router.
+app.include_router(
+    dynamics_router, 
+    prefix=settings.API_PREFIX,
+    tags=["Acciones Dinámicas"] # Etiqueta para agrupar en la documentación OpenAPI
 )
 
-# Lista de todos los routers a incluir
-routers = [
-    azuremgmt_router, bookings_router, calendario_router, correo_router,
-    forms_router, github_router, googleads_router, graph_router,
-    hubspot_router, linkedin_ads_router, metaads_router, notion_router,
-    office_router, onedrive_router, openai_router, planner_router,
-    power_automate_router, powerbi_router, sharepoint_router, stream_router,
-    teams_router, tiktok_ads_router, todo_router, userprofile_router,
-    users_router, vivainsights_router, youtube_ads_router
-]
+logger.info(f"Router de acciones dinámicas incluido bajo el prefijo: {settings.API_PREFIX}")
+logger.info(f"Documentación OpenAPI (Swagger UI) disponible en: {settings.API_PREFIX}/docs")
+logger.info(f"Documentación ReDoc disponible en: {settings.API_PREFIX}/redoc")
 
-# Inclusión masiva de todos los routers en la aplicación
-for router_module in routers:
-    app.include_router(router_module.router, prefix="/api/v1")
+# --- Configuración para Ejecución Local (uvicorn) ---
+if __name__ == "__main__":
+    # Esta sección solo se ejecuta cuando se corre el script directamente (ej. python app/main.py)
+    # Para producción, se usa un servidor ASGI como Gunicorn + Uvicorn workers.
+    host_dev = os.getenv("HOST", "127.0.0.1")
+    port_dev = int(os.getenv("PORT", "8000")) # Azure App Service puede setear PORT
+    log_level_dev = settings.LOG_LEVEL.lower()
 
-logger.info(f"✅ Se han cargado {len(routers)} routers de servicios explícitos.")
-
-# Endpoint de verificación de salud
-@app.get("/health", tags=["General"])
-async def health_check():
-    return {"status": "ok", "appName": settings.APP_NAME, "appVersion": settings.APP_VERSION}
+    logger.info(f"Iniciando servidor de desarrollo Uvicorn en http://{host_dev}:{port_dev}")
+    uvicorn.run(
+        "app.main:app", # Referencia a la instancia 'app' en este archivo
+        host=host_dev, 
+        port=port_dev, 
+        log_level=log_level_dev,
+        reload=True # Habilitar auto-reload para desarrollo (no usar en producción directa así)
+    )

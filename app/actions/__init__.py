@@ -1,5 +1,4 @@
-# app/actions/__init__.py
-# Este archivo inicializa el paquete 'actions'.
-# Contiene todos los módulos que definen la lógica de negocio específica
-# para interactuar con los diferentes servicios y APIs externas.
-# (No requiere contenido adicional si solo sirve para marcar el paquete)
+# app/__init__.py
+# Inicializa el paquete principal 'app' de la aplicación FastAPI.
+# Este archivo hace que el directorio 'app' sea reconocido como un paquete de Python,
+# permitiendo importaciones relativas y una mejor organización del código.

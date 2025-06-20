@@ -42,7 +42,7 @@ def _handle_viva_insights_api_error(e: Exception, action_name: str, params_for_l
 
 # --- FUNCIONES DE ACCIÓN PARA VIVA INSIGHTS ---
 
-async async def get_my_analytics(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def get_my_analytics(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "viva_get_my_analytics"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -86,7 +86,7 @@ async async def get_my_analytics(client: AuthenticatedHttpClient, params: Dict[s
     analytics_scope = getattr(settings, 'GRAPH_SCOPE_ANALYTICS_READ_ALL', # Suponiendo que podría existir
                               getattr(settings, 'GRAPH_SCOPE_ANALYTICS_READ', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
-        response = await client.get(url, scope=analytics_scope, params=odata_params if odata_params else None)
+        response = client.get(url, scope=analytics_scope, params=odata_params if odata_params else None)
         analytics_data = response.json()
         # La respuesta es una colección de objetos activityStatistic bajo la clave "value"
         return {"status": "success", "data": analytics_data.get("value", [])}
@@ -106,7 +106,7 @@ async async def get_my_analytics(client: AuthenticatedHttpClient, params: Dict[s
     except Exception as e:
         return _handle_viva_insights_api_error(e, action_name, params)
 
-async async def get_focus_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def get_focus_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     action_name = "viva_get_focus_plan"
     logger.info(f"Ejecutando {action_name} con params: {params}")

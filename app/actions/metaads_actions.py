@@ -8,28 +8,31 @@ from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.campaign import Campaign
 from facebook_business.adobjects.adset import AdSet
 from facebook_business.adobjects.ad import Ad
+# from facebook_business.adobjects.adsinsights import AdsInsights # Para tipado si es necesario
+from facebook_business.adobjects.adreportrun import AdReportRun # Para insights asíncronos
 from facebook_business.exceptions import FacebookRequestError
-import json
+import time # Para esperar por jobs asíncronos de insights
 
-from app.core.config import settings
-from app.shared.helpers.http_client import AuthenticatedHttpClient # No se usa directamente
+from app.core.config import settings # Para acceder a las credenciales de Meta Ads
+from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
 
 _meta_ads_api_instance: Optional[FacebookAdsApi] = None
 
-def get_meta_ads_api_client(client_config_override: Optional[Dict[str, Any]] = None) -> FacebookAdsApi:
+def get_meta_ads_api_client(client_config_override: Optional[Dict[str, str]] = None) -> FacebookAdsApi:
+    """
+    Inicializa y devuelve una instancia de la API de Facebook Ads.
+    Reutiliza la instancia si ya ha sido creada y no hay override.
+    """
     global _meta_ads_api_instance
     if _meta_ads_api_instance and not client_config_override:
         return _meta_ads_api_instance
 
-    config_to_use: Dict[str, Optional[Any]]
-    params_from_config = {}
+    config_to_use: Dict[str, Optional[str]]
     if client_config_override:
         logger.info("Utilizando configuración de Meta Ads proporcionada en 'client_config_override'.")
         config_to_use = client_config_override
-        if "params" in client_config_override and isinstance(client_config_override["params"], dict):
-            params_from_config = client_config_override["params"]
     else:
         config_to_use = {
             "app_id": settings.META_ADS.APP_ID,
@@ -46,29 +49,31 @@ def get_meta_ads_api_client(client_config_override: Optional[Dict[str, Any]] = N
             "Se requieren: APP_ID, APP_SECRET, ACCESS_TOKEN (ya sea de settings o de client_config_override)."
         )
         logger.critical(msg)
-        raise ValueError(msg)
+        raise ValueError(msg) 
 
     logger.info("Inicializando cliente de Meta Ads (Facebook Marketing API)...")
     try:
+        # Asegurarse que los valores son strings para el SDK
         app_id_str = str(config_to_use["app_id"])
         app_secret_str = str(config_to_use["app_secret"])
         access_token_str = str(config_to_use["access_token"])
-        api_version_str = str(params_from_config.get("api_version", "v19.0"))
+        api_version = params.get("api_version") if isinstance(params:=config_to_use.get("params"), dict) else "v19.0"
+
 
         FacebookAdsApi.init(
             app_id=app_id_str,
             app_secret=app_secret_str,
             access_token=access_token_str,
-            api_version=api_version_str
+            api_version=api_version # Especificar la versión de la API
         )
         current_api_instance = FacebookAdsApi.get_default_api()
-        if not current_api_instance:
+        if not current_api_instance: 
              raise ConnectionError("FacebookAdsApi.get_default_api() devolvió None después de la inicialización.")
-
-        if not client_config_override:
+        
+        if not client_config_override: # Solo guardar como instancia global si no es un override
             _meta_ads_api_instance = current_api_instance
 
-        logger.info(f"Cliente de Meta Ads inicializado exitosamente. API Version: {api_version_str}")
+        logger.info(f"Cliente de Meta Ads inicializado exitosamente. API Version: {api_version}")
         return current_api_instance
     except Exception as e:
         logger.exception(f"Error crítico inicializando el cliente de Meta Ads: {e}")
@@ -80,69 +85,52 @@ def _handle_meta_ads_api_error(
     action_name: str,
     params_for_log: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
+    """Formatea una FacebookRequestError u otra excepción en una respuesta de error estándar."""
     log_message = f"Error en Meta Ads Action '{action_name}'"
-    safe_params = {}
+    safe_params = {} # Inicializar
     if params_for_log:
-        sensitive_keys = ['client_config_override', 'access_token', 'campaign_payload', 'update_payload', 'ad_object_payload']
+        sensitive_keys = ['campaign_payload', 'update_payload', 'ad_object_payload'] # Añadir otros si es necesario
         safe_params = {k: (v if k not in sensitive_keys else f"[{type(v).__name__} OMITIDO]") for k, v in params_for_log.items()}
         log_message += f" con params: {safe_params}"
-
+    
     logger.error(f"{log_message}: {type(e).__name__} - {str(e)}", exc_info=True)
-
+    
     details_str = str(e)
     status_code_int = 500
     api_error_code = None
     api_error_subcode = None
-    api_error_message = str(e)
-    user_message = None
-    user_title = None
-    fbtrace_id = None
+    api_error_message = str(e) 
+    user_message = None # Mensaje para el usuario final, si está disponible en el error
+    user_title = None   # Título para el usuario final
 
     if isinstance(e, FacebookRequestError):
         status_code_int = e.http_status() or 500
         api_error_code = e.api_error_code()
         api_error_subcode = e.api_error_subcode()
-        
-        # Corrección: Obtener mensajes de forma segura
-        _api_error_message_from_sdk = e.api_error_message()
-        _user_message_from_sdk = e.api_error_user_message() if hasattr(e, 'api_error_user_message') else None
-        _user_title_from_sdk = e.api_error_user_title() if hasattr(e, 'api_error_user_title') else None
-        
-        error_body_content = None
+        api_error_message = e.api_error_message() or str(e)
+        user_message = e.api_error_user_message()
+        user_title = e.api_error_user_title()
         try:
-            error_body_content = e.body() # type: ignore
-        except Exception:
-             logger.debug(f"No se pudo obtener e.body() de FacebookRequestError para {action_name}")
+            # Intentar obtener el cuerpo completo de la respuesta de error si es JSON
+            response_body_dict = e.get_response() # Esto puede ser None o un dict
+            if response_body_dict and isinstance(response_body_dict, dict):
+                 details_str = json.dumps(response_body_dict)
+            elif e.get_response() is not None: # Si no es dict pero existe
+                 details_str = str(e.get_response())
+            else: # Si get_response es None
+                details_str = f"API Error Code: {api_error_code}, Subcode: {api_error_subcode}, Message: {api_error_message}"
+        except Exception: #NOSONAR
+            details_str = f"API Error Code: {api_error_code}, Subcode: {api_error_subcode}, Message: {api_error_message}. No se pudo obtener el cuerpo de la respuesta de error."
 
-        if error_body_content and isinstance(error_body_content, dict) and 'error' in error_body_content:
-            error_obj = error_body_content['error']
-            api_error_message = error_obj.get('message', _api_error_message_from_sdk or str(e))
-            user_message = error_obj.get('error_user_msg', _user_message_from_sdk)
-            user_title = error_obj.get('error_user_title', _user_title_from_sdk)
-            if not api_error_code: api_error_code = error_obj.get('code')
-            if not api_error_subcode: api_error_subcode = error_obj.get('error_subcode')
-            fbtrace_id = error_obj.get('fbtrace_id')
-            details_str = json.dumps(error_body_content)
-        else:
-            api_error_message = _api_error_message_from_sdk or str(e)
-            user_message = _user_message_from_sdk
-            user_title = _user_title_from_sdk
-            details_str = f"API Error Code: {api_error_code}, Subcode: {api_error_subcode}, Message: {api_error_message}"
-            if e.http_status() and hasattr(e, 'get_response_content') and e.get_response_content(): # type: ignore
-                try:
-                    details_str = json.dumps(json.loads(e.get_response_content())) # type: ignore
-                except:
-                     details_str = str(e.get_response_content())[:500] # type: ignore
-
-    elif isinstance(e, (ValueError, ConnectionError)):
+    elif isinstance(e, (ValueError, ConnectionError)): 
         status_code_int = 503 if isinstance(e, ConnectionError) else 400
         api_error_message = str(e)
-        details_str = str(e)
+
 
     error_response: Dict[str, Any] = {
         "status": "error",
         "action": action_name,
-        "message": user_message or api_error_message,
+        "message": user_message or api_error_message, # Priorizar user_message si existe
         "http_status": status_code_int,
         "details": {
             "raw_exception_type": type(e).__name__,
@@ -150,33 +138,32 @@ def _handle_meta_ads_api_error(
             "api_error_code": api_error_code,
             "api_error_subcode": api_error_subcode,
             "api_error_title_for_user": user_title,
-            "fbtrace_id": fbtrace_id,
             "full_api_response_details": details_str
         }
     }
+    # Si el error original tenía un request ID, añadirlo (FacebookRequestError no lo expone directamente así)
+    # request_id = getattr(e, "request_context", {}).get("id") # Esto es una suposición de cómo podría estar
+    # if request_id: error_response["details"]["api_request_id"] = request_id
+    
     return error_response
 
 def _get_ad_account(params: Dict[str, Any]) -> AdAccount:
+    """Obtiene el objeto AdAccount, priorizando el ID de los parámetros."""
     ad_account_id_from_params: Optional[str] = params.get("ad_account_id")
     effective_ad_account_id = ad_account_id_from_params or settings.META_ADS.BUSINESS_ACCOUNT_ID
-
+    
     if not effective_ad_account_id:
         raise ValueError("Se requiere 'ad_account_id' en los parámetros de la acción o META_ADS_BUSINESS_ACCOUNT_ID en la configuración global.")
-
-    effective_ad_account_id_str = str(effective_ad_account_id)
-    if not effective_ad_account_id_str.startswith("act_"):
-        effective_ad_account_id_str = f"act_{effective_ad_account_id_str.replace('act_', '')}"
-
+    
+    # Asegurar que el ID tenga el prefijo "act_"
+    if not str(effective_ad_account_id).startswith("act_"):
+        effective_ad_account_id_str = f"act_{str(effective_ad_account_id).replace('act_', '')}"
+    else:
+        effective_ad_account_id_str = str(effective_ad_account_id)
+        
     return AdAccount(effective_ad_account_id_str)
 
-def default_fields_for_campaign_read():
-    return [
-        Campaign.Field.id, Campaign.Field.name, Campaign.Field.status, Campaign.Field.effective_status,
-        Campaign.Field.objective, Campaign.Field.buying_type, Campaign.Field.start_time,
-        Campaign.Field.stop_time, Campaign.Field.daily_budget, Campaign.Field.lifetime_budget,
-        Campaign.Field.budget_remaining, Campaign.Field.created_time, Campaign.Field.updated_time,
-        Campaign.Field.account_id, Campaign.Field.special_ad_categories
-    ]
+# --- Implementación de Acciones de Meta Ads ---
 
 def metaads_list_campaigns(client_unused: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
@@ -185,36 +172,40 @@ def metaads_list_campaigns(client_unused: Optional[AuthenticatedHttpClient], par
 
     fields_param: Optional[List[str]] = params.get("fields")
     filtering_param: Optional[List[Dict[str, Any]]] = params.get("filtering")
-    limit_param: Optional[int] = params.get("limit")
+    limit_param: Optional[int] = params.get("limit") # Para el número de campañas a devolver
 
-    fields_to_request = fields_param if fields_param and isinstance(fields_param, list) else default_fields_for_campaign_read()
+    default_fields = [
+        Campaign.Field.id, Campaign.Field.name, Campaign.Field.status, Campaign.Field.effective_status,
+        Campaign.Field.objective, Campaign.Field.buying_type, Campaign.Field.start_time,
+        Campaign.Field.stop_time, Campaign.Field.daily_budget, Campaign.Field.lifetime_budget,
+        Campaign.Field.budget_remaining, Campaign.Field.created_time, Campaign.Field.updated_time,
+        Campaign.Field.account_id, Campaign.Field.special_ad_categories
+    ]
+    fields_to_request = fields_param if fields_param and isinstance(fields_param, list) else default_fields
 
     try:
-        get_meta_ads_api_client(params.get("client_config_override"))
+        get_meta_ads_api_client(params.get("client_config_override")) # Asegurar que la API esté inicializada
         ad_account = _get_ad_account(params)
-
+        
         logger.info(f"Listando campañas de Meta Ads para la cuenta '{ad_account[AdAccount.Field.id]}' con campos: {fields_to_request}")
-
+        
         api_params_sdk: Dict[str, Any] = {'fields': fields_to_request}
         if filtering_param and isinstance(filtering_param, list):
             api_params_sdk['filtering'] = filtering_param
             logger.info(f"Aplicando filtros: {filtering_param}")
         if limit_param and isinstance(limit_param, int) and limit_param > 0:
-            api_params_sdk['limit'] = limit_param
+            api_params_sdk['limit'] = limit_param # El SDK maneja la paginación, limit aquí es para el total
 
         campaigns_cursor = ad_account.get_campaigns(params=api_params_sdk)
         
-        campaigns_list = []
-        for campaign in campaigns_cursor:
-            campaigns_list.append(campaign.export_all_data())
-            if limit_param and len(campaigns_list) >= limit_param:
-                break
-                
+        campaigns_list = [campaign.export_all_data() for campaign in campaigns_cursor]
+
         logger.info(f"Se encontraron {len(campaigns_list)} campañas para la cuenta '{ad_account[AdAccount.Field.id]}'.")
         return {"status": "success", "data": campaigns_list, "total_retrieved": len(campaigns_list)}
 
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name, params)
+
 
 def metaads_create_campaign(client_unused: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
@@ -229,29 +220,33 @@ def metaads_create_campaign(client_unused: Optional[AuthenticatedHttpClient], pa
         return {"status": "error", "action": action_name, "message": "'campaign_payload' (dict) es requerido.", "http_status": 400}
 
     required_keys = [Campaign.Field.name, Campaign.Field.objective, Campaign.Field.status, Campaign.Field.special_ad_categories]
+    # 'special_ad_categories' es obligatoria, incluso si es una lista vacía [] para campañas sin categoría especial.
     if not all(key in campaign_payload for key in required_keys):
         missing = [key for key in required_keys if key not in campaign_payload]
         return {"status": "error", "action": action_name, "message": f"Faltan campos requeridos en 'campaign_payload': {missing}. Mínimo: name, objective, status, special_ad_categories (puede ser lista vacía []).", "http_status": 400}
-    if not isinstance(campaign_payload.get(Campaign.Field.special_ad_categories), list):
+    if not isinstance(campaign_payload[Campaign.Field.special_ad_categories], list):
          return {"status": "error", "action": action_name, "message": f"El campo '{Campaign.Field.special_ad_categories}' debe ser una lista (ej. [] o ['HOUSING']).", "http_status": 400}
+
 
     try:
         get_meta_ads_api_client(params.get("client_config_override"))
         ad_account = _get_ad_account(params)
-
+        
         logger.info(f"Creando campaña de Meta Ads en la cuenta '{ad_account[AdAccount.Field.id]}' con nombre: '{campaign_payload.get('name')}'")
-
+        
         new_campaign = Campaign(parent_id=ad_account[AdAccount.Field.id])
-        new_campaign.update(campaign_payload)
-
-        new_campaign.remote_create()
-
+        new_campaign.update(campaign_payload) 
+        
+        new_campaign.remote_create() 
+        
         logger.info(f"Campaña '{new_campaign[Campaign.Field.name]}' creada con ID: {new_campaign[Campaign.Field.id]}")
-        new_campaign.api_get(fields=default_fields_for_campaign_read())
+        # Devolver el objeto completo de la campaña creada
+        new_campaign.api_get(fields=default_fields_for_campaign_read_after_write()) # Leer campos estándar
         return {"status": "success", "data": new_campaign.export_all_data()}
-
+        
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name, params)
+
 
 def metaads_update_campaign(client_unused: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
@@ -265,25 +260,34 @@ def metaads_update_campaign(client_unused: Optional[AuthenticatedHttpClient], pa
 
     if not campaign_id:
         return {"status": "error", "action": action_name, "message": "'campaign_id' es requerido.", "http_status": 400}
-    if not update_payload or not isinstance(update_payload, dict) or not update_payload:
+    if not update_payload or not isinstance(update_payload, dict) or not update_payload: 
         return {"status": "error", "action": action_name, "message": "'update_payload' (dict no vacío con campos a actualizar) es requerido.", "http_status": 400}
 
     try:
         get_meta_ads_api_client(params.get("client_config_override"))
-
+        
         logger.info(f"Actualizando campaña de Meta Ads ID: '{campaign_id}' con campos: {list(update_payload.keys())}")
-
+        
         campaign_to_update = Campaign(campaign_id)
         campaign_to_update.update(update_payload)
-
-        campaign_to_update.remote_update()
-
+        
+        campaign_to_update.remote_update() 
+        
         logger.info(f"Campaña ID '{campaign_id}' actualizada.")
-        campaign_to_update.api_get(fields=default_fields_for_campaign_read())
+        campaign_to_update.api_get(fields=default_fields_for_campaign_read_after_write())
         return {"status": "success", "data": campaign_to_update.export_all_data()}
 
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name, params)
+
+def default_fields_for_campaign_read_after_write():
+    """Campos estándar para leer después de una creación/actualización de campaña."""
+    return [
+        Campaign.Field.id, Campaign.Field.name, Campaign.Field.status, Campaign.Field.effective_status,
+        Campaign.Field.objective, Campaign.Field.account_id, Campaign.Field.special_ad_categories,
+        Campaign.Field.daily_budget, Campaign.Field.lifetime_budget, Campaign.Field.budget_remaining,
+        Campaign.Field.start_time, Campaign.Field.stop_time, Campaign.Field.created_time, Campaign.Field.updated_time
+    ]
 
 def metaads_delete_campaign(client_unused: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
@@ -297,14 +301,19 @@ def metaads_delete_campaign(client_unused: Optional[AuthenticatedHttpClient], pa
 
     try:
         get_meta_ads_api_client(params.get("client_config_override"))
-
-        logger.info(f"Intentando eliminar la campaña de Meta Ads ID: '{campaign_id}'")
-
+        
+        logger.info(f"Intentando eliminar (marcar como DELETED) la campaña de Meta Ads ID: '{campaign_id}'")
+        
         campaign_to_delete = Campaign(campaign_id)
-        campaign_to_delete.remote_delete()
+        # La forma de "eliminar" una campaña es cambiar su estado a DELETED.
+        campaign_to_delete.update({Campaign.Field.status: Campaign.Status.deleted})
+        campaign_to_delete.remote_update() # Esto es un POST con status=DELETED
 
-        logger.info(f"Campaña ID '{campaign_id}' eliminada.")
-        return {"status": "success", "message": f"Campaña '{campaign_id}' eliminada exitosamente."}
+        # También se puede usar remote_delete() si el SDK y el estado del objeto lo permiten.
+        # campaign_to_delete.remote_delete() # Esto sería un DELETE HTTP
+
+        logger.info(f"Campaña ID '{campaign_id}' marcada como DELETED (o archivada si aplica).")
+        return {"status": "success", "message": f"Campaña '{campaign_id}' marcada como eliminada/archivada."}
 
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name, params)
@@ -313,28 +322,32 @@ def metaads_get_insights(client_unused: Optional[AuthenticatedHttpClient], param
     params = params or {}
     action_name = "metaads_get_insights"
     logger.info(f"Ejecutando {action_name} con params: {params}")
-
-    object_id_param: Optional[str] = params.get("object_id")
+    
+    object_id_param: Optional[str] = params.get("object_id") 
     level_param: Optional[str] = params.get("level", "campaign").lower()
-
+    
     fields_param: Optional[List[str]] = params.get("fields")
-    date_preset_param: Optional[str] = params.get("date_preset")
+    date_preset_param: Optional[str] = params.get("date_preset") 
     time_range_param: Optional[Dict[str, str]] = params.get("time_range")
     filtering_param: Optional[List[Dict[str, Any]]] = params.get("filtering")
     breakdowns_param: Optional[List[str]] = params.get("breakdowns")
     action_breakdowns_param: Optional[List[str]] = params.get("action_breakdowns")
-    time_increment_param: Optional[Any] = params.get("time_increment")
+    time_increment_param: Optional[Union[int, str]] = params.get("time_increment")
     limit_param: Optional[int] = params.get("limit")
-    sort_param: Optional[List[str]] = params.get("sort")
+    sort_param: Optional[List[str]] = params.get("sort") # Ej: ['spend_descending']
 
+    # Validar nivel
     if level_param not in ['campaign', 'adset', 'ad', 'account']:
         return {"status": "error", "action": action_name, "message": "'level' debe ser 'campaign', 'adset', 'ad', o 'account'.", "http_status": 400}
+    # Object_id es el ID de la campaña/adset/ad. Para nivel 'account', object_id es el ad_account_id
+    # que se resuelve con _get_ad_account.
     if level_param != 'account' and not object_id_param:
         return {"status": "error", "action": action_name, "message": f"'object_id' es requerido para el nivel '{level_param}'.", "http_status": 400}
 
     default_insight_fields = [
-        'campaign_name', 'adset_name', 'ad_name', 'impressions', 'spend',
+        'campaign_name', 'adset_name', 'ad_name', 'impressions', 'spend', 
         'clicks', 'ctr', 'cpc', 'reach', 'frequency', 'objective', 'date_start', 'date_stop'
+        # 'actions', 'action_values' requieren 'action_attribution_windows' y pueden ser complejos
     ]
     fields_to_request = fields_param if fields_param and isinstance(fields_param, list) else default_insight_fields
 
@@ -344,15 +357,23 @@ def metaads_get_insights(client_unused: Optional[AuthenticatedHttpClient], param
     if filtering_param and isinstance(filtering_param, list): api_params_sdk['filtering'] = filtering_param
     if breakdowns_param and isinstance(breakdowns_param, list): api_params_sdk['breakdowns'] = breakdowns_param
     if action_breakdowns_param and isinstance(action_breakdowns_param, list): api_params_sdk['action_breakdowns'] = action_breakdowns_param
-    if time_increment_param: api_params_sdk['time_increment'] = time_increment_param
+    if time_increment_param: api_params_sdk['time_increment'] = time_increment_param # 1, 7, 30, 'monthly', 'all_days'
     if limit_param and isinstance(limit_param, int) and limit_param > 0: api_params_sdk['limit'] = limit_param
     if sort_param and isinstance(sort_param, list): api_params_sdk['sort'] = sort_param
+    
+    # Parámetro para forzar modo síncrono (puede ser lento)
+    # Por defecto, el SDK puede hacer una llamada asíncrona y devolver un AdReportRun.
+    # Para simplificar el flujo aquí, intentaremos forzar una respuesta síncrona.
+    # Si la query es muy grande, esto podría fallar o tomar mucho tiempo.
+    # El SDK no tiene un flag directo 'is_async=False' en get_insights. Se ejecuta y se espera.
+    # O se usa `target_object.get_insights(params=api_params_sdk, async=True)` para un job asíncrono.
+    # Para este caso, vamos a obtener el cursor y luego iterar, lo que debería ser síncrono.
 
     try:
         get_meta_ads_api_client(params.get("client_config_override"))
-        target_object_sdk: Any
+        target_object_sdk: Any 
+        
         log_object_id_desc = object_id_param
-
         if level_param == 'campaign':
             target_object_sdk = Campaign(object_id_param)
         elif level_param == 'adset':
@@ -360,15 +381,17 @@ def metaads_get_insights(client_unused: Optional[AuthenticatedHttpClient], param
         elif level_param == 'ad':
             target_object_sdk = Ad(object_id_param)
         elif level_param == 'account':
-            ad_account_params = {"ad_account_id": object_id_param} if object_id_param else params
-            target_object_sdk = _get_ad_account(ad_account_params)
+            # Si object_id_param se provee para account, es el ad_account_id.
+            # Sino, _get_ad_account usará el de settings.
+            target_object_sdk = _get_ad_account(params) 
             log_object_id_desc = target_object_sdk[AdAccount.Field.id]
-        else:
+        else: 
             raise ValueError(f"Nivel de insights desconocido: {level_param}")
 
         logger.info(f"Obteniendo insights de Meta Ads para ID '{log_object_id_desc}' (Nivel: {level_param}). Params SDK: {api_params_sdk}")
         
-        insights_cursor = target_object_sdk.get_insights(params=api_params_sdk, is_async=False)
+        # El método get_insights devuelve un AdsInsights.Curso;, que maneja la paginación.
+        insights_cursor = target_object_sdk.get_insights(params=api_params_sdk)
         
         insights_list = [insight_data.export_all_data() for insight_data in insights_cursor]
 
@@ -377,3 +400,5 @@ def metaads_get_insights(client_unused: Optional[AuthenticatedHttpClient], param
 
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name, params)
+
+# --- FIN DEL MÓDULO actions/metaads_actions.py ---
