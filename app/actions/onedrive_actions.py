@@ -1,19 +1,16 @@
 # app/actions/onedrive_actions.py
 import logging
-import requests # Para tipos de excepción y llamadas directas a uploadUrl de sesión
-import json # Para el helper de error
+import requests
+import json
 from typing import Dict, List, Optional, Union, Any
 
-# Importar la configuración y el cliente HTTP autenticado
 from app.core.config import settings
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
 
-# Constante local para timeout, usando el valor de settings
 DEFAULT_CHUNK_UPLOAD_TIMEOUT_SECONDS = settings.DEFAULT_API_TIMEOUT
 
-# ---- Helpers Locales para Endpoints de OneDrive (ahora orientados a /users/{user_id}/drive) ----
 def _get_od_user_drive_base_endpoint(user_id: str) -> str:
     return f"{settings.GRAPH_API_BASE_URL}/users/{user_id}/drive"
 
@@ -30,9 +27,7 @@ def _get_od_user_item_by_id_endpoint(user_id: str, item_id: str) -> str:
     drive_endpoint = _get_od_user_drive_base_endpoint(user_id)
     return f"{drive_endpoint}/items/{item_id}"
 
-# --- Helper para manejar errores de OneDrive API de forma centralizada ---
 def _handle_onedrive_api_error(e: Exception, action_name: str, params_for_log: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    # Esta función helper no toma 'params' del action_map directamente
     log_message = f"Error en OneDrive action '{action_name}'"
     if params_for_log:
         safe_params = {k: v for k, v in params_for_log.items() if k not in ['contenido_bytes', 'password']}
@@ -57,15 +52,12 @@ def _handle_onedrive_api_error(e: Exception, action_name: str, params_for_log: O
         "graph_error_code": error_code_graph
     }
 
-# --- Helper para obtener ID de item si se provee path (adaptado para user_id) ---
 def _internal_onedrive_get_item_metadata(client: AuthenticatedHttpClient, user_id: str, params: Dict[str, Any]) -> Dict[str, Any]:
-    # Esta función es interna, el logging principal y 'params or {}' se maneja en la pública
     item_path_or_id: Optional[str] = params.get("item_id_or_path")
     select: Optional[str] = params.get("select")
     expand: Optional[str] = params.get("expand")
 
     if not item_path_or_id:
-        # Este error debería ser capturado por la función pública que llama a esta.
         raise ValueError("'item_id_or_path' es requerido para _internal_onedrive_get_item_metadata.")
     
     try:
@@ -82,18 +74,18 @@ def _internal_onedrive_get_item_metadata(client: AuthenticatedHttpClient, user_i
         if select: query_api_params['$select'] = select
         if expand: query_api_params['$expand'] = expand
         
-        logger.info(f"Obteniendo metadatos OneDrive para user '{user_id}' (interno): Item '{item_path_or_id}' desde endpoint '{item_endpoint.replace(settings.GRAPH_API_BASE_URL, '')}'")
+        logger.info(f"Obteniendo metadatos OneDrive para user '{user_id}' (interno): Item '{item_path_or_id}' desde endpoint '{item_endpoint.replace(str(settings.GRAPH_API_BASE_URL), '')}'")
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.get(item_endpoint, scope=files_read_scope, params=query_api_params if query_api_params else None)
-        return {"status": "success", "data": response.json()}
+        response_data = client.get(item_endpoint, scope=files_read_scope, params=query_api_params if query_api_params else None)
+        # CORRECCIÓN: 'response_data' ya es un dict.
+        return {"status": "success", "data": response_data}
     except Exception as e:
-        # Re-lanzar para que la función pública lo maneje con _handle_onedrive_api_error
         raise e
 
 
 def _get_item_id_from_path_if_needed_onedrive(
     client: AuthenticatedHttpClient,
-    user_id: str, # Necesario para llamar a _internal_onedrive_get_item_metadata
+    user_id: str,
     item_path_or_id: str
 ) -> Union[str, Dict[str, Any]]:
     is_likely_id = '!' in item_path_or_id or \
@@ -105,10 +97,9 @@ def _get_item_id_from_path_if_needed_onedrive(
         return item_path_or_id
 
     logger.debug(f"'{item_path_or_id}' parece un path en OneDrive para user '{user_id}'. Intentando obtener su ID.")
-    metadata_params = {"item_id_or_path": item_path_or_id, "select": "id,name"} # Params para _internal_onedrive_get_item_metadata
+    metadata_params = {"item_id_or_path": item_path_or_id, "select": "id,name"}
 
     try:
-        # Llamada interna directa, ya no a la acción pública get_item
         response = _internal_onedrive_get_item_metadata(client, user_id, metadata_params)
         if response.get("status") == "success" and response.get("data", {}).get("id"):
             item_id = response["data"]["id"]
@@ -117,26 +108,21 @@ def _get_item_id_from_path_if_needed_onedrive(
         else:
             error_msg = f"No se pudo obtener el ID para el path/item OneDrive '{item_path_or_id}' (user '{user_id}')."
             logger.error(error_msg + f" Detalles: {response}")
-            # Devolver la estructura de error si _internal_onedrive_get_item_metadata ya la formateó.
-            # Esto es poco probable ya que _internal_onedrive_get_item_metadata relanza la excepción.
             return response if isinstance(response, dict) and response.get("status") == "error" else \
                    {"status": "error", "message": error_msg, "details": str(response), "http_status": response.get("http_status", 500)}
-    except Exception as e_resolve: # Captura excepciones de _internal_onedrive_get_item_metadata
-        # Formatear el error usando el helper estándar
+    except Exception as e_resolve:
         return _handle_onedrive_api_error(e_resolve, "_get_item_id_from_path_if_needed_onedrive", {"user_id": user_id, "item_path_or_id": item_path_or_id})
 
 
-# --- Helper común para paginación ---
 def _onedrive_paged_request(
     client: AuthenticatedHttpClient,
     url_base: str,
     scope: List[str],
-    params: Dict[str, Any], # params originales de la acción para logging
+    params: Dict[str, Any],
     query_api_params_initial: Dict[str, Any],
     max_items_total: Optional[int],
     action_name_for_log: str
 ) -> Dict[str, Any]:
-    # El logging principal y 'params or {}' se hacen en la función llamante
     all_items: List[Dict[str, Any]] = []
     current_url: Optional[str] = url_base
     page_count = 0
@@ -150,12 +136,14 @@ def _onedrive_paged_request(
             is_first_call = (current_url == url_base and page_count == 1)
             current_params_for_call = query_api_params_initial if is_first_call else None
             logger.debug(f"Página {page_count} para '{action_name_for_log}': GET {current_url.split('?')[0]} con params: {current_params_for_call}")
-            response = client.get(
+            
+            response_data = client.get(
                 url=current_url,
                 scope=scope,
                 params=current_params_for_call
             )
-            response_data = response.json()
+            # CORRECCIÓN: 'response_data' ya es un dict.
+            
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list):
                 logger.warning(f"Respuesta inesperada en paginación para '{action_name_for_log}', 'value' no es una lista: {response_data}")
@@ -173,8 +161,6 @@ def _onedrive_paged_request(
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name_for_log, params)
 
-# ---- FUNCIONES DE ACCIÓN PARA ONEDRIVE (ahora para /users/{user_id}/drive) ----
-
 def list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     logger.info("Ejecutando list_items (OneDrive) con params: %s", params)
@@ -182,12 +168,11 @@ def list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' (UPN o ID de objeto) es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' (UPN o ID de objeto) es requerido.", "http_status": 400}
 
-    ruta_param: str = params.get("ruta", "/") # Ruta relativa dentro del drive del usuario
+    ruta_param: str = params.get("ruta", "/")
     top_per_page: int = min(int(params.get("top_per_page", 50)), 200)
-    max_items_total: Optional[int] = params.get("max_items_total") # None para todos hasta límite de paginación
+    max_items_total: Optional[int] = params.get("max_items_total")
     select: Optional[str] = params.get("select")
     filter_query: Optional[str] = params.get("filter_query")
     order_by: Optional[str] = params.get("order_by")
@@ -197,9 +182,9 @@ def list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
                        (len(ruta_param) > 40 or '!' in ruta_param or ruta_param.startswith("driveItem_")) and \
                        not ("." in ruta_param and len(ruta_param) < 70)
 
-        if is_likely_id: # ruta_param es un ID de carpeta
+        if is_likely_id:
             item_endpoint_base = _get_od_user_item_by_id_endpoint(user_identifier, ruta_param)
-        else: # ruta_param es un path relativo
+        else:
             item_endpoint_base = _get_od_user_item_by_path_endpoint(user_identifier, ruta_param)
         
         url_base = f"{item_endpoint_base}/children"
@@ -213,7 +198,7 @@ def list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         logger.info(f"{action_name}: Listando items para user '{user_identifier}', ruta/ID '{ruta_param}'. Query: {query_api_params}")
         return _onedrive_paged_request(client, url_base, files_read_scope, params, query_api_params, max_items_total, action_name)
-    except Exception as e: # Captura excepciones de construcción de URL o de _onedrive_paged_request
+    except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
 
@@ -224,34 +209,31 @@ def get_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
-    item_id_or_path_param: Optional[str] = params.get("item_id_or_path") # Nuevo nombre de parámetro
+    item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
     if not item_id_or_path_param:
-        logger.error(f"{action_name}: El parámetro 'item_id_or_path' es requerido.")
         return {"status": "error", "action": action_name, "message": "'item_id_or_path' es requerido.", "http_status": 400}
 
     try:
-        # _internal_onedrive_get_item_metadata ahora toma user_id
         return _internal_onedrive_get_item_metadata(client, user_identifier, params)
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
 
 def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    # Esta función usa POST/PUT, no se ve afectada por el bug de .json() en GET. Se mantiene igual.
     params = params or {}
     logger.info("Ejecutando upload_file (OneDrive) con params (omitiendo contenido binario del log): %s", {k:v for k,v in params.items() if k != "contenido_bytes"})
     action_name = "onedrive_upload_file"
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     nombre_archivo: Optional[str] = params.get("nombre_archivo")
     contenido_bytes: Optional[bytes] = params.get("contenido_bytes")
-    ruta_destino_relativa: str = params.get("ruta_destino_relativa", "/") # Relativa a la raíz del drive del usuario
+    ruta_destino_relativa: str = params.get("ruta_destino_relativa", "/")
     conflict_behavior: str = params.get("conflict_behavior", "rename")
 
     if not nombre_archivo or contenido_bytes is None:
@@ -262,8 +244,6 @@ def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     try:
         clean_folder_path = ruta_destino_relativa.strip('/')
         target_file_path_for_api = f"{nombre_archivo}" if not clean_folder_path else f"{clean_folder_path}/{nombre_archivo}"
-        
-        # Endpoint para upload usa el path relativo al root del drive del usuario
         item_endpoint_for_upload_base = _get_od_user_item_by_path_endpoint(user_identifier, target_file_path_for_api)
 
         file_size_bytes = len(contenido_bytes)
@@ -315,7 +295,7 @@ def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
             if not final_item_metadata and start_byte >= file_size_bytes :
                 logger.warning("Subida OD grande parece completa, pero no se recibió metadata del item final. Intentando verificación.")
                 get_params = {"user_id": user_identifier, "item_id_or_path": target_file_path_for_api}
-                final_item_check = get_item(client, get_params) # Llama a la acción pública
+                final_item_check = get_item(client, get_params)
                 if final_item_check.get("status") == "success":
                     final_item_metadata = final_item_check["data"]
                 else:
@@ -341,12 +321,10 @@ def download_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Un
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
     if not item_id_or_path_param:
-        logger.error(f"{action_name}: El parámetro 'item_id_or_path' es requerido.")
         return {"status": "error", "action": action_name, "message": "'item_id_or_path' es requerido.", "http_status": 400}
         
     try:
@@ -363,10 +341,17 @@ def download_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Un
 
         logger.info(f"{action_name}: Descargando archivo OneDrive para user '{user_identifier}': Item '{item_id_or_path_param}'")
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.get(url, scope=files_read_scope, stream=True)
-        file_bytes = response.content
-        logger.info(f"Archivo OneDrive '{item_id_or_path_param}' (user '{user_identifier}') descargado ({len(file_bytes)} bytes).")
-        return file_bytes
+        response_content = client.get(url, scope=files_read_scope, stream=True)
+        
+        if isinstance(response_content, bytes):
+            logger.info(f"Archivo OneDrive '{item_id_or_path_param}' (user '{user_identifier}') descargado ({len(response_content)} bytes).")
+            return response_content
+        elif isinstance(response_content, dict) and response_content.get("status") == "error":
+            return response_content 
+        else:
+            logger.error(f"Se esperaban bytes pero se recibió tipo {type(response_content)}: {str(response_content)[:200]}")
+            return _handle_onedrive_api_error(Exception("Respuesta inesperada al obtener el archivo."), action_name, params)
+            
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -377,12 +362,10 @@ def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
     if not item_id_or_path_param:
-        logger.error(f"{action_name}: El parámetro 'item_id_or_path' es requerido.")
         return {"status": "error", "action": action_name, "message": "'item_id_or_path' es requerido.", "http_status": 400}
         
     try:
@@ -406,19 +389,18 @@ def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     nombre_carpeta: Optional[str] = params.get("nombre_carpeta")
     if not nombre_carpeta:
         return _handle_onedrive_api_error(ValueError("'nombre_carpeta' es requerido."), action_name, params)
         
-    ruta_padre_relativa: str = params.get("ruta_padre_relativa", "/") # Relativa al root del drive del usuario
-    conflict_behavior: str = params.get("conflict_behavior", "fail") # fail, rename, replace
+    ruta_padre_relativa: str = params.get("ruta_padre_relativa", "/")
+    conflict_behavior: str = params.get("conflict_behavior", "fail")
 
     try:
         if ruta_padre_relativa == "/":
-            parent_item_endpoint = _get_od_user_item_by_path_endpoint(user_identifier, "/") # Endpoint del root
+            parent_item_endpoint = _get_od_user_item_by_path_endpoint(user_identifier, "/")
         else:
             resolved_parent_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, ruta_padre_relativa)
             if isinstance(resolved_parent_id, dict) and resolved_parent_id.get("status") == "error":
@@ -440,13 +422,12 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
     logger.info("Ejecutando move_item (OneDrive) con params: %s", params)
     action_name = "onedrive_move_item"
 
-    user_identifier: Optional[str] = params.get("user_id") # ID del usuario cuyo drive contiene el item a mover
+    user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     item_id_or_path_origen: Optional[str] = params.get("item_id_or_path_origen")
-    parent_reference_param: Optional[Dict[str, str]] = params.get("parent_reference") # Debe contener 'id' o 'path' del nuevo padre
+    parent_reference_param: Optional[Dict[str, str]] = params.get("parent_reference")
     nuevo_nombre: Optional[str] = params.get("nuevo_nombre")
 
     if not item_id_or_path_origen:
@@ -454,14 +435,11 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
     if not parent_reference_param or not isinstance(parent_reference_param, dict):
          return _handle_onedrive_api_error(ValueError("'parent_reference' (dict con 'id' o 'path' para el nuevo padre) requerido."), action_name, params)
 
-    # parent_reference.path debe ser relativo al drive especificado en parent_reference.driveId (o el mismo drive si no se especifica)
-    # Para /users/{id}/drive, el path en parentReference para ese mismo drive DEBE empezar con /drive/root:
     parent_id = parent_reference_param.get("id")
-    parent_path_raw = parent_reference_param.get("path") # Path relativo al root del drive destino, ej: "/Documentos/Destino"
+    parent_path_raw = parent_reference_param.get("path")
     target_drive_id_in_parent_ref = parent_reference_param.get("driveId")
 
-
-    if not parent_id and not parent_path_raw: # Se necesita uno de los dos para el destino
+    if not parent_id and not parent_path_raw:
         return _handle_onedrive_api_error(ValueError("'parent_reference' debe tener 'id' o 'path'."), action_name, params)
     
     try:
@@ -469,26 +447,25 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
         if isinstance(resolved_item_id_origen, dict) and resolved_item_id_origen.get("status") == "error":
             return resolved_item_id_origen
         
-        # El item a mover está en el drive de user_identifier
         item_origen_endpoint_for_patch = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id_origen))
 
         body: Dict[str, Any] = {"parentReference": {}}
         if parent_id:
             body["parentReference"]["id"] = parent_id
         elif parent_path_raw:
-            # Ajustar el path si el movimiento es dentro del mismo drive de este usuario
-            # y no se especificó un driveId diferente en parentReference.
-            if not target_drive_id_in_parent_ref or target_drive_id_in_parent_ref == client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get("id"):
+            drive_response = client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE)
+            user_drive_id = drive_response.get('id') if isinstance(drive_response, dict) else None
+            
+            if not target_drive_id_in_parent_ref or target_drive_id_in_parent_ref == user_drive_id:
                 if parent_path_raw == "/":
-                    body["parentReference"]["path"] = f"/drives/{client.get(f'{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id', scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get('id')}/root:"
+                    body["parentReference"]["path"] = f"/drives/{user_drive_id}/root:"
                 else:
-                    body["parentReference"]["path"] = f"/drives/{client.get(f'{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id', scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get('id')}/root:{parent_path_raw.lstrip('/')}"
-            else: # Moviendo a un path en un drive diferente (target_drive_id_in_parent_ref existe y es diferente)
-                body["parentReference"]["path"] = parent_path_raw # Asumir que el path es correcto para ese driveId
+                    body["parentReference"]["path"] = f"/drives/{user_drive_id}/root:{parent_path_raw.lstrip('/')}"
+            else:
+                body["parentReference"]["path"] = parent_path_raw
         
-        if target_drive_id_in_parent_ref: # Si se mueve a otro drive
+        if target_drive_id_in_parent_ref:
             body["parentReference"]["driveId"] = target_drive_id_in_parent_ref
-        # 'siteId' también se puede añadir a parentReference si se mueve a un drive de SharePoint
 
         if nuevo_nombre: body["name"] = nuevo_nombre
         
@@ -501,17 +478,17 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
 
 
 def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    # Esta función usa POST, no se ve afectada por el bug. Se mantiene igual.
     params = params or {}
     logger.info("Ejecutando copy_item (OneDrive) con params: %s", params)
     action_name = "onedrive_copy_item"
 
-    user_identifier: Optional[str] = params.get("user_id") # ID del usuario cuyo drive contiene el item a copiar
+    user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     item_id_or_path_origen: Optional[str] = params.get("item_id_or_path_origen")
-    parent_reference_param: Optional[Dict[str, str]] = params.get("parent_reference") # Destino
+    parent_reference_param: Optional[Dict[str, str]] = params.get("parent_reference")
     nuevo_nombre_copia: Optional[str] = params.get("nuevo_nombre_copia")
 
     if not item_id_or_path_origen:
@@ -538,20 +515,19 @@ def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
         if parent_id_dest:
             body_copy_payload["parentReference"]["id"] = parent_id_dest
         elif parent_path_raw_dest:
-            # Similar a move, ajustar path si es para el mismo drive del mismo usuario
-            # y no se especificó un driveId diferente en parentReference.
-            if not target_drive_id_dest or target_drive_id_dest == client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get("id"):
-                user_drive_id_for_path = client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get("id")
+            drive_response = client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE)
+            user_drive_id_for_path = drive_response.get('id') if isinstance(drive_response, dict) else None
+            
+            if not target_drive_id_dest or target_drive_id_dest == user_drive_id_for_path:
                 if parent_path_raw_dest == "/":
                     body_copy_payload["parentReference"]["path"] = f"/drives/{user_drive_id_for_path}/root:"
                 else:
                     body_copy_payload["parentReference"]["path"] = f"/drives/{user_drive_id_for_path}/root:{parent_path_raw_dest.lstrip('/')}"
-            else: # Copiando a un path en un drive diferente
+            else:
                 body_copy_payload["parentReference"]["path"] = parent_path_raw_dest
         
         if target_drive_id_dest:
             body_copy_payload["parentReference"]["driveId"] = target_drive_id_dest
-        # 'siteId' también se puede añadir a parentReference si se copia a un drive de SharePoint
 
         if nuevo_nombre_copia: body_copy_payload["name"] = nuevo_nombre_copia
         
@@ -561,28 +537,26 @@ def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
         monitor_url = response.headers.get('Location') 
         
         if response.status_code == 202 and monitor_url:
-            logger.info(f"Solicitud de copia aceptada (202). Monitor URL: {monitor_url}")
-            try: response_data = response.json() if response.content else {}
-            except json.JSONDecodeError: response_data = {}
+            response_data = response.json() if response.content else {}
             return {"status": "pending", "message": "Solicitud de copia aceptada y en progreso.", "monitor_url": monitor_url, "data": response_data, "http_status": 202}
         elif response.status_code in [200, 201]:
             return {"status": "success", "data": response.json(), "message": "Elemento copiado exitosamente (síncrono)."}
         else:
-            logger.warning(f"Respuesta de copia OD inesperada. Status: {response.status_code}, Headers: {response.headers}, Body: {response.text[:200]}")
-            return _handle_onedrive_api_error(requests.exceptions.HTTPError(response=response), action_name, params)
+            response.raise_for_status()
+            return {}
 
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
 
 def update_item_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    # Esta función usa PATCH, no se ve afectada por el bug. Se mantiene igual.
     params = params or {}
     logger.info("Ejecutando update_item_metadata (OneDrive) con params: %s", {k:v for k,v in params.items() if k != "nuevos_valores"})
     action_name = "onedrive_update_item_metadata"
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
@@ -601,7 +575,7 @@ def update_item_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]
         item_endpoint_for_update = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
 
         custom_headers = {}
-        etag = nuevos_valores_payload.pop('@odata.etag', params.get('etag')) # Permitir etag en payload o como param
+        etag = nuevos_valores_payload.pop('@odata.etag', params.get('etag'))
         if etag: custom_headers['If-Match'] = etag
 
         logger.info(f"{action_name}: Actualizando metadatos OneDrive para user '{user_identifier}': ID '{resolved_item_id}' (original: '{item_id_or_path_param}')")
@@ -619,7 +593,6 @@ def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     query_text: Optional[str] = params.get("query_text")
@@ -629,27 +602,17 @@ def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     top_per_page: int = min(int(params.get("top_per_page", 50)), 200)
     max_items_total: Optional[int] = params.get("max_items_total")
     select: Optional[str] = params.get("select")
-    # search_scope_path ahora se interpreta como relativo al root del drive del usuario
     search_folder_path_relative: str = params.get("search_scope_path", "") 
 
     base_drive_endpoint_str = _get_od_user_drive_base_endpoint(user_identifier)
     
     if search_folder_path_relative and search_folder_path_relative != "/":
-        # Para buscar dentro de una carpeta, se usa el ID del item de la carpeta.
-        # O se usa /drives/{drive-id}/root:/path/to/folder:/search(q='...')
-        # Por simplicidad, vamos a construir el path para /drives/{drive-id}/root:/path:/search(q='...')
         search_path_segment = f"/root:{search_folder_path_relative.strip('/')}:"
         log_search_scope = f"OneDrive user '{user_identifier}' (Scope Path: '{search_folder_path_relative}', Query: '{query_text}')"
-    else: # Búsqueda en todo el drive del usuario
-        search_path_segment = "/root" # O directamente sobre el drive /search(q='...')
+    else:
+        search_path_segment = "/root"
         log_search_scope = f"OneDrive user '{user_identifier}' (Todo el drive, Query: '{query_text}')"
 
-    # La API de búsqueda de Drive es /drives/{drive-id}/search(q='{searchText}')
-    # o /drives/{drive-id}/root/search(q='{searchText}') para buscar desde la raíz
-    # o /drives/{drive-id}/items/{item-id}/search(q='{searchText}') para buscar bajo un item
-    
-    # Usaremos /drives/{drive-id}/root:/search(q='...') para buscar en todo el drive del usuario
-    # o /drives/{drive-id}/root:/folder:/search(q='...')
     url_base = f"{base_drive_endpoint_str}{search_path_segment}/search(q='{query_text}')"
 
     query_api_params: Dict[str, Any] = {'$top': top_per_page}
@@ -657,9 +620,6 @@ def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     else: query_api_params['$select'] = "id,name,webUrl,size,file,folder,parentReference,searchResult,createdDateTime,lastModifiedDateTime"
 
     logger.info(f"{action_name}: {log_search_scope}")
-    # _onedrive_paged_request ya maneja la paginación para respuestas estándar de 'value' y '@odata.nextLink'
-    # La respuesta de /search es un poco diferente, puede tener 'hitsContainers'.
-    # Adaptamos la lógica de paginación aquí para /search.
     
     all_found_resources: List[Dict[str, Any]] = []
     current_url_search: Optional[str] = url_base
@@ -672,19 +632,20 @@ def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
             page_count_search += 1
             is_first_search_call = (current_url_search == url_base and page_count_search == 1)
             
-            response = client.get(
+            search_page_data = client.get(
                 url=current_url_search,
                 scope=files_read_scope,
-                params=query_api_params if is_first_search_call else None # Los params OData van en la URL inicial
+                params=query_api_params if is_first_search_call else None
             )
-            search_page_data = response.json()
+            # CORRECCIÓN: 'search_page_data' ya es un dict.
+            
             items_from_page: List[Dict[str, Any]] = search_page_data.get('value', [])
             
             if not isinstance(items_from_page, list):
                 logger.warning(f"Respuesta inesperada de búsqueda, 'value' no es lista: {items_from_page}")
                 break
 
-            for item_res in items_from_page: # Cada item_res es un DriveItem
+            for item_res in items_from_page:
                 if max_items_total is None or len(all_found_resources) < max_items_total:
                     all_found_resources.append(item_res)
                 else: break
@@ -699,23 +660,23 @@ def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
 
 
 def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    # Esta función usa POST, no se ve afectada por el bug. Se mantiene igual.
     params = params or {}
     logger.info("Ejecutando get_sharing_link (OneDrive) con params: %s", {k:v for k,v in params.items() if k != "password"})
     action_name = "onedrive_get_sharing_link"
 
     user_identifier: Optional[str] = params.get("user_id")
     if not user_identifier:
-        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
         return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
 
     item_id_or_path_param: Optional[str] = params.get("item_id_or_path")
     if not item_id_or_path_param:
         return _handle_onedrive_api_error(ValueError("'item_id_or_path' es requerido."), action_name, params)
         
-    link_type: str = params.get("type", "view") # 'view', 'edit', 'embed'
-    scope: str = params.get("scope", "organization") # 'anonymous', 'organization', 'users'
+    link_type: str = params.get("type", "view")
+    scope: str = params.get("scope", "organization")
     password: Optional[str] = params.get("password")
-    expiration_datetime: Optional[str] = params.get("expirationDateTime") # ISO 8601
+    expiration_datetime: Optional[str] = params.get("expirationDateTime")
 
     try:
         resolved_item_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_param)
@@ -728,7 +689,6 @@ def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
         body: Dict[str, Any] = {"type": link_type, "scope": scope}
         if password: body["password"] = password
         if expiration_datetime: body["expirationDateTime"] = expiration_datetime
-        # Para scope='users', se necesitaría 'recipients' en el body, que no está en los params actuales.
 
         logger.info(f"{action_name}: Creando/obteniendo enlace para OneDrive item ID '{resolved_item_id}' (user '{user_identifier}')")
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
@@ -736,5 +696,3 @@ def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
         return {"status": "success", "data": response.json()}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
-
-# --- FIN DEL MÓDULO actions/onedrive_actions.py ---
