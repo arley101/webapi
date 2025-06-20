@@ -1,4 +1,4 @@
-# app/main.py (Versión Original Restaurada)
+# app/main.py
 import logging
 import os
 from fastapi import FastAPI, Request
