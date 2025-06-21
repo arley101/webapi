@@ -1,4 +1,4 @@
-/Users/arleygalan/Desktop/Proyectoapidynamisc/elitedynamicsapi/elitedynamicsapi_deploy 7/app/actions/onedrive_actions.py/Users/arleygalan/Desktop/Proyectoapidynamisc/elitedynamicsapi/elitedynamicsapi_deploy 7/app/actions/onedrive_actions.py# app/actions/onedrive_actions.py
+# app/actions/onedrive_actions.py
 import logging
 import requests # Para tipos de excepción y llamadas directas a uploadUrl de sesión
 import json # Para el helper de error
@@ -85,7 +85,10 @@ def _internal_onedrive_get_item_metadata(client: AuthenticatedHttpClient, user_i
         logger.info(f"Obteniendo metadatos OneDrive para user '{user_id}' (interno): Item '{item_path_or_id}' desde endpoint '{item_endpoint.replace(settings.GRAPH_API_BASE_URL, '')}'")
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(item_endpoint, scope=files_read_scope, params=query_api_params if query_api_params else None)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        # `client.get` ya devuelve un dict, no un objeto response. Se elimina `.json()`.
+        return {"status": "success", "data": response}
     except Exception as e:
         # Re-lanzar para que la función pública lo maneje con _handle_onedrive_api_error
         raise e
@@ -155,7 +158,10 @@ def _onedrive_paged_request(
                 scope=scope,
                 params=current_params_for_call
             )
-            response_data = response.json()
+            # --- CORRECCIÓN ---
+            # `client.get` ya devuelve un dict, no un objeto response. Se elimina `.json()`.
+            response_data = response
+
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list):
                 logger.warning(f"Respuesta inesperada en paginación para '{action_name_for_log}', 'value' no es una lista: {response_data}")
@@ -364,7 +370,11 @@ def download_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Un
         logger.info(f"{action_name}: Descargando archivo OneDrive para user '{user_identifier}': Item '{item_id_or_path_param}'")
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(url, scope=files_read_scope, stream=True)
-        file_bytes = response.content
+        
+        # --- CORRECCIÓN ---
+        # `client.get(stream=True)` devuelve directamente los bytes.
+        file_bytes = response
+        
         logger.info(f"Archivo OneDrive '{item_id_or_path_param}' (user '{user_identifier}') descargado ({len(file_bytes)} bytes).")
         return file_bytes
     except Exception as e:
@@ -478,11 +488,17 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
         elif parent_path_raw:
             # Ajustar el path si el movimiento es dentro del mismo drive de este usuario
             # y no se especificó un driveId diferente en parentReference.
-            if not target_drive_id_in_parent_ref or target_drive_id_in_parent_ref == client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get("id"):
+            
+            # --- CORRECCIÓN ---
+            # `client.get` ya devuelve un dict, no un objeto response. Se elimina `.json()`.
+            user_drive_info = client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE)
+            user_drive_id = user_drive_info.get("id") if isinstance(user_drive_info, dict) else None
+
+            if not target_drive_id_in_parent_ref or target_drive_id_in_parent_ref == user_drive_id:
                 if parent_path_raw == "/":
-                    body["parentReference"]["path"] = f"/drives/{client.get(f'{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id', scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get('id')}/root:"
+                    body["parentReference"]["path"] = f"/drives/{user_drive_id}/root:"
                 else:
-                    body["parentReference"]["path"] = f"/drives/{client.get(f'{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id', scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get('id')}/root:{parent_path_raw.lstrip('/')}"
+                    body["parentReference"]["path"] = f"/drives/{user_drive_id}/root:{parent_path_raw.lstrip('/')}"
             else: # Moviendo a un path en un drive diferente (target_drive_id_in_parent_ref existe y es diferente)
                 body["parentReference"]["path"] = parent_path_raw # Asumir que el path es correcto para ese driveId
         
@@ -492,7 +508,7 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
 
         if nuevo_nombre: body["name"] = nuevo_nombre
         
-        logger.info(f"{action_name}: Moviendo OneDrive item ID '{resolved_item_id_origen}' de user '{user_identifier}' a '{parent_reference_param}'. Nuevo nombre: '{body.get('name')}'")
+        logger.info(f"Moviendo OneDrive item ID '{resolved_item_id_origen}' de user '{user_identifier}' a '{parent_reference_param}'. Nuevo nombre: '{body.get('name')}'")
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.patch(item_origen_endpoint_for_patch, scope=files_rw_scope, json_data=body)
         return {"status": "success", "data": response.json(), "message": "Elemento movido/renombrado."}
@@ -540,8 +556,13 @@ def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
         elif parent_path_raw_dest:
             # Similar a move, ajustar path si es para el mismo drive del mismo usuario
             # y no se especificó un driveId diferente en parentReference.
-            if not target_drive_id_dest or target_drive_id_dest == client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get("id"):
-                user_drive_id_for_path = client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE).json().get("id")
+            
+            # --- CORRECCIÓN ---
+            # `client.get` ya devuelve un dict, no un objeto response. Se elimina `.json()`.
+            user_drive_info = client.get(f"{_get_od_user_drive_base_endpoint(user_identifier)}?$select=id", scope=settings.GRAPH_API_DEFAULT_SCOPE)
+            user_drive_id_for_path = user_drive_info.get("id") if isinstance(user_drive_info, dict) else None
+
+            if not target_drive_id_dest or target_drive_id_dest == user_drive_id_for_path:
                 if parent_path_raw_dest == "/":
                     body_copy_payload["parentReference"]["path"] = f"/drives/{user_drive_id_for_path}/root:"
                 else:
@@ -677,7 +698,10 @@ def search_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
                 scope=files_read_scope,
                 params=query_api_params if is_first_search_call else None # Los params OData van en la URL inicial
             )
-            search_page_data = response.json()
+            # --- CORRECCIÓN ---
+            # `client.get` ya devuelve un dict, no un objeto response. Se elimina `.json()`.
+            search_page_data = response
+
             items_from_page: List[Dict[str, Any]] = search_page_data.get('value', [])
             
             if not isinstance(items_from_page, list):

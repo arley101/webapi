@@ -75,7 +75,10 @@ def _calendar_paged_request(
             logger.debug(f"Página {page_count} para '{action_name_for_log}': GET {current_url.split('?')[0]} con params: {current_params_for_call}")
             
             response = client.get(url=current_url, scope=scope_list, params=current_params_for_call)
-            response_data = response.json()
+            
+            # --- CORRECCIÓN ---
+            # `client.get` ya devuelve un dict, no un objeto response. Se elimina `.json()`.
+            response_data = response
             
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list):
@@ -220,7 +223,9 @@ def get_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
     logger.info(f"{action_name}: Obteniendo evento ID '{event_id}' para '{user_identifier}' (Select: {select_fields or 'default'})")
     try:
         response = client.get(url, scope=CALENDARS_READ_SCOPE, params=query_api_params)
-        return {"status": "success", "data": response.json()}
+        # --- CORRECCIÓN ---
+        # `client.get` ya devuelve un dict, no un objeto response. Se elimina `.json()`.
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 

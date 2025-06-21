@@ -53,7 +53,10 @@ def _directory_paged_request(
             current_headers = custom_headers_first_call if is_first_call else None
             
             response = client.get(url=current_url, scope=scope, params=current_call_params, headers=current_headers)
-            response_data = response.json()
+
+            # --- CORRECCIÓN ---
+            response_data = response
+
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list): break
             for item in page_items:
@@ -101,7 +104,9 @@ def get_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     scope_to_use = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=scope_to_use, params=api_query_params if api_query_params else None)
-        return {"status": "success", "data": response.json()}
+
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except requests.exceptions.HTTPError as http_err:
         if http_err.response and http_err.response.status_code == 404:
             return {"status": "error", "message": f"Usuario '{user_id_or_upn}' no encontrado.", "http_status": 404, "details": http_err.response.text}
@@ -142,7 +147,7 @@ def update_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         response = client.patch(url, scope=scope_to_use, json_data=update_payload)
         if response.status_code == 204:
             logger.info(f"Usuario '{user_id_or_upn}' actualizado (204).")
-            get_user_params = {"user_id_or_upn": user_id_or_upn} # Corregir param name
+            get_user_params = {"user_id": user_id_or_upn} 
             if params.get("select_after_update"): get_user_params["select"] = params["select_after_update"]
             updated_user_info = get_user(client, get_user_params)
             if updated_user_info["status"] == "success":
@@ -199,7 +204,9 @@ def get_group(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
     scope_to_use = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=scope_to_use, params=api_query_params if api_query_params else None)
-        return {"status": "success", "data": response.json()}
+
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except requests.exceptions.HTTPError as http_err:
         if http_err.response and http_err.response.status_code == 404:
             return {"status": "error", "message": f"Grupo '{group_id}' no encontrado.", "http_status": 404, "details": http_err.response.text}

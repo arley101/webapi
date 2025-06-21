@@ -59,7 +59,10 @@ def _teams_paged_request(
             
             logger.debug(f"Página {page_count} para '{action_name_for_log}': GET {current_url.split('?')[0]} con params: {current_call_params}")
             response = client.get(url=current_url, scope=scope, params=current_call_params)
-            response_data = response.json()
+
+            # --- CORRECCIÓN ---
+            response_data = response
+
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list): break
             
@@ -108,17 +111,6 @@ def list_joined_teams(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
     logger.info(f"{action_name}: Listando equipos unidos para usuario '{user_identifier}'. Query: {query_api_params}, Max_items: {max_items_total or 'todos'}")
     return _teams_paged_request(client, url_base, teams_read_scope, params, query_api_params, max_items_total, action_name)
 
-# ... (El resto de las funciones de teams_actions.py: get_team, list_channels, get_channel, 
-# send_channel_message, list_channel_messages, reply_to_message, list_chats, get_chat, 
-# create_chat, send_chat_message, list_chat_messages, schedule_meeting, get_meeting_details, 
-# list_members permanecen idénticas a la versión que te proporcioné en la respuesta del
-# Vie, 31 de May de 2024 a la(s) 12:53 PM, ya que esa versión es la que está en tu ZIP y
-# ya contiene las correcciones para user_id y el helper de paginación)
-# --- CONTINUACIÓN DEL CÓDIGO DE app/actions/teams_actions.py ---
-# (Asegúrate de copiar el resto de las funciones desde la versión completa que te di anteriormente,
-#  o la que está en tu ZIP elitedynamicsapi_DEPLOY_CLEAN.zip/app/actions/teams_actions.py
-#  ya que es extenso y el contenido del ZIP es el que considero base ahora)
-
 def get_team(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
     logger.info("Ejecutando get_team con params: %s", params)
@@ -135,7 +127,9 @@ def get_team(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     teams_read_scope = getattr(settings, 'GRAPH_SCOPE_TEAMS_READ_BASIC_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=teams_read_scope, params=query_params)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
@@ -185,7 +179,9 @@ def get_channel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     channel_read_scope = getattr(settings, 'GRAPH_SCOPE_CHANNEL_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=channel_read_scope, params=query_params)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
@@ -326,7 +322,9 @@ def get_chat(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     chat_rw_scope = getattr(settings, 'GRAPH_SCOPE_CHAT_READWRITE_ALL', getattr(settings, 'GRAPH_SCOPE_CHAT_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
         response = client.get(url, scope=chat_rw_scope, params=query_api_params if query_api_params else None)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_teams_api_error(e, action_name, params)
 
@@ -485,7 +483,10 @@ def get_meeting_details(client: AuthenticatedHttpClient, params: Dict[str, Any])
     meeting_read_scope = getattr(settings, 'GRAPH_SCOPE_CALENDARS_READ', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=meeting_read_scope, params=query_params)
-        event_data = response.json()
+        
+        # --- CORRECCIÓN ---
+        event_data = response
+
         if not event_data.get("isOnlineMeeting") or event_data.get("onlineMeetingProvider", "").lower() != "teamsforbusiness":
             return {"status": "warning", "data": event_data, "message": "Evento obtenido, pero no parece ser una reunión online de Teams válida."}
         return {"status": "success", "data": event_data}

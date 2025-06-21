@@ -96,7 +96,10 @@ def list_task_lists(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
             page_count += 1
             current_call_params = query_api_params_initial if page_count == 1 else None
             response = client.get(current_url, scope=todo_read_scope, params=current_call_params)
-            response_data = response.json()
+            
+            # --- CORRECCIÓN ---
+            response_data = response
+
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list): break
             for item in page_items:
@@ -169,7 +172,10 @@ def list_tasks(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
             page_count += 1
             current_call_params = query_api_params_initial if page_count == 1 else None
             response = client.get(current_url, scope=todo_read_scope, params=current_call_params)
-            response_data = response.json()
+
+            # --- CORRECCIÓN ---
+            response_data = response
+
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list): break
             for item in page_items:
@@ -255,7 +261,9 @@ def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     todo_read_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READ', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=todo_read_scope, params=query_api_params if query_api_params else None)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_todo_api_error(e, action_name)
 

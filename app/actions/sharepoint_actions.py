@@ -40,7 +40,11 @@ def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any])
              try:
                  sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
                  root_site_info_resp = client.get(f"{settings.GRAPH_API_BASE_URL}/sites/root?$select=siteCollection", scope=sites_read_scope)
-                 root_site_hostname = root_site_info_resp.json().get("siteCollection", {}).get("hostname")
+                 
+                 # --- CORRECCIÓN ---
+                 # `client.get` ya devuelve un dict. Se elimina `.json()`.
+                 root_site_hostname = root_site_info_resp.get("siteCollection", {}).get("hostname")
+
                  if root_site_hostname:
                      lookup_path = f"{root_site_hostname}:{site_input}"
                      logger.info(f"SP Path relativo '{site_input}' convertido a: '{lookup_path}' para búsqueda de ID.")
@@ -52,7 +56,10 @@ def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any])
         try:
             sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
             response = client.get(url_lookup, scope=sites_read_scope)
-            site_data = response.json(); resolved_site_id = site_data.get("id")
+
+            # --- CORRECCIÓN ---
+            site_data = response; resolved_site_id = site_data.get("id")
+
             if resolved_site_id:
                 logger.info(f"SP Site ID resuelto para input '{site_input}' (usando lookup path '{lookup_path}'): '{resolved_site_id}' (Nombre: {site_data.get('displayName')})")
                 return resolved_site_id
@@ -68,7 +75,10 @@ def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any])
     try:
         sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response_root = client.get(url_root_site, scope=sites_read_scope)
-        root_site_data = response_root.json(); root_site_id = root_site_data.get("id")
+
+        # --- CORRECCIÓN ---
+        root_site_data = response_root; root_site_id = root_site_data.get("id")
+
         if root_site_id:
             logger.info(f"Usando SP Site ID raíz como fallback final: '{root_site_id}' (Nombre: {root_site_data.get('displayName')})")
             return root_site_id
@@ -95,7 +105,10 @@ def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_nam
         url_drive_by_id = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives/{target_drive_identifier}?$select=id,name"
         try:
             response = client.get(url_drive_by_id, scope=files_read_scope)
-            drive_data = response.json(); drive_id = drive_data.get("id")
+            
+            # --- CORRECCIÓN ---
+            drive_data = response; drive_id = drive_data.get("id")
+
             if drive_id: 
                 logger.info(f"Drive ID '{drive_id}' verificado para sitio '{site_id}'.")
                 return drive_id
@@ -106,7 +119,10 @@ def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_nam
     url_list_drives = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives?$select=id,name,displayName,webUrl"
     try:
         response_drives = client.get(url_list_drives, scope=files_read_scope)
-        drives_list = response_drives.json().get("value", [])
+        
+        # --- CORRECCIÓN ---
+        drives_list = response_drives.get("value", [])
+
         for drive_obj in drives_list:
             if drive_obj.get("name", "").lower() == target_drive_identifier.lower() or \
                drive_obj.get("displayName", "").lower() == target_drive_identifier.lower():
@@ -192,7 +208,10 @@ def _sp_paged_request(
             
             logger.debug(f"Página SP {page_count} para '{action_name_for_log}': GET {current_url.split('?')[0]} con params: {current_params}")
             response = client.get(url=current_url, scope=scope, params=current_params)
-            response_data = response.json()
+
+            # --- CORRECCIÓN ---
+            response_data = response
+
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list): 
                 logger.warning(f"Respuesta paginada SP inesperada, 'value' no es lista: {response_data}")
@@ -290,7 +309,9 @@ def get_site_info(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
         logger.info(f"Obteniendo información del sitio SP: '{target_site_identifier}' (Select: {query_api_params['$select']})")
         sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(url, scope=sites_read_scope, params=query_api_params if query_api_params else None)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -316,7 +337,9 @@ def search_sites(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=sites_read_scope, params=api_query_params)
-        return {"status": "success", "data": response.json().get("value", [])}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response.get("value", [])}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -401,7 +424,9 @@ def get_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
         logger.info(f"Obteniendo lista SP '{list_id_or_name}' de sitio '{target_site_id}'. (Select: {query_api_params.get('$select')}, Expand: {query_api_params.get('$expand')})")
         sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(url, scope=sites_read_scope, params=query_api_params if query_api_params else None)
-        return {"status": "success", "data": response.json()}
+
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -534,7 +559,9 @@ def get_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
         logger.info(f"Obteniendo item SP ID '{item_id}' de lista '{list_id_or_name}', sitio '{target_site_id}'. (Expand: {expand_fields})")
         sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(url, scope=sites_read_scope, params=query_api_params if query_api_params else None)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -734,7 +761,9 @@ def get_file_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
         
         files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(base_url_item, scope=files_read_scope, params=query_api_params if query_api_params else None)
-        return {"status": "success", "data": response.json()}
+
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -880,7 +909,10 @@ def download_document(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
         # El http_client.get ya maneja stream=True si es necesario, o devuelve response.content
         response = client.get(url_content, scope=files_read_scope, stream=True) # stream=True es importante para archivos
         
-        file_bytes = response.content
+        # --- CORRECCIÓN ---
+        # `client.get(stream=True)` devuelve directamente los bytes.
+        file_bytes = response
+        
         logger.info(f"Documento SP '{item_actual_id}' descargado ({len(file_bytes)} bytes).")
         return file_bytes # FastAPI manejará esto como una respuesta binaria
     except Exception as e: 
@@ -931,7 +963,7 @@ def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     action_name = "create_folder"
 
     folder_name: Optional[str] = params.get("folder_name")
-    parent_folder_path_or_id: str = params.get("parent_folder_path_or_id", "") # Path relativo al root, o ID de carpeta padre
+    parent_folder_path_or_id: str = params.get("parent_folder_path_or_id", "") # Path relativo al root del drive, o ID de carpeta padre
     drive_id_or_name_input: Optional[str] = params.get("drive_id_or_name")
     conflict_behavior: str = params.get("conflict_behavior", "fail") # fail, rename, replace
 
@@ -1210,7 +1242,9 @@ def list_item_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any
         perm_scope = getattr(settings, 'GRAPH_SCOPE_SITES_FULLCONTROL_ALL', # O un scope más granular si se conoce
                              getattr(settings, 'GRAPH_SCOPE_SITES_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
         response = client.get(url_item_permissions, scope=perm_scope)
-        return {"status": "success", "data": response.json().get("value", [])} # Devuelve una colección de objetos Permission
+
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response.get("value", [])} # Devuelve una colección de objetos Permission
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 

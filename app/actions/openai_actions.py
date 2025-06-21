@@ -251,7 +251,10 @@ def list_models(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
             scope=openai_scope, 
             timeout=params.get("timeout", settings.DEFAULT_API_TIMEOUT)
         )
-        response_data = response.json()
+        
+        # --- CORRECCIÓN ---
+        response_data = response
+        
         # La respuesta de /models tiene un campo "data" que es una lista de modelos.
         return {"status": "success", "data": response_data.get("data", [])}
     except Exception as e:

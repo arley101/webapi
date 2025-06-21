@@ -78,13 +78,17 @@ def generic_get(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     logger.info(f"{action_name}: Realizando GET a Graph API. Path: {graph_path}, URL: {full_url}, Scope: {scope_to_use}, QueryParams: {query_api_params}, Headers: {bool(custom_headers)}")
     try:
         response = client.get(full_url, scope=scope_to_use, params=query_api_params, headers=custom_headers)
-        # Intentar devolver JSON, si falla, devolver texto crudo.
-        try:
-            data = response.json()
-        except requests.exceptions.JSONDecodeError:
-            data = response.text
-            logger.info(f"Respuesta GET genérica a Graph para {full_url} no es JSON, devolviendo texto. Status: {response.status_code}")
-        return {"status": "success", "data": data, "http_status": response.status_code}
+        
+        # --- CORRECCIÓN ---
+        # `client.get` ya devuelve un dict (o str/bytes), no un objeto response.
+        # Asumimos un estado 200 OK si no hay excepción, que es el comportamiento de `http_client`.
+        data = response
+        http_status = 200 # Asumir 200 OK en caso de éxito, ya que client.get no devuelve el status.
+        
+        if isinstance(data, str):
+            logger.info(f"Respuesta GET genérica a Graph para {full_url} no es JSON, devolviendo texto.")
+        
+        return {"status": "success", "data": data, "http_status": http_status}
     except Exception as e:
         # Pasar los params originales (no log_params) al helper de error para contexto completo.
         return _handle_generic_graph_api_error(e, action_name, params)
