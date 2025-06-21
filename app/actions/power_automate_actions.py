@@ -7,7 +7,6 @@ from typing import Dict, Optional, Any, List # Añadido List
 
 # Importar la configuración y el cliente HTTP autenticado
 from app.core.config import settings
-from app.shared.helpers.http_client import AuthenticatedHttpClient # Para llamadas ARM
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
@@ -94,7 +93,10 @@ def listar_flows(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
         if not mgmt_scope: raise ValueError("AZURE_MGMT_DEFAULT_SCOPE no está configurado.")
 
         response = client.get(url, scope=mgmt_scope, params=odata_params, timeout=settings.DEFAULT_API_TIMEOUT)
-        response_data = response.json()
+        
+        # --- CORRECCIÓN ---
+        response_data = response
+        
         return {"status": "success", "data": response_data.get("value", [])}
     except Exception as e:
         return _handle_pa_api_error(e, action_name, params)
@@ -128,7 +130,10 @@ def obtener_flow(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
         if not mgmt_scope: raise ValueError("AZURE_MGMT_DEFAULT_SCOPE no está configurado.")
         
         response = client.get(url, scope=mgmt_scope, params=odata_params if odata_params else None, timeout=settings.DEFAULT_API_TIMEOUT)
-        flow_data = response.json()
+
+        # --- CORRECCIÓN ---
+        flow_data = response
+
         return {"status": "success", "data": flow_data}
     except requests.exceptions.HTTPError as http_err:
         if http_err.response is not None and http_err.response.status_code == 404:
@@ -233,7 +238,10 @@ def obtener_estado_ejecucion_flow(client: AuthenticatedHttpClient, params: Dict[
         if not mgmt_scope: raise ValueError("AZURE_MGMT_DEFAULT_SCOPE no está configurado.")
         
         response = client.get(url, scope=mgmt_scope, params=odata_params if odata_params else None, timeout=settings.DEFAULT_API_TIMEOUT)
-        run_data = response.json()
+
+        # --- CORRECCIÓN ---
+        run_data = response
+
         return {"status": "success", "data": run_data}
     except requests.exceptions.HTTPError as http_err:
         if http_err.response is not None and http_err.response.status_code == 404:

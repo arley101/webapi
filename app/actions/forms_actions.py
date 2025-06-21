@@ -112,7 +112,9 @@ def list_forms(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
         
         forms_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(url=url, scope=forms_read_scope, params=api_query_odata_params) 
-        search_results_data = response.json()
+        
+        # --- CORRECCIÓN ---
+        search_results_data = response
         
         items_found: List[Dict[str, Any]] = []
         raw_value = search_results_data.get('value', [])
@@ -128,7 +130,7 @@ def list_forms(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
                 if resource_item:
                     # Confirmar si es un Form revisando el tipo de paquete o MIME type
                     is_form_package = resource_item.get("package", {}).get("type", "").lower() == "form"
-                    is_form_mimetype = resource_item.get("file", {}).get("mimeType", "") == "application/vnd.ms-form"
+                    is_form_mimetype = resource_item.get("file", {}).get("mimeType") == "application/vnd.ms-form"
                     # A veces los forms son solo .xlsx que contienen el form, no se detectan así.
                     # La búsqueda por 'contentType:FormPackage' es más directa si el indexador de Graph lo soporta bien.
                     if is_form_package or is_form_mimetype or ".form" in resource_item.get("name", "").lower():
@@ -184,7 +186,9 @@ def get_form(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     forms_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url=url_base_item, scope=forms_read_scope, params=api_query_odata_params)
-        form_file_metadata = response.json()
+        
+        # --- CORRECCIÓN ---
+        form_file_metadata = response
         
         is_confirmed_form_file = False
         if form_file_metadata.get("package", {}).get("type", "").lower() == "form":

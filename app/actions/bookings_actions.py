@@ -75,7 +75,9 @@ def list_businesses(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
         # Usar .default asume que los permisos necesarios están concedidos a la aplicación.
         bookings_read_all_scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(url, scope=bookings_read_all_scope, params=query_params if query_params else None)
-        return {"status": "success", "data": response.json().get("value", [])}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_bookings_api_error(e, action_name, params)
 
@@ -99,7 +101,9 @@ def get_business(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     bookings_read_all_scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=bookings_read_all_scope, params=odata_params if odata_params else None)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_bookings_api_error(e, action_name, params)
 
@@ -123,7 +127,9 @@ def list_services(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     bookings_read_all_scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=bookings_read_all_scope, params=odata_params if odata_params else None)
-        return {"status": "success", "data": response.json().get("value", [])}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_bookings_api_error(e, action_name, params)
 
@@ -146,7 +152,9 @@ def list_staff(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     bookings_read_all_scope = getattr(settings, 'GRAPH_SCOPE_BOOKINGS_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=bookings_read_all_scope, params=odata_params if odata_params else None)
-        return {"status": "success", "data": response.json().get("value", [])}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_bookings_api_error(e, action_name, params)
 
@@ -224,7 +232,9 @@ def list_appointments(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
                                      getattr(settings, 'GRAPH_SCOPE_BOOKINGS_APPOINTMENT_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
         response = client.get(url, scope=bookings_read_all_scope, params=odata_params)
-        return {"status": "success", "data": response.json().get("value", [])}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_bookings_api_error(e, action_name, params)
 
@@ -251,7 +261,9 @@ def get_appointment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
                                      getattr(settings, 'GRAPH_SCOPE_BOOKINGS_APPOINTMENT_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
         response = client.get(url, scope=bookings_read_all_scope, params=odata_params if odata_params else None)
-        return {"status": "success", "data": response.json()}
+
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_bookings_api_error(e, action_name, params)
 

@@ -180,7 +180,9 @@ def obtener_documento_word_binario(client: AuthenticatedHttpClient, params: Dict
     files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=files_read_scope, stream=True) 
-        file_bytes = response.content
+        # --- CORRECCIÓN ---
+        file_bytes = response
+
         logger.info(f"Documento Word '{item_id_o_ruta}' (usuario '{user_identifier}') descargado ({len(file_bytes)} bytes).")
         return file_bytes 
     except Exception as e:
@@ -260,7 +262,9 @@ def leer_celda_excel(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
     workbook_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE) 
     try:
         response = client.get(url_range_api, scope=workbook_scope)
-        return {"status": "success", "data": response.json()}
+        
+        # --- CORRECCIÓN ---
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_office_api_error(e, action_name, params)
 
