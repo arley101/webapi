@@ -62,7 +62,7 @@ def list_resource_groups(client: AuthenticatedHttpClient, params: Dict[str, Any]
     logger.info(f"Listando grupos de recursos para la suscripción '{subscription_id}' con OData params: {odata_params}")
     try:
         response = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
-        # CORRECCIÓN: 'response' ya es un dict, no se llama a .json()
+        # CORRECCIÓN: 'response' ya es un dict, no llamar a .json()
         return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
@@ -90,7 +90,7 @@ def list_resources_in_rg(client: AuthenticatedHttpClient, params: Dict[str, Any]
     logger.info(f"Listando recursos en RG '{resource_group_name}', suscripción '{subscription_id}'. Filtro: {odata_params.get('$filter')}")
     try:
         response = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, params=odata_params)
-        # CORRECCIÓN: 'response' ya es un dict, no se llama a .json()
+        # CORRECCIÓN: 'response' ya es un dict, no llamar a .json()
         return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
@@ -161,8 +161,9 @@ def get_function_status(client: AuthenticatedHttpClient, params: Dict[str, Any])
     
     logger.info(f"Obteniendo estado de la función '{function_name}' en Function App '{function_app_name}'")
     try:
-        function_data = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE)
-        # CORRECCIÓN: 'function_data' ya es un dict.
+        response = client.get(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE)
+        # CORRECCIÓN: 'response' es un dict.
+        function_data = response
         function_properties = function_data.get("properties", {})
         is_disabled = function_properties.get("isDisabled", False) 
         return {
@@ -242,8 +243,8 @@ def get_logic_app_run_history(client: AuthenticatedHttpClient, params: Dict[str,
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-# Las funciones que usan POST/PUT/DELETE como restart_function_app, create_deployment,
-# no usan client.get() y por lo tanto no tienen este bug específico. Se mantienen igual.
+# --- Las acciones restart_function_app, create_deployment y trigger_logic_app (que son POST/PUT) no usan client.get(),
+# por lo que no deberían tener el bug del .json() y no necesitan corrección en ese sentido. Se mantienen como están. ---
 
 def restart_function_app(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
