@@ -4,8 +4,9 @@ from typing import Dict, List, Optional, Any
 
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
-from google.protobuf import json_format, field_mask_pb2
+from google.protobuf import json_format
 from google.protobuf.json_format import ParseDict
+from google.protobuf import field_mask_pb2
 
 from app.core.config import settings
 from app.shared.helpers.http_client import AuthenticatedHttpClient
@@ -124,6 +125,7 @@ def _execute_mutate_operation(
         mutate_request = gads_client.get_type(request_type_name)
         mutate_request.customer_id = customer_id_clean
         mutate_request.operations.extend(sdk_operations)
+        mutate_request.partial_failure = params.get("partial_failure", False)
         mutate_request.validate_only = params.get("validate_only", False)
         
         response = getattr(service_client, mutate_method_name)(request=mutate_request)
