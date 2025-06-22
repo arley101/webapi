@@ -4,8 +4,8 @@ from typing import Dict, List, Optional, Any
 
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
-from google.protobuf import json_format
-from google.api_core import protobuf_helpers
+from google.protobuf import json_format, field_mask_pb2
+from google.protobuf.json_format import ParseDict
 
 from app.core.config import settings
 from app.shared.helpers.http_client import AuthenticatedHttpClient
@@ -39,7 +39,7 @@ def get_google_ads_client() -> GoogleAdsClient:
 
 def _handle_google_ads_exception(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
     errors = [{"message": error.message} for error in ex.failure.errors]
-    logger.error(f"Google Ads API Exception en '{action_name}': {errors}", exc_info=False)
+    logger.error(f"Google Ads API Exception en '{action_name}': {errors}", exc_info=True)
     message = errors[0]['message'] if errors else "Error en API de Google Ads."
     return {"status": "error", "action": action_name, "message": message, "details": {"errors": errors}, "http_status": 400}
 
@@ -93,21 +93,23 @@ def _execute_mutate_operation(
             
             if "create" in op_dict and isinstance(op_dict["create"], dict):
                 resource = gads_client.get_type(resource_type_name)
-                gads_client.copy_from(resource, op_dict["create"])
+                ParseDict(op_dict["create"], resource)
                 getattr(operation, "create").CopyFrom(resource)
 
             elif "update" in op_dict and isinstance(op_dict["update"], dict):
-                update_data = op_dict["update"]
-                resource_name = update_data.get("resource_name")
-                if not resource_name: raise ValueError("Update op debe tener 'resource_name'.")
-                
-                resource_to_update = getattr(operation, "update")
-                gads_client.copy_from(resource_to_update, update_data)
-                
-                update_mask = protobuf_helpers.field_mask(None, resource_to_update._pb)
-                paths_without_resource_name = [p for p in update_mask.paths if p != "resource_name"]
-                final_mask = field_mask_pb2.FieldMask(paths=paths_without_resource_name)
-                operation.update_mask.CopyFrom(final_mask)
+                update_dict = op_dict["update"]
+                resource_name = update_dict.pop("resource_name", None)
+                if not resource_name:
+                    raise ValueError("El campo 'resource_name' es obligatorio en una operación de actualización.")
+
+                resource_obj = gads_client.get_type(resource_type_name)
+                ParseDict(update_dict, resource_obj)
+                resource_obj.resource_name = resource_name
+
+                getattr(operation, "update").CopyFrom(resource_obj)
+
+                update_mask = field_mask_pb2.FieldMask(paths=update_dict.keys())
+                operation.update_mask.CopyFrom(update_mask)
 
             elif "remove" in op_dict and isinstance(op_dict["remove"], str):
                 operation.remove = op_dict["remove"]
@@ -122,7 +124,6 @@ def _execute_mutate_operation(
         mutate_request = gads_client.get_type(request_type_name)
         mutate_request.customer_id = customer_id_clean
         mutate_request.operations.extend(sdk_operations)
-        mutate_request.partial_failure = params.get("partial_failure", False)
         mutate_request.validate_only = params.get("validate_only", False)
         
         response = getattr(service_client, mutate_method_name)(request=mutate_request)
