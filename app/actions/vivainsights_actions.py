@@ -87,7 +87,10 @@ def get_my_analytics(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
                               getattr(settings, 'GRAPH_SCOPE_ANALYTICS_READ', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
         response = client.get(url, scope=analytics_scope, params=odata_params if odata_params else None)
-        analytics_data = response.json()
+        
+        # --- CORRECCIÓN ---
+        analytics_data = response
+
         # La respuesta es una colección de objetos activityStatistic bajo la clave "value"
         return {"status": "success", "data": analytics_data.get("value", [])}
     except requests.exceptions.HTTPError as http_err:

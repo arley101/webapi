@@ -68,16 +68,16 @@ def profile_get_my_profile(client: AuthenticatedHttpClient, params: Dict[str, An
     try:
         # User.Read.All es necesario para leer el perfil completo de cualquier usuario con permisos de aplicación.
         profile_scope = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        # El método http_client.get ahora puede devolver dict, str, o bytes.
-        # Para esta llamada, esperamos un dict (JSON).
+        
         response_data = client.get(url, scope=profile_scope, params=query_api_params)
         
+        # --- CORRECCIÓN ---
+        # client.get() ya devuelve el dict directamente
         if isinstance(response_data, dict):
-            # Si get devolvió un dict de error ya formateado por el client, propagarlo.
             if response_data.get("status") == "error":
                 return response_data
             return {"status": "success", "data": response_data}
-        else: # Si devolvió string o bytes, es inesperado para este endpoint.
+        else:
             logger.error(f"Respuesta inesperada de client.get para perfil (se esperaba dict): {type(response_data)}. Contenido: {str(response_data)[:200]}")
             return _handle_userprofile_api_error(Exception(f"Tipo de respuesta inesperado del cliente HTTP: {type(response_data)}"), action_name, params)
 
@@ -105,6 +105,7 @@ def profile_get_my_manager(client: AuthenticatedHttpClient, params: Dict[str, An
         manager_scope = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response_data = client.get(url, scope=manager_scope, params=query_api_params)
         
+        # --- CORRECCIÓN ---
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data # Error del client
             return {"status": "success", "data": response_data}
@@ -115,7 +116,6 @@ def profile_get_my_manager(client: AuthenticatedHttpClient, params: Dict[str, An
     except requests.exceptions.HTTPError as http_err:
         if http_err.response is not None and http_err.response.status_code == 404:
             logger.info(f"Manager no encontrado (404) para user_id '{user_id}'.")
-            # Devolver un éxito con data=None para indicar que no tiene manager, no que la API falló.
             return {"status": "success", "data": None, "message": "Manager no encontrado."} 
         return _handle_userprofile_api_error(http_err, action_name, params) # Otros errores HTTP
     except ValueError as ve:
@@ -138,18 +138,17 @@ def profile_get_my_direct_reports(client: AuthenticatedHttpClient, params: Dict[
     
     query_api_params: Dict[str,Any] = {"$select": select_fields}
     if params.get("$top"): query_api_params["$top"] = params["$top"] 
-    # $skip y paginación completa podrían añadirse si es necesario
     
     logger.info(f"Obteniendo reportes directos para user_id: '{user_id}'")
     try:
         reports_scope = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response_data = client.get(url, scope=reports_scope, params=query_api_params)
         
+        # --- CORRECCIÓN ---
         if isinstance(response_data, dict):
             if response_data.get("status") == "error": return response_data
-            # Graph devuelve una colección bajo "value"
             return {"status": "success", "data": response_data.get("value", [])}
-        elif isinstance(response_data, list): # Por si Graph devuelve directamente la lista
+        elif isinstance(response_data, list):
             return {"status": "success", "data": response_data}
         else:
             logger.error(f"Respuesta inesperada de client.get para direct reports: {type(response_data)}")
@@ -173,8 +172,6 @@ def profile_get_my_photo(client: AuthenticatedHttpClient, params: Dict[str, Any]
     
     url_photo_segment = "photo"
     if photo_size:
-        # Validar que photo_size sea uno de los formatos soportados si es necesario
-        # Ej: "48x48", "64x64", "96x96", "120x120", "240x240", "360x360", "432x432", "504x504", "648x648"
         url_photo_segment = f"photos/{photo_size}"
 
     url = f"{settings.GRAPH_API_BASE_URL}/users/{user_id}/{url_photo_segment}/$value"
@@ -182,30 +179,24 @@ def profile_get_my_photo(client: AuthenticatedHttpClient, params: Dict[str, Any]
     
     try:
         photo_scope = getattr(settings, 'GRAPH_SCOPE_USER_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        # Pasar stream=True para que el http_client.get sepa que puede ser binario
         response_content = client.get(url, scope=photo_scope, stream=True) 
         
         if isinstance(response_content, bytes):
-            return response_content # Devolver los bytes directamente, el router los manejará
+            return response_content 
         elif isinstance(response_content, dict) and response_content.get("status") == "error":
-            # Si http_client.get ya devolvió un error formateado (ej. por 404), propagarlo.
             return response_content 
         else:
-            # Si no son bytes ni un error formateado del client, es inesperado.
             logger.error(f"Se esperaban bytes de la foto pero se recibió tipo {type(response_content)}: {str(response_content)[:200]}")
             return _handle_userprofile_api_error(Exception("Respuesta inesperada al obtener la foto."), action_name, params)
 
     except requests.exceptions.HTTPError as http_err:
-        # Este bloque se activaría si client.get relanza el error HTTP en lugar de manejarlo.
-        # Con la nueva implementación de get en http_client.py, debería manejar 404 y devolver texto/json de error.
-        # Pero por si acaso, o si otro tipo de HTTPError ocurre.
         if http_err.response is not None and http_err.response.status_code == 404:
             logger.warning(f"Foto de perfil no encontrada (404) para user_id '{user_id}' vía HTTPError.")
             return {"status": "error", "action": action_name, "message": "Foto de perfil no encontrada.", "http_status": 404, "details": "El usuario podría no tener una foto o el tamaño solicitado no existe."}
         return _handle_userprofile_api_error(http_err, action_name, params)
-    except ValueError as ve: # Para errores de scope/token desde client.get
+    except ValueError as ve:
         return _handle_userprofile_api_error(ve, action_name, params)
-    except Exception as e: # Otros errores
+    except Exception as e:
         return _handle_userprofile_api_error(e, action_name, params)
 
 def profile_update_my_profile(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -223,28 +214,22 @@ def profile_update_my_profile(client: AuthenticatedHttpClient, params: Dict[str,
     if not update_payload or not isinstance(update_payload, dict) or not update_payload: # Payload no puede ser vacío
         return _handle_userprofile_api_error(ValueError("'update_payload' (dict no vacío con propiedades a actualizar) es requerido."), action_name, params)
 
-    # Las propiedades del perfil de usuario (aboutMe, skills, etc.) se actualizan en el objeto /users/{id}.
-    # El recurso /profile es de solo lectura.
     url = f"{settings.GRAPH_API_BASE_URL}/users/{user_id}"
     
     logger.info(f"Actualizando propiedades de usuario para user_id: '{user_id}'. Payload keys: {list(update_payload.keys())}")
     try:
-        # User.ReadWrite.All es necesario para actualizar propiedades de otros usuarios.
         update_scope = getattr(settings, 'GRAPH_SCOPE_USER_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_obj = client.patch(url, scope=update_scope, json_data=update_payload) # client.patch devuelve requests.Response
+        response_obj = client.patch(url, scope=update_scope, json_data=update_payload)
         
-        # PATCH a /users/{id} devuelve 204 No Content si tiene éxito.
         if response_obj.status_code == 204:
             logger.info(f"Propiedades de usuario para user_id '{user_id}' actualizadas exitosamente (204).")
-            # Opcional: re-obtener el perfil para devolverlo
             get_params = {"user_id": user_id}
-            # Si el usuario quiere un select específico después de actualizar
             if params.get("select_after_update"): 
                 get_params["select"] = params["select_after_update"]
-            else: # Usar el mismo select que se usaría en profile_get_my_profile por defecto
+            else:
                 get_params["select"] = "id,displayName,givenName,surname,userPrincipalName,jobTitle,mail,mobilePhone,officeLocation,businessPhones,aboutMe,birthday,hireDate,interests,mySite,pastProjects,preferredLanguage,responsibilities,schools,skills"
 
-            updated_profile_response = profile_get_my_profile(client, get_params) # Llamar a la acción de este módulo
+            updated_profile_response = profile_get_my_profile(client, get_params)
             
             if updated_profile_response.get("status") == "success":
                 return {"status": "success", "data": updated_profile_response.get("data"), "message": "Perfil de usuario actualizado."}
@@ -252,8 +237,6 @@ def profile_update_my_profile(client: AuthenticatedHttpClient, params: Dict[str,
                 logger.warning(f"Propiedades de usuario para '{user_id}' actualizadas (204), pero falló la re-obtención. Error: {updated_profile_response.get('message')}")
                 return {"status": "success", "message": "Perfil de usuario actualizado (204), pero falló la re-obtención de datos.", "http_status": 204, "details_get_failed": updated_profile_response}
         else: 
-            # Si no es 204 pero la librería no lanzó una excepción HTTPError (ej. un 200 OK con cuerpo),
-            # lo cual sería inusual para un PATCH a /users/{id}.
             logger.warning(f"Respuesta inesperada {response_obj.status_code} al actualizar perfil de user_id '{user_id}'. Respuesta: {response_obj.text[:200]}")
             response_data = {}
             if response_obj.content:
