@@ -75,7 +75,7 @@ def _execute_mutate_operation(
     client_unused: Optional[AuthenticatedHttpClient], 
     params: Dict[str, Any]
 ) -> Dict[str, Any]:
-    action_name = f"googleads_mutate_{resource_type_name.lower()}s"
+    action_name = f"googleads_mutate_{resource_type_name.lower().replace('adgroupad', 'ad').replace('adgroupcriterion', 'keyword')}s"
     customer_id = params.get("customer_id") or settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID
     operations_payload = params.get("operations")
     if not customer_id or not operations_payload:
