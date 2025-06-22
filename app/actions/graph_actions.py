@@ -1,168 +1,164 @@
-# app/actions/googleads_actions.py
+# app/actions/graph_actions.py
+# -*- coding: utf-8 -*-
 import logging
+import requests # Para requests.exceptions.HTTPError
+import json # Para el helper de error
 from typing import Dict, List, Optional, Any
-from google.ads.googleads.client import GoogleAdsClient
-from google.ads.googleads.errors import GoogleAdsException
-from google.protobuf import json_format
-from google.api_core import protobuf_helpers
 
-from app.core.config import settings
+from app.core.config import settings # Para acceder a GRAPH_API_DEFAULT_SCOPE, GRAPH_API_BASE_URL
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
 
-_google_ads_client_instance: Optional[GoogleAdsClient] = None
-
-def get_google_ads_client() -> GoogleAdsClient:
-    """Inicializa y devuelve una instancia singleton del cliente de Google Ads."""
-    global _google_ads_client_instance
-    if _google_ads_client_instance:
-        return _google_ads_client_instance
+def _handle_generic_graph_api_error(e: Exception, action_name: str, params_for_log: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Helper para manejar errores genéricos de Graph API."""
+    log_message = f"Error en Graph Action '{action_name}'"
+    safe_params = {} # Inicializar safe_params
+    if params_for_log:
+        # Evitar loguear el payload si es muy grande o sensible
+        sensitive_keys = ['payload', 'json_data', 'data']
+        safe_params = {k: (v if k not in sensitive_keys else f"[{type(v).__name__} OMITIDO]") for k, v in params_for_log.items()}
+        log_message += f" con params: {safe_params}"
     
-    required_vars = {
-        "developer_token": settings.GOOGLE_ADS.DEVELOPER_TOKEN,
-        "client_id": settings.GOOGLE_ADS.CLIENT_ID,
-        "client_secret": settings.GOOGLE_ADS.CLIENT_SECRET,
-        "refresh_token": settings.GOOGLE_ADS.REFRESH_TOKEN,
-    }
-    missing = [key for key, value in required_vars.items() if not value]
-    if missing:
-        raise ValueError(f"Faltan credenciales de Google Ads en settings: {', '.join(missing)}")
+    logger.error(f"{log_message}: {type(e).__name__} - {str(e)}", exc_info=True)
     
-    effective_config = {
-        "developer_token": str(settings.GOOGLE_ADS.DEVELOPER_TOKEN),
-        "client_id": str(settings.GOOGLE_ADS.CLIENT_ID),
-        "client_secret": str(settings.GOOGLE_ADS.CLIENT_SECRET),
-        "refresh_token": str(settings.GOOGLE_ADS.REFRESH_TOKEN),
-        "login_customer_id": str(settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID else None,
-        "use_proto_plus": True,
-    }
+    details_str = str(e)
+    status_code_int = 500
+    graph_error_code = None
 
-    try:
-        _google_ads_client_instance = GoogleAdsClient.load_from_dict(effective_config)
-        return _google_ads_client_instance
-    except Exception as e:
-        raise ConnectionError(f"No se pudo inicializar el cliente de Google Ads: {e}")
-
-def _format_google_ads_row_to_dict(row: Any) -> Dict[str, Any]:
-    return json_format.MessageToDict(row._pb, preserving_proto_field_name=True)
-
-def _handle_google_ads_api_exception(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
-    errors = []
-    for error in ex.failure.errors:
-        errors.append({"message": error.message})
-    logger.error(f"Google Ads API Exception en '{action_name}'. Request ID: {ex.request_id}. Errors: {errors}", exc_info=False)
-    message = errors[0]['message'] if errors else "Error en la API de Google Ads."
-    return {"status": "error", "action": action_name, "message": message, "details": {"errors": errors, "requestId": ex.request_id}, "http_status": 400}
-
-def googleads_search_stream(client_unused: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    customer_id = params.get("customer_id") or settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID
-    query = params.get("query")
-    if not customer_id or not query:
-        return {"status": "error", "message": "'customer_id' y 'query' son requeridos.", "http_status": 400}
-    
-    customer_id_clean = str(customer_id).replace("-", "")
-    try:
-        gads_client = get_google_ads_client()
-        ga_service = gads_client.get_service("GoogleAdsService")
-        search_request = gads_client.get_type("SearchGoogleAdsStreamRequest")
-        search_request.customer_id = customer_id_clean
-        search_request.query = query
-        stream = ga_service.search_stream(request=search_request)
-        results = [_format_google_ads_row_to_dict(row) for batch in stream for row in batch.results]
-        return {"status": "success", "data": {"results": results}}
-    except GoogleAdsException as ex:
-        return _handle_google_ads_api_exception(ex, "googleads_search_stream")
-    except Exception as e:
-        return {"status": "error", "action": "googleads_search_stream", "message": f"Error inesperado: {str(e)}", "http_status": 500}
-
-def _create_campaign_operation(gads_client: GoogleAdsClient, op_dict: Dict[str, Any]) -> Any:
-    operation = gads_client.get_type("CampaignOperation")
-    campaign = operation.create
-    gads_client.copy_from(campaign, op_dict["create"])
-    return operation
-
-def _update_campaign_operation(gads_client: GoogleAdsClient, op_dict: Dict[str, Any]) -> Any:
-    update_data = op_dict["update"]
-    resource_name = update_data.get("resource_name")
-    if not resource_name:
-        raise ValueError("La operación de 'update' debe contener 'resource_name'.")
-
-    operation = gads_client.get_type("CampaignOperation")
-    campaign_update = operation.update
-    campaign_update.resource_name = resource_name
-
-    # Traducir 'status' de string a enum
-    if "status" in update_data:
-        status_str = update_data["status"]
-        campaign_update.status = gads_client.enums.CampaignStatusEnum[status_str]
-
-    # Crear la máscara de campo (field_mask)
-    # Lista solo los campos que se están actualizando (además de resource_name)
-    update_mask_paths = [key for key in update_data.keys() if key != "resource_name"]
-    field_mask = protobuf_helpers.field_mask(None, update_mask_paths)
-    operation.update_mask.CopyFrom(field_mask)
-    
-    return operation
-
-def _remove_campaign_operation(gads_client: GoogleAdsClient, op_dict: Dict[str, Any]) -> Any:
-    operation = gads_client.get_type("CampaignOperation")
-    operation.remove = op_dict["remove"]
-    return operation
-
-def googleads_mutate_campaigns(client_unused: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    action_name = "googleads_mutate_campaigns"
-    customer_id = params.get("customer_id") or settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID
-    operations_payload = params.get("operations")
-    if not customer_id or not operations_payload:
-        return {"status": "error", "message": "'customer_id' y 'operations' son requeridos.", "http_status": 400}
-    
-    customer_id_clean = str(customer_id).replace("-", "")
-    try:
-        gads_client = get_google_ads_client()
-        campaign_service = gads_client.get_service("CampaignService")
-        
-        operations = []
-        for op_dict in operations_payload:
-            if "create" in op_dict:
-                operations.append(_create_campaign_operation(gads_client, op_dict))
-            elif "update" in op_dict:
-                operations.append(_update_campaign_operation(gads_client, op_dict))
-            elif "remove" in op_dict:
-                operations.append(_remove_campaign_operation(gads_client, op_dict))
-
-        if not operations:
-            return {"status": "error", "message": "No se proveyeron operaciones válidas.", "http_status": 400}
-        
-        response = campaign_service.mutate_campaigns(
-            customer_id=customer_id_clean,
-            operations=operations,
-            partial_failure=params.get("partial_failure", False),
-            validate_only=params.get("validate_only", False)
-        )
-        
-        formatted_response = {"results": [_format_google_ads_row_to_dict(r) for r in response.results]}
-        if response.partial_failure_error:
-             failure_message = gads_client.get_type("GoogleAdsFailure")
-             failure_message.ParseFromString(response.partial_failure_error.details[0].value)
-             formatted_response["partial_failure_error"] = _extract_google_ads_errors(failure_message, gads_client)
+    if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
+        status_code_int = e.response.status_code
+        try:
+            error_data = e.response.json()
+            error_info = error_data.get("error", {})
+            details_str = error_info.get("message", e.response.text)
+            graph_error_code = error_info.get("code")
+        except json.JSONDecodeError: # Corregido para usar json.JSONDecodeError
+            details_str = e.response.text[:500] if e.response.text else "No response body"
             
-        return {"status": "success", "data": formatted_response}
+    return {
+        "status": "error",
+        "action": action_name,
+        "message": f"Error ejecutando acción genérica de Graph '{action_name}': {details_str}",
+        "http_status": status_code_int,
+        "details": str(e) if not isinstance(e, requests.exceptions.HTTPError) else details_str,
+        "graph_error_code": graph_error_code
+    }
 
-    except GoogleAdsException as ex:
-        return _handle_google_ads_api_exception(ex, action_name)
+def generic_get(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "graph_generic_get" # Nombre de la acción pública
+    # Loggear params de forma segura
+    log_params = {k: v for k, v in params.items() if k not in ['custom_headers']} # Ejemplo de filtrado
+    logger.info(f"Ejecutando {action_name} con params: %s", log_params)
+    
+    graph_path: Optional[str] = params.get("graph_path")
+    
+    if not graph_path:
+        logger.error(f"{action_name}: El parámetro 'graph_path' es requerido en 'params'. Params recibidos: {params}")
+        return {
+            "status": "error", "action": action_name, 
+            "message": "'graph_path' es requerido dentro de 'params' (ej. {'graph_path': 'organization'}).", 
+            "http_status": 400, "details": f"Params recibidos: {params}"
+        }
+
+    base_url_override_str = params.get("base_url", str(settings.GRAPH_API_BASE_URL))
+    
+    # Permitir especificar beta endpoint o una versión diferente
+    if params.get("api_version") == "beta":
+        base_url_override_str = "https://graph.microsoft.com/beta"
+    
+    full_url = f"{base_url_override_str.rstrip('/')}/{graph_path.lstrip('/')}"
+    
+    query_api_params: Optional[Dict[str, Any]] = params.get("query_params")
+    custom_scope_list: Optional[List[str]] = params.get("custom_scope")
+    scope_to_use = custom_scope_list if custom_scope_list else settings.GRAPH_API_DEFAULT_SCOPE
+    custom_headers: Optional[Dict[str, str]] = params.get("custom_headers")
+
+    logger.info(f"{action_name}: Realizando GET a Graph API. Path: {graph_path}, URL: {full_url}, Scope: {scope_to_use}, QueryParams: {query_api_params}, Headers: {bool(custom_headers)}")
+    try:
+        response = client.get(full_url, scope=scope_to_use, params=query_api_params, headers=custom_headers)
+        
+        # --- CORRECCIÓN ---
+        # `client.get` ya devuelve un dict (o str/bytes), no un objeto response.
+        # Asumimos un estado 200 OK si no hay excepción, que es el comportamiento de `http_client`.
+        data = response
+        http_status = 200 # Asumir 200 OK en caso de éxito, ya que client.get no devuelve el status.
+        
+        if isinstance(data, str):
+            logger.info(f"Respuesta GET genérica a Graph para {full_url} no es JSON, devolviendo texto.")
+        
+        return {"status": "success", "data": data, "http_status": http_status}
     except Exception as e:
-        return {"status": "error", "action": action_name, "message": f"Error inesperado: {str(e)}", "http_status": 500}
+        # Pasar los params originales (no log_params) al helper de error para contexto completo.
+        return _handle_generic_graph_api_error(e, action_name, params)
 
-# Las funciones para adgroups, ads, y keywords seguirían un patrón similar de refactorización si fueran necesarias.
-# Por ahora, nos centramos en la que está dando problemas.
-def googleads_mutate_adgroups(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    return {"status": "not_implemented", "message": "Esta acción necesita ser refactorizada con el nuevo patrón."}
+def generic_post(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "generic_post" # Nombre de la acción pública
+    log_params = {k: v for k, v in params.items() if k not in ['payload', 'json_data', 'data', 'custom_headers']}
+    if 'payload' in params or 'json_data' in params or 'data' in params:
+        log_params["payload_provided"] = True
+    logger.info(f"Ejecutando {action_name} con params: %s", log_params)
+    
+    graph_path: Optional[str] = params.get("graph_path")
+    payload: Optional[Dict[str, Any]] = params.get("payload") # El cuerpo JSON para el POST
 
-def googleads_mutate_ads(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    return {"status": "not_implemented", "message": "Esta acción necesita ser refactorizada con el nuevo patrón."}
+    if not graph_path:
+        logger.error(f"{action_name}: El parámetro 'graph_path' es requerido. Params recibidos: {params}")
+        return {"status": "error", "action": action_name, "message": "'graph_path' es requerido.", "http_status": 400}
+    # El payload es opcional para algunos POSTs que solo disparan una acción.
 
-def googleads_mutate_keywords(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    return {"status": "not_implemented", "message": "Esta acción necesita ser refactorizada con el nuevo patrón."}
+    base_url_override_str = params.get("base_url", str(settings.GRAPH_API_BASE_URL))
+    if params.get("api_version") == "beta":
+        base_url_override_str = "https://graph.microsoft.com/beta"
+        
+    full_url = f"{base_url_override_str.rstrip('/')}/{graph_path.lstrip('/')}"
+    
+    custom_scope_list: Optional[List[str]] = params.get("custom_scope")
+    scope_to_use = custom_scope_list if custom_scope_list else settings.GRAPH_API_DEFAULT_SCOPE
+    custom_headers: Optional[Dict[str, str]] = params.get("custom_headers")
+
+    logger.info(f"{action_name}: Realizando POST a Graph API. Path: {graph_path}, URL: {full_url}, Scope: {scope_to_use}, Payload presente: {bool(payload)}, Headers: {bool(custom_headers)}")
+    try:
+        response = client.post(full_url, scope=scope_to_use, json_data=payload, headers=custom_headers)
+        
+        if response.status_code in [201, 200] and response.content:
+            try:
+                data = response.json()
+                return {"status": "success", "data": data, "http_status": response.status_code}
+            except requests.exceptions.JSONDecodeError:
+                logger.info(f"Respuesta POST genérica a Graph para {full_url} no es JSON (status {response.status_code}), devolviendo texto.")
+                return {"status": "success", "data": response.text, "http_status": response.status_code}
+        elif response.status_code in [202, 204]: 
+             logger.info(f"Solicitud POST genérica a Graph para {full_url} exitosa con status {response.status_code} (sin contenido de respuesta esperado).")
+             return {"status": "success", "message": f"Operación POST completada con estado {response.status_code}.", "http_status": response.status_code, "data": None}
+        else: 
+            logger.info(f"Respuesta POST genérica a Graph para {full_url} con status {response.status_code}. Contenido: {response.text[:100]}...")
+            return {"status": "success", "data": response.text, "http_status": response.status_code}
+    except Exception as e:
+        return _handle_generic_graph_api_error(e, action_name, params)
+
+# --- Funciones de Compatibilidad para el Asistente GPT ---
+# Estas funciones aceptan **kwargs y los reempaquetan en el diccionario 'params'
+# que las funciones originales esperan.
+
+def generic_get_compat(client: AuthenticatedHttpClient, **kwargs: Any) -> Dict[str, Any]:
+    # No se usa 'params = params or {}' aquí porque kwargs es el que tiene los datos.
+    action_name_log = "graph_generic_get_compat" # Para logging
+    logger.info(f"Ejecutando {action_name_log} con kwargs: {kwargs}")
+    # kwargs aquí contendrá las claves que el plugin desempaquetó, ej. {'graph_path': 'organization'}
+    # o {'graph_path': 'users', 'query_params': {'$top': 2}}
+    # Se pasan estos kwargs como el diccionario 'params' a generic_get.
+    return generic_get(client, kwargs) 
+
+def generic_post_compat(client: AuthenticatedHttpClient, **kwargs: Any) -> Dict[str, Any]:
+    action_name_log = "graph_generic_post_compat"
+    log_kwargs = {k:v for k,v in kwargs.items() if k not in ['payload']} # Omitir payload del log
+    if 'payload' in kwargs: log_kwargs['payload_provided'] = True
+    logger.info(f"Ejecutando {action_name_log} con kwargs: {log_kwargs}")
+    # kwargs contendrá las claves desempaquetadas y el objeto 'payload' si el asistente lo envió correctamente anidado.
+    # O, si el asistente envía 'payload' como un kwarg más (ej. payload={"key": "value"}), también funcionará.
+    return generic_post(client, kwargs)
+
+# --- FIN DEL MÓDULO actions/graph_actions.py ---
