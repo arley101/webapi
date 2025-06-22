@@ -122,8 +122,8 @@ def list_plans(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     planner_scope = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # Asumiendo que group scope es más común
     try:
         response = client.get(url_base, scope=planner_scope, params=odata_params)
-        plans_data = response.json()
-        return {"status": "success", "data": plans_data.get("value", [])}
+        # CORRECCIÓN: 'response' ya es un dict, no llamar a .json()
+        return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
@@ -150,8 +150,8 @@ def get_plan(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     planner_scope = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
     try:
         response = client.get(url, scope=planner_scope, params=odata_params)
-        plan_data = response.json()
-        return {"status": "success", "data": plan_data}
+        # CORRECCIÓN: 'response' ya es un dict, no llamar a .json()
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
@@ -207,8 +207,8 @@ def list_tasks(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
             current_call_params = query_api_params_initial if page_count == 1 and current_url == url_base else None
             logger.debug(f"Página {page_count} para '{log_context_for_paged}': GET {current_url.split('?')[0]} con params: {current_call_params}")
             
-            response = client.get(current_url, scope=planner_scope, params=current_call_params)
-            response_data = response.json()
+            response_data = client.get(current_url, scope=planner_scope, params=current_call_params)
+            # CORRECCIÓN: 'response_data' ya es un dict
             page_items = response_data.get('value', [])
             if not isinstance(page_items, list): break
             
@@ -246,13 +246,11 @@ def create_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     if bucket_id: body["bucketId"] = bucket_id
     if assignments and isinstance(assignments, dict): body["assignments"] = assignments
     
-    # Campos opcionales de plannerTask
     optional_fields = ["priority", "percentComplete", "assigneePriority", "orderHint", "appliedCategories", "conversationThreadId"]
     for field in optional_fields:
         if params.get(field) is not None:
             body[field] = params[field]
     
-    # Campos de fecha/hora
     datetime_fields_planner = ["dueDateTime", "startDateTime", "completedDateTime"]
     for field_name in datetime_fields_planner:
         dt_str_input = params.get(field_name)
@@ -270,38 +268,35 @@ def create_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         task_data = response_task.json()
         task_id = task_data.get("id")
         
-        # Si se provee details_payload, intentar actualizar/crear los detalles de la tarea
         if details_payload and isinstance(details_payload, dict) and task_id:
             logger.info(f"Tarea Planner '{task_id}' creada. Procediendo a actualizar/crear sus detalles.")
             details_url = f"{settings.GRAPH_API_BASE_URL}/planner/tasks/{task_id}/details"
             
-            # Para PATCH en details, se necesita el ETag de los detalles actuales.
-            # Planner crea automáticamente un objeto details al crear la tarea, así que deberíamos poder obtenerlo.
             etag_details: Optional[str] = None
             try:
                 logger.debug(f"Obteniendo ETag para detalles de la nueva tarea '{task_id}'.")
-                # El objeto `task_data` devuelto por el POST de la tarea ya debería contener `details@odata.etag`
-                etag_details = task_data.get("details@odata.etag") # Graph devuelve details con ETag así.
-                if not etag_details and task_data.get("details") and isinstance(task_data["details"], dict): # Forma alternativa si no está en el nivel superior
+                etag_details = task_data.get("details@odata.etag")
+                if not etag_details and task_data.get("details") and isinstance(task_data["details"], dict):
                     etag_details = task_data["details"].get("@odata.etag")
 
-                if not etag_details: # Si aún no lo tenemos, hacer un GET explícito
-                    get_details_response = client.get(details_url, scope=planner_rw_scope, params={"$select": "@odata.etag"})
-                    etag_details = get_details_response.json().get("@odata.etag")
-            except requests.exceptions.HTTPError as http_e_details: # Si el GET falla (ej. 404, aunque no debería)
+                if not etag_details:
+                    get_details_response_data = client.get(details_url, scope=planner_rw_scope, params={"$select": "@odata.etag"})
+                    # CORRECCIÓN: get_details_response_data ya es un dict
+                    etag_details = get_details_response_data.get("@odata.etag")
+            except requests.exceptions.HTTPError as http_e_details:
                 if http_e_details.response is not None and http_e_details.response.status_code == 404:
                     logger.warning(f"Detalles para tarea '{task_id}' no encontrados (404) inmediatamente después de crearla. Se intentará PATCH sin ETag, podría crear los detalles.")
-                    etag_details = "*" # Usar '*' para crear si no existe y el ETag no se pudo obtener
-                else: raise # Re-lanzar otros errores HTTP
+                    etag_details = "*"
+                else: raise
             except Exception as get_etag_err:
                 logger.warning(f"Error obteniendo ETag para detalles de tarea '{task_id}': {get_etag_err}. Se intentará PATCH sin ETag.")
-                etag_details = "*" # Como fallback, puede que cree el recurso details.
+                etag_details = "*"
             
-            details_custom_headers = {'If-Match': etag_details} if etag_details else {} # Solo añadir si tenemos ETag
+            details_custom_headers = {'If-Match': etag_details} if etag_details else {}
             if not etag_details: logger.warning(f"Intentando PATCH de detalles para tarea '{task_id}' sin ETag. Podría fallar o sobreescribir.")
             
             response_details = client.patch(details_url, scope=planner_rw_scope, json_data=details_payload, headers=details_custom_headers)
-            task_data["details_updated_data"] = response_details.json() # Añadir la respuesta de la actualización de detalles
+            task_data["details_updated_data"] = response_details.json()
             task_data["details_update_status"] = "success"
             logger.info(f"Detalles de tarea Planner '{task_id}' actualizados/creados exitosamente.")
             
@@ -325,7 +320,6 @@ def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
     odata_params['$select'] = params.get('select', default_select)
     if params.get('expand_details', str(params.get('expand', "")).lower() == 'details'):
         odata_params['$expand'] = 'details'
-        # Asegurar que 'details' esté en $select si se expande
         if '$select' in odata_params and 'details' not in odata_params['$select'].split(','):
              odata_params['$select'] += ",details"
 
@@ -334,8 +328,8 @@ def get_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[st
                             getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
         response = client.get(url, scope=planner_scope, params=odata_params)
-        task_data = response.json()
-        return {"status": "success", "data": task_data}
+        # CORRECCIÓN: 'response' ya es un dict
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
@@ -351,109 +345,86 @@ def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
     if not task_id:
         return {"status": "error", "action": action_name, "message": "Parámetro 'task_id' es requerido.", "http_status": 400}
     
-    update_payload_task: Optional[Dict[str, Any]] = params.get("update_payload_task") # Para el objeto plannerTask
-    update_payload_details: Optional[Dict[str, Any]] = params.get("update_payload_details") # Para plannerTaskDetails
+    update_payload_task: Optional[Dict[str, Any]] = params.get("update_payload_task")
+    update_payload_details: Optional[Dict[str, Any]] = params.get("update_payload_details")
     
-    # ETags son cruciales para PATCH en Planner
-    etag_task: Optional[str] = params.get("etag_task") # ETag para el plannerTask
-    etag_details: Optional[str] = params.get("etag_details") # ETag para plannerTaskDetails
+    etag_task: Optional[str] = params.get("etag_task")
+    etag_details: Optional[str] = params.get("etag_details")
 
-    if not update_payload_task and not update_payload_details: # Si no hay nada que actualizar
-        logger.info(f"{action_name}: No se especificaron 'update_payload_task' ni 'update_payload_details'. No se realizarán cambios.")
-        # Podríamos devolver el estado actual de la tarea o simplemente un mensaje.
-        get_task_response = get_task(client, {"task_id": task_id}) # Obtener datos actuales
+    if not update_payload_task and not update_payload_details:
+        get_task_response = get_task(client, {"task_id": task_id})
         return get_task_response if get_task_response.get("status") == "success" else \
                {"status": "success", "message": "No se especificaron cambios para la tarea.", "data": {"id": task_id}}
 
-    final_task_data_response: Dict[str, Any] = {"id": task_id} # Para construir la respuesta final
+    final_task_data_response: Dict[str, Any] = {"id": task_id}
     planner_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', 
                                getattr(settings, 'GRAPH_SCOPE_GROUP_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
 
-    # 1. Actualizar el objeto plannerTask principal
     if update_payload_task and isinstance(update_payload_task, dict):
         url_task = f"{settings.GRAPH_API_BASE_URL}/planner/tasks/{task_id}"
-        # El ETag para plannerTask se pasa en el header If-Match
-        current_etag_task = etag_task or update_payload_task.pop('@odata.etag', None) # Permitir ETag en payload
+        current_etag_task = etag_task or update_payload_task.pop('@odata.etag', None)
         if not current_etag_task:
             logger.warning(f"Actualizando tarea Planner '{task_id}' (principal) SIN ETag. Podría fallar si el item ha cambiado.")
         
         custom_headers_task = {'If-Match': current_etag_task} if current_etag_task else {}
         
-        # Formatear fechas en el payload de la tarea si existen
         for field_name in ["dueDateTime", "startDateTime", "completedDateTime"]:
             if field_name in update_payload_task and update_payload_task[field_name] is not None:
                 try: 
                     update_payload_task[field_name] = _parse_and_utc_datetime_str(update_payload_task[field_name], field_name)
                 except ValueError as ve: 
                     return {"status": "error", "action": action_name, "message": f"Formato inválido para '{field_name}' en 'update_payload_task': {ve}", "http_status": 400}
-            elif field_name in update_payload_task and update_payload_task[field_name] is None: # Permitir borrar fecha
+            elif field_name in update_payload_task and update_payload_task[field_name] is None:
                 update_payload_task[field_name] = None 
-
 
         logger.info(f"Actualizando tarea Planner '{task_id}' (campos principales). ETag usado: {current_etag_task or 'Ninguno'}. Payload keys: {list(update_payload_task.keys())}")
         try:
             response_task = client.patch(url_task, scope=planner_rw_scope, json_data=update_payload_task, headers=custom_headers_task)
-            # PATCH a task devuelve 204 si el ETag coincide y la actualización es exitosa,
-            # o 200 con el objeto actualizado si el ETag no se usó o fue '*'
             if response_task.status_code == 204:
                 logger.info(f"Tarea Planner '{task_id}' (principal) actualizada (204). Es necesario re-obtener para ver cambios y nuevo ETag.")
-                # Marcar que se necesita re-obtener para el ETag de detalles.
                 final_task_data_response["_task_updated_needs_refresh_for_details_etag"] = True
             elif response_task.status_code == 200:
-                final_task_data_response = response_task.json() # Actualizar con la respuesta
+                final_task_data_response = response_task.json()
                 logger.info(f"Tarea Planner '{task_id}' (principal) actualizada (200).")
-            else: # Respuesta inesperada
+            else:
                  logger.warning(f"Respuesta inesperada {response_task.status_code} al actualizar tarea Planner '{task_id}'. Respuesta: {response_task.text[:200]}")
-                 response_task.raise_for_status() # Forzar error
+                 response_task.raise_for_status()
 
             final_task_data_response["task_update_status"] = "success"
         except Exception as e_task:
             logger.error(f"Fallo al actualizar la parte principal de la tarea Planner '{task_id}'.")
-            # Devolver error y no continuar con detalles si la actualización principal falla.
             return _handle_planner_api_error(e_task, f"{action_name} (task_part)", params)
 
-    # 2. Actualizar el objeto plannerTaskDetails
     if update_payload_details and isinstance(update_payload_details, dict):
         url_details = f"{settings.GRAPH_API_BASE_URL}/planner/tasks/{task_id}/details"
         current_etag_details = etag_details or update_payload_details.pop('@odata.etag', None)
         
-        # Si el ETag de detalles no se proveyó y la tarea principal se actualizó (o no),
-        # intentar obtener el ETag actual de los detalles.
         if not current_etag_details:
             logger.debug(f"ETag para detalles de tarea '{task_id}' no provisto. Intentando obtenerlo...")
             try:
-                # Si la tarea fue actualizada y devolvió el objeto completo, podría tener el ETag de details.
                 if final_task_data_response.get("details@odata.etag"):
                     current_etag_details = final_task_data_response["details@odata.etag"]
                 elif final_task_data_response.get("details", {}).get("@odata.etag"):
                     current_etag_details = final_task_data_response["details"]["@odata.etag"]
                 
-                if not current_etag_details: # Si aún no lo tenemos, hacer un GET
-                    get_details_response = client.get(details_url, scope=planner_rw_scope, params={"$select": "@odata.etag"})
-                    current_etag_details = get_details_response.json().get("@odata.etag")
+                if not current_etag_details:
+                    get_details_response_data = client.get(details_url, scope=planner_rw_scope, params={"$select": "@odata.etag"})
+                    # CORRECCIÓN: get_details_response_data ya es un dict
+                    current_etag_details = get_details_response_data.get("@odata.etag")
                 
                 if current_etag_details:
                     logger.info(f"ETag obtenido para detalles de tarea '{task_id}': {current_etag_details}")
-                else: # Si no se pudo obtener ETag (ej. 404 en details si es la primera vez que se actualizan)
-                    logger.warning(f"No se pudo obtener ETag para detalles de tarea '{task_id}'. Se intentará PATCH sin ETag (o con '*' si aplica para crear).")
-                    # Para crear detalles si no existen, el ETag '*' podría ser necesario, o a veces se omite.
-                    # La API de Planner usualmente crea el objeto 'details' vacío al crear la tarea.
-                    # Por lo tanto, un PATCH sin ETag o con un ETag viejo debería fallar si ha cambiado.
-                    # Si los details no existen (404 en el GET), un PATCH fallará.
-                    # Aquí la lógica es actualizar, así que un ETag es preferible.
-
+                else:
+                    logger.warning(f"No se pudo obtener ETag para detalles de tarea '{task_id}'.")
             except requests.exceptions.HTTPError as http_e_get_details:
                  if http_e_get_details.response is not None and http_e_get_details.response.status_code == 404:
-                     logger.warning(f"No se encontraron detalles existentes para tarea '{task_id}' (404). Un PATCH para crear detalles podría ser necesario si la API lo permite así, pero usualmente se crean con la tarea.")
-                     # Si los detalles no existen, un PATCH fallará. Se esperaría que el objeto details se cree con la tarea.
-                     # Devolver error si se intenta actualizar detalles que no existen.
+                     logger.warning(f"No se encontraron detalles existentes para tarea '{task_id}' (404).")
                      return {"status": "error", "action": f"{action_name} (details_part)", "message": f"No se encontraron detalles para la tarea '{task_id}'. No se pueden actualizar.", "http_status": 404}
-                 else: # Otro error HTTP al obtener ETag
+                 else:
                      logger.error(f"Error HTTP obteniendo ETag para detalles de tarea '{task_id}': {http_e_get_details}")
-                     # Continuar sin ETag o fallar? Es más seguro fallar si no se puede garantizar la atomicidad.
                      return _handle_planner_api_error(http_e_get_details, f"{action_name} (get_details_etag)", params)
-            except Exception as get_etag_err: # Otro error
-                logger.warning(f"Error inesperado obteniendo ETag para detalles de tarea '{task_id}': {get_etag_err}. Se intentará PATCH sin ETag si no es obligatorio.")
+            except Exception as get_etag_err:
+                logger.warning(f"Error inesperado obteniendo ETag para detalles de tarea '{task_id}': {get_etag_err}.")
         
         custom_headers_details = {'If-Match': current_etag_details} if current_etag_details else {}
         if not current_etag_details: logger.warning(f"Intentando PATCH de detalles para tarea '{task_id}' sin ETag.")
@@ -477,24 +448,19 @@ def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
                 logger.warning(f"Respuesta inesperada {response_details.status_code} al actualizar detalles de tarea '{task_id}'.")
                 response_details.raise_for_status()
 
-
             if isinstance(final_task_data_response, dict):
                 final_task_data_response.setdefault("details", {}).update(updated_details_data)
                 final_task_data_response["details_update_status"] = "success"
-            else: # Debería ser un dict por la actualización de tarea o inicialización.
+            else:
                 final_task_data_response = {"id": task_id, "details": updated_details_data, "details_update_status": "success"}
 
         except Exception as e_details:
             logger.error(f"Fallo al actualizar los detalles de la tarea Planner '{task_id}'.")
             if isinstance(final_task_data_response, dict):
                 final_task_data_response["details_update_status"] = f"error: {type(e_details).__name__} - {str(e_details)[:100]}"
-            # Si solo se intentó actualizar detalles y falló, devolver ese error.
             if not update_payload_task:
                 return _handle_planner_api_error(e_details, f"{action_name} (details_part)", params)
-            # Si la actualización de la tarea principal tuvo éxito pero la de detalles falló,
-            # la respuesta general sigue siendo de éxito parcial.
             logger.warning(f"Actualización de tarea '{task_id}' tuvo éxito para la parte principal, pero falló para los detalles.")
-
 
     return {"status": "success", "data": final_task_data_response, "message": "Actualización de tarea procesada."}
 
@@ -519,7 +485,6 @@ def delete_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
                                getattr(settings, 'GRAPH_SCOPE_GROUP_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
         response = client.delete(url, scope=planner_rw_scope, headers=custom_headers)
-        # DELETE devuelve 204 No Content
         return {"status": "success", "message": f"Tarea Planner '{task_id}' eliminada exitosamente.", "http_status": response.status_code}
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
@@ -539,15 +504,14 @@ def list_buckets(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     odata_params['$select'] = params.get('select', "id,name,orderHint,planId,orderHint") # orderHint es importante para el orden
     if params.get('$filter'): odata_params['$filter'] = params['$filter']
     if params.get('$top'): odata_params['$top'] = params['$top']
-    # $orderby podría ser útil aquí, ej. por orderHint
 
     logger.info(f"Listando buckets para el plan Planner '{plan_id}'. Select: {odata_params['$select']}")
     planner_scope = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', 
                             getattr(settings, 'GRAPH_SCOPE_TASKS_READ', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
         response = client.get(url, scope=planner_scope, params=odata_params)
-        buckets_data = response.json()
-        return {"status": "success", "data": buckets_data.get("value", [])}
+        # CORRECCIÓN: 'response' ya es un dict
+        return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 

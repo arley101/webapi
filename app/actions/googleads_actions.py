@@ -1,6 +1,6 @@
 # app/actions/googleads_actions.py
 import logging
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union 
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
 from google.protobuf import json_format, field_mask_pb2 
@@ -10,19 +10,17 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
 
-# Instancia global para reutilizar el cliente una vez inicializado
 _google_ads_client_instance: Optional[GoogleAdsClient] = None
 
 def get_google_ads_client(client_config_override: Optional[Dict[str, Any]] = None) -> GoogleAdsClient:
     """
-    Inicializa y devuelve una instancia del cliente de Google Ads.
-    Esta versión es robusta: utiliza las credenciales de settings para construir un cliente 
-    que maneja automáticamente la renovación de tokens usando el refresh_token.
-    Reutiliza la instancia del cliente para mejorar el rendimiento.
+    Inicializa y devuelve una instancia del cliente de Google Ads utilizando
+    la configuración de variables de entorno o un override.
+    Reutiliza la instancia si ya ha sido creada y no hay override.
+    Maneja automáticamente la renovación de tokens usando el refresh_token.
     """
     global _google_ads_client_instance
     if _google_ads_client_instance and not client_config_override:
-        logger.debug("Reutilizando instancia existente del cliente de Google Ads.")
         return _google_ads_client_instance
 
     effective_config = {}
@@ -30,16 +28,15 @@ def get_google_ads_client(client_config_override: Optional[Dict[str, Any]] = Non
         effective_config = client_config_override
         logger.info("Utilizando configuración de Google Ads proporcionada en 'client_config_override'.")
     else:
-        # Cargar credenciales desde la configuración global (app/core/config.py)
-        required_vars = {
+        required_env_vars_map = {
             "developer_token": settings.GOOGLE_ADS.DEVELOPER_TOKEN,
             "client_id": settings.GOOGLE_ADS.CLIENT_ID,
             "client_secret": settings.GOOGLE_ADS.CLIENT_SECRET,
             "refresh_token": settings.GOOGLE_ADS.REFRESH_TOKEN,
         }
-        missing = [key for key, value in required_vars.items() if not value]
+        missing = [key for key, value in required_env_vars_map.items() if not value]
         if missing:
-            msg = f"Faltan credenciales de Google Ads en settings: {', '.join(missing)}."
+            msg = f"Faltan credenciales/configuraciones de Google Ads en settings: {', '.join(missing)}."
             logger.critical(msg)
             raise ValueError(msg)
         
@@ -52,16 +49,12 @@ def get_google_ads_client(client_config_override: Optional[Dict[str, Any]] = Non
             "use_proto_plus": True,
         }
 
-    logger.info(f"Inicializando cliente de Google Ads. Login Customer ID: {effective_config.get('login_customer_id') or 'No especificado'}")
+    logger.info(f"Inicializando cliente de Google Ads con login_customer_id: {effective_config.get('login_customer_id')}")
     try:
-        # GoogleAdsClient.load_from_dict usará el refresh_token para generar access_tokens automáticamente.
-        # El error 'invalid_grant' ocurre si el refresh_token mismo es inválido o ha sido revocado.
         client_instance = GoogleAdsClient.load_from_dict(effective_config)
-        
         if not client_config_override:
             _google_ads_client_instance = client_instance
             logger.info("Cliente de Google Ads inicializado y cacheado exitosamente.")
-        
         return client_instance
     except Exception as e:
         logger.exception(f"Error crítico inicializando el cliente de Google Ads: {e}")
@@ -71,44 +64,53 @@ def get_google_ads_client(client_config_override: Optional[Dict[str, Any]] = Non
 def _format_google_ads_row_to_dict(google_ads_row: Any) -> Dict[str, Any]:
     """Convierte un objeto GoogleAdsRow (protobuf) a un diccionario Python serializable."""
     try:
+        # CORRECCIÓN: Se eliminó el parámetro `including_default_value_fields`
         return json_format.MessageToDict(
             google_ads_row._pb, 
-            preserving_proto_field_name=True,
-            including_default_value_fields=False 
+            preserving_proto_field_name=True
         )
     except Exception as e_json_format:
-        logger.warning(f"Fallo al convertir GoogleAdsRow a dict usando json_format ({e_json_format}). La fila se omitirá o se representará como string.")
+        logger.warning(f"Fallo al convertir GoogleAdsRow a dict usando json_format ({e_json_format}). La fila se representará como string.")
         return {"_raw_repr_": str(google_ads_row), "_serialization_error_": str(e_json_format)}
 
-
-def _extract_google_ads_errors(failure_message: Any) -> List[Dict[str, Any]]:
+def _extract_google_ads_errors(failure_message: Any, client: GoogleAdsClient) -> List[Dict[str, Any]]:
     """Extrae y formatea errores de un objeto GoogleAdsFailure."""
     error_list = []
     if not (failure_message and hasattr(failure_message, 'errors')):
         return error_list
 
     for error_item in failure_message.errors:
-        err_detail = {
-            "message": error_item.message,
-            "trigger": str(error_item.trigger.string_value) if error_item.trigger else None,
-            "location": [
-                {"field_name": el.field_name, "index": el.index if el.index is not None else None}
-                for el in error_item.location.field_path_elements
-            ] if error_item.location else None
-        }
+        err_detail = {"message": error_item.message}
+        if hasattr(error_item, 'trigger') and error_item.trigger and error_item.trigger.string_value:
+            err_detail["triggerValue"] = error_item.trigger.string_value
         
-        # Simplifica la extracción del código de error
+        if hasattr(error_item, 'location') and error_item.location and hasattr(error_item.location, 'field_path_elements'):
+            err_detail["location"] = [{"fieldName": el.field_name, "index": el.index if el.index is not None else None} for el in error_item.location.field_path_elements]
+
         if hasattr(error_item, 'error_code'):
-            for field, value in error_item.error_code.items():
-                err_detail["error_code_type"] = field
-                err_detail["error_code_value"] = value.name if hasattr(value, 'name') else value
-                break 
+             oneof_field_name = error_item.error_code._pb.WhichOneof('error_code')
+             if oneof_field_name:
+                try:
+                    enum_type_name = f"{oneof_field_name[0].upper()}{oneof_field_name[1:].replace('_error', 'ErrorEnum')}"
+                    enum_type = client.enums[enum_type_name]
+                    enum_value = getattr(error_item.error_code, oneof_field_name)
+                    err_detail["errorCode"] = enum_type(enum_value).name
+                except (KeyError, AttributeError):
+                    err_detail["errorCode"] = str(getattr(error_item.error_code, oneof_field_name))
+             else:
+                err_detail["errorCode"] = "UNKNOWN"
         error_list.append(err_detail)
     return error_list
 
-def _handle_google_ads_api_exception(ex: GoogleAdsException, action_name: str, customer_id_log: Optional[str] = None) -> Dict[str, Any]:
+
+def _handle_google_ads_api_exception(
+    ex: GoogleAdsException,
+    action_name: str,
+    gads_client_for_enums: GoogleAdsClient,
+    customer_id_log: Optional[str] = None
+) -> Dict[str, Any]:
     """Formatea una GoogleAdsException en una respuesta de error estándar."""
-    error_details_extracted = _extract_google_ads_errors(ex.failure)
+    error_details_extracted = _extract_google_ads_errors(ex.failure, gads_client_for_enums)
     
     logger.error(
         f"Google Ads API Exception en acción '{action_name}' para customer_id '{customer_id_log or 'N/A'}'. "
@@ -136,12 +138,11 @@ def _handle_google_ads_api_exception(ex: GoogleAdsException, action_name: str, c
 def _build_resource_from_dict(client: GoogleAdsClient, resource_type_name: str, data_dict: Dict[str, Any]):
     resource_obj = client.get_type(resource_type_name)
     try:
-        # copy_from es el método recomendado y robusto para esto.
         client.copy_from(resource_obj, data_dict)
         return resource_obj
     except Exception as e_copy:
         logger.error(f"Error durante client.copy_from para {resource_type_name} con dict {data_dict}: {e_copy}", exc_info=True)
-        raise TypeError(f"Error convirtiendo dict a {resource_type_name}: {e_copy}. Verifique la estructura del payload y los tipos de datos, incluyendo los enums.")
+        raise TypeError(f"Error convirtiendo dict a {resource_type_name}: {e_copy}. Verifique la estructura del payload y los tipos de datos.")
 
 # --- ACCIONES ---
 
@@ -150,8 +151,6 @@ def googleads_search_stream(client: Optional[AuthenticatedHttpClient], params: D
     action_name = "googleads_search_stream"
     logger.info(f"Ejecutando {action_name} con params: {params}")
     
-    # --- LÓGICA MEJORADA ---
-    # Usar el customer_id de los params, pero si no está, usar el default de la configuración.
     customer_id_from_params: Optional[str] = params.get("customer_id")
     customer_id_to_use = customer_id_from_params or settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID
 
@@ -182,7 +181,8 @@ def googleads_search_stream(client: Optional[AuthenticatedHttpClient], params: D
         return {"status": "success", "data": response_data}
 
     except GoogleAdsException as ex:
-        return _handle_google_ads_api_exception(ex, action_name, customer_id_clean)
+        gads_client_for_error = get_google_ads_client(client_config_override)
+        return _handle_google_ads_api_exception(ex, action_name, gads_client_for_error, customer_id_clean)
     except (ValueError, ConnectionError) as conf_err: 
         logger.error(f"Error de configuración/conexión en {action_name}: {conf_err}", exc_info=True)
         return {"status": "error", "action": action_name, "message": str(conf_err), "http_status": 503 if isinstance(conf_err, ConnectionError) else 400}
@@ -203,7 +203,6 @@ def _execute_mutate_operation(
     action_name = f"googleads_mutate_{resource_type_name.lower().replace('adgroupad', 'ad').replace('adgroupcriterion', 'keyword')}s"
     logger.info(f"Ejecutando {action_name} con params (operations omitido del log): %s", {k:v for k,v in params.items() if k != 'operations'})
 
-    # --- LÓGICA MEJORADA ---
     customer_id_from_params: Optional[str] = params.get("customer_id")
     customer_id_to_use = customer_id_from_params or settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID
     
@@ -260,7 +259,10 @@ def _execute_mutate_operation(
         
         formatted_response: Dict[str, Any] = {"results": []}
         if response.partial_failure_error:
-            formatted_response["partial_failure_error"] = _extract_google_ads_errors(response.partial_failure_error)
+            # Re-convertir el error protobuf a un formato manejable
+            failure_message = gads_client.get_type("GoogleAdsFailure")
+            failure_message.ParseFromString(response.partial_failure_error.details[0].value)
+            formatted_response["partial_failure_error"] = _extract_google_ads_errors(failure_message, gads_client)
 
         for result in response.results:
             formatted_response["results"].append(json_format.MessageToDict(result._pb))
@@ -268,7 +270,8 @@ def _execute_mutate_operation(
         return {"status": "success", "data": formatted_response}
 
     except GoogleAdsException as ex:
-        return _handle_google_ads_api_exception(ex, action_name, customer_id_clean)
+        gads_client_for_error = get_google_ads_client(client_config_override)
+        return _handle_google_ads_api_exception(ex, action_name, gads_client_for_error, customer_id_clean)
     except (ValueError, ConnectionError, TypeError) as conf_err: 
         logger.error(f"Error de configuración/payload en {action_name}: {conf_err}", exc_info=True)
         return {"status": "error", "action": action_name, "message": str(conf_err), "http_status": 503 if isinstance(conf_err, ConnectionError) else 400}
