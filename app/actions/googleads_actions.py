@@ -34,11 +34,8 @@ def get_google_ads_client() -> GoogleAdsClient:
     if config.get("login_customer_id"):
         config["login_customer_id"] = str(config["login_customer_id"]).replace("-", "")
     
-    try:
-        _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
-        return _google_ads_client_instance
-    except Exception as e:
-        raise ConnectionError(f"No se pudo inicializar el cliente de Google Ads: {e}")
+    _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
+    return _google_ads_client_instance
 
 def _handle_google_ads_exception(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
     errors = [{"message": error.message} for error in ex.failure.errors]
@@ -122,17 +119,13 @@ def _execute_mutate_operation(
         if not sdk_operations:
             return {"status": "error", "action": action_name, "message": "No se proveyeron operaciones válidas.", "http_status": 400}
 
-        # ***** CORRECCIÓN DEFINITIVA *****
-        # Construir el objeto de solicitud (el "sobre cerrado")
         mutate_request = gads_client.get_type(request_type_name)
         mutate_request.customer_id = customer_id_clean
         mutate_request.operations.extend(sdk_operations)
         mutate_request.partial_failure = params.get("partial_failure", False)
         mutate_request.validate_only = params.get("validate_only", False)
         
-        # Enviar el objeto de solicitud completo, en lugar de parámetros separados
         response = getattr(service_client, mutate_method_name)(request=mutate_request)
-        # ***** FIN DE LA CORRECCIÓN *****
         
         formatted_response = {"results": [_format_response(r) for r in response.results]}
         if response.partial_failure_error:
