@@ -10,236 +10,142 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient
 logger = logging.getLogger(__name__)
 
 LINKEDIN_API_BASE_URL = "https://api.linkedin.com"
-# Es importante verificar la última versión recomendada por LinkedIn para estos headers
-LINKEDIN_API_VERSION_HEADER = "202401" # Ejemplo, ajusta a una versión reciente y válida
+LINKEDIN_API_VERSION_HEADER = "202401" # Se recomienda usar una versión reciente
 LINKEDIN_RESTLI_VERSION_HEADER = "2.0.0"
 
-def _get_linkedin_api_headers(params: Dict[str, Any]) -> Dict[str, str]:
-    """
-    Prepara los headers para las solicitudes a la LinkedIn Ads API.
-    Prioriza el access_token de params, luego de settings.
-    """
-    access_token: Optional[str] = params.get("access_token", settings.LINKEDIN_ACCESS_TOKEN)
+# --- HELPERS INTERNOS ROBUSTOS ---
 
+def _get_linkedin_api_headers(params: Dict[str, Any]) -> Dict[str, str]:
+    """Prepara los headers para las solicitudes a la LinkedIn API."""
+    access_token: Optional[str] = params.get("access_token", settings.LINKEDIN_ACCESS_TOKEN)
     if not access_token:
-        raise ValueError("Se requiere 'access_token' para LinkedIn Ads API (ya sea en params o configurado en el backend).")
+        raise ValueError("Se requiere 'access_token' para LinkedIn API.")
     
-    headers = {
+    return {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
         "LinkedIn-Version": LINKEDIN_API_VERSION_HEADER,
         "X-Restli-Protocol-Version": LINKEDIN_RESTLI_VERSION_HEADER
     }
-    return headers
 
-def _handle_linkedin_api_error(
-    e: Exception,
-    action_name: str,
-    params_for_log: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """Helper para manejar errores de LinkedIn Ads API."""
-    log_message = f"Error en LinkedIn Ads Action '{action_name}'"
-    safe_params = {}
-    if params_for_log:
-        sensitive_keys = ['access_token'] # Ajusta según sea necesario
-        safe_params = {k: (v if k not in sensitive_keys else f"[{type(v).__name__} OMITIDO]") for k, v in params_for_log.items()}
-        log_message += f" con params: {safe_params}"
+def _handle_linkedin_api_error(e: Exception, action_name: str) -> Dict[str, Any]:
+    """Maneja errores de la API de LinkedIn de forma estandarizada."""
+    logger.error(f"Error en LinkedIn Action '{action_name}': {type(e).__name__} - {e}", exc_info=True)
     
-    logger.error(f"{log_message}: {type(e).__name__} - {str(e)}", exc_info=True)
-    
-    details_str = str(e)
-    status_code_int = 500
-    linkedin_error_code = None
-    linkedin_service_error_code = None
-    linkedin_request_id = None
+    status_code = 500
+    details = str(e)
+    service_error_code = None
 
     if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
-        status_code_int = e.response.status_code
-        linkedin_request_id = e.response.headers.get("x-li-uuid") or e.response.headers.get("x-linkedin-tracking-id")
+        status_code = e.response.status_code
         try:
             error_data = e.response.json()
-            # Estructura de error de LinkedIn: {"serviceErrorCode": X, "message": "...", "status": Y}
-            linkedin_service_error_code = error_data.get("serviceErrorCode")
-            linkedin_error_code = error_data.get("code") # A veces 'code' existe
-            details_str = error_data.get("message", e.response.text)
+            details = error_data.get("message", e.response.text)
+            service_error_code = error_data.get("serviceErrorCode")
         except json.JSONDecodeError:
-            details_str = e.response.text[:500] if e.response.text else "No response body"
+            details = e.response.text
             
     return {
-        "status": "error",
-        "action": action_name,
-        "message": f"Error interactuando con LinkedIn Ads API: {details_str}",
-        "details": {
-            "raw_exception_type": type(e).__name__,
-            "raw_exception_message": str(e),
-            "linkedin_api_status": status_code_int, # 'status' suele estar en el cuerpo del error también
-            "linkedin_api_error_code": linkedin_error_code,
-            "linkedin_api_service_error_code": linkedin_service_error_code,
-            "linkedin_api_request_id": linkedin_request_id,
-            "response_body": details_str if isinstance(e, requests.exceptions.HTTPError) else None
-        },
-        "http_status": status_code_int,
+        "status": "error", "action": action_name,
+        "message": f"Error interactuando con LinkedIn API: {details}",
+        "details": {"serviceErrorCode": service_error_code, "raw_response": details},
+        "http_status": status_code
     }
 
-def _get_linkedin_ad_account_urn(params: Dict[str, Any]) -> str:
-    """
-    Obtiene el URN de la cuenta publicitaria de LinkedIn.
-    Prioriza account_id de params, luego de settings.DEFAULT_LINKEDIN_AD_ACCOUNT_ID.
-    Espera el ID numérico y lo formatea como URN.
-    """
-    numeric_account_id_str: Optional[str] = params.get("account_id", settings.DEFAULT_LINKEDIN_AD_ACCOUNT_ID)
+def _get_ad_account_urn(params: Dict[str, Any]) -> str:
+    """Obtiene y formatea el URN de la cuenta publicitaria."""
+    account_id = params.get("account_id", settings.DEFAULT_LINKEDIN_AD_ACCOUNT_ID)
+    if not account_id:
+        raise ValueError("Se requiere 'account_id' en los params o en la configuración.")
     
-    if not numeric_account_id_str:
-        raise ValueError("Se requiere 'account_id' (numérico) en params o DEFAULT_LINKEDIN_AD_ACCOUNT_ID configurado.")
-    
-    # Limpiar por si se pasa el URN completo o "urn:li:sponsoredAccount:"
-    numeric_id_cleaned = str(numeric_account_id_str).replace("urn:li:sponsoredAccount:", "").strip()
-    
-    if not numeric_id_cleaned.isdigit():
-        raise ValueError(f"El 'account_id' de LinkedIn ('{numeric_id_cleaned}') debe ser numérico.")
+    account_id_str = str(account_id).replace("urn:li:sponsoredAccount:", "").strip()
+    if not account_id_str.isdigit():
+        raise ValueError(f"El 'account_id' de LinkedIn ('{account_id_str}') debe ser numérico.")
         
-    return f"urn:li:sponsoredAccount:{numeric_id_cleaned}"
+    return f"urn:li:sponsoredAccount:{account_id_str}"
 
+# --- ACCIONES PRINCIPALES ---
 
-# --- ACCIONES ---
-# Nota: El parámetro 'client: AuthenticatedHttpClient' no se usa aquí.
-# Se mantiene por consistencia con el action_mapper.
-
-def linkedin_get_ad_accounts(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    action_name = "linkedin_get_ad_accounts"
-    logger.info(f"Ejecutando {action_name} con params (token omitido del log): %s", {k:v for k,v in params.items() if k not in ['access_token']})
-
-    # Documentación: https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/account-structure/create-and-manage-accounts?view=li-lms-2024-01&tabs=http#search-for-ad-accounts
-    # Endpoint para buscar cuentas a las que el token tiene acceso
-    url = f"{LINKEDIN_API_BASE_URL}/v2/adAccountsV2"
+def linkedin_find_ad_accounts(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Busca cuentas publicitarias a las que el token tiene acceso."""
+    action_name = "linkedin_find_ad_accounts"
+    logger.info(f"Ejecutando {action_name}...")
     
-    # Parámetros de búsqueda
-    # q=search es un buscador general. Se puede filtrar por 'reference' (URN del owner) o 'id' (URN de la cuenta)
-    # Para listar las cuentas asociadas al token, q=search&search=(type:(values:List(BUSINESS,ENTERPRISE_PROFILE)))
-    # O según el ejemplo del usuario: q=search
-    
-    query_api_params: Dict[str, Any] = {"q": params.get("q_search_type", "search")} # "search" como default
-    
-    # Se pueden añadir filtros más específicos si se conocen, ej:
-    # search_filter_reference_urn = params.get("search_filter_owner_urn") # ej. urn:li:organization:12345
-    # if search_filter_reference_urn:
-    #    query_api_params["search.reference.values[0]"] = search_filter_reference_urn
-
-    logger.info(f"Listando cuentas publicitarias de LinkedIn. Tipo de búsqueda: {query_api_params['q']}")
     try:
         headers = _get_linkedin_api_headers(params)
-        response = requests.get(url, headers=headers, params=query_api_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        url = f"{LINKEDIN_API_BASE_URL}/v2/adAccountsV2"
+        
+        # Búsqueda genérica para encontrar todas las cuentas asociadas
+        query_params = {"q": "search"}
+        
+        response = requests.get(url, headers=headers, params=query_params, timeout=settings.DEFAULT_API_TIMEOUT)
         response.raise_for_status()
-        return {"status": "success", "action": action_name, "data": response.json(), "http_status": response.status_code}
-    except ValueError as ve:
-        return {"status": "error", "action": action_name, "message": str(ve), "http_status": 401}
+        return {"status": "success", "data": response.json()}
     except Exception as e:
-        return _handle_linkedin_api_error(e, action_name, params)
+        return _handle_linkedin_api_error(e, action_name)
 
-
-def linkedin_list_campaigns(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    action_name = "linkedin_list_campaigns"
-    logger.info(f"Ejecutando {action_name} con params (token omitido del log): %s", {k:v for k,v in params.items() if k not in ['access_token']})
+def linkedin_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene campañas para una cuenta publicitaria, con filtros opcionales."""
+    action_name = "linkedin_get_campaigns"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
 
     try:
-        account_urn = _get_linkedin_ad_account_urn(params)
+        account_urn = _get_ad_account_urn(params)
         headers = _get_linkedin_api_headers(params)
-        
-        # Documentación: https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads/campaign-management/create-and-manage-campaign-groups?view=li-lms-2024-01&tabs=http#search-for-campaigns
-        # El formato del filtro de búsqueda es `search=(account:(values:List(urn%3Ali%3AsponsoredAccount%3A1234567)))`
-        # El SDK de Python lo maneja, pero con requests directos hay que construirlo bien.
-        # Tu borrador usaba: search.account.values[0]={account_id} lo cual puede no ser correcto.
         
         url = f"{LINKEDIN_API_BASE_URL}/v2/adCampaignsV2"
-        query_api_params: Dict[str, Any] = {
+        
+        # El parámetro 'search.account.values[0]' es la forma correcta de filtrar por cuenta
+        query_params: Dict[str, Any] = {
             "q": "search",
-            "search.account.values[0]": account_urn # LinkedIn espera el URN completo aquí
+            "search.account.values[0]": account_urn
         }
         
-        # Parámetros adicionales de la API de LinkedIn
-        if params.get("fields"): # Ej: "id,name,status,versionTag,account"
-            query_api_params["fields"] = params["fields"]
-        if params.get("count"): # Para paginación
-            query_api_params["count"] = params["count"]
-        if params.get("start"): # Para paginación
-            query_api_params["start"] = params["start"]
-        # Otros filtros como `search.status.values[0]=ACTIVE` pueden añadirse.
+        # Añadir filtros opcionales
+        if params.get("status_filter"):
+            query_params["search.status.values[0]"] = params["status_filter"].upper() # ej: ACTIVE, PAUSED, DRAFT
 
-        logger.info(f"Listando campañas de LinkedIn para cuenta URN '{account_urn}'. Params: {query_api_params}")
-        response = requests.get(url, headers=headers, params=query_api_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        logger.info(f"Listando campañas de LinkedIn para cuenta URN '{account_urn}' con filtros: {query_params}")
+        response = requests.get(url, headers=headers, params=query_params, timeout=settings.DEFAULT_API_TIMEOUT)
         response.raise_for_status()
-        return {"status": "success", "action": action_name, "data": response.json(), "http_status": response.status_code}
-    except ValueError as ve:
-        return {"status": "error", "action": action_name, "message": str(ve), "http_status": 400 if "account_id" in str(ve) else 401}
+        return {"status": "success", "data": response.json()}
     except Exception as e:
-        return _handle_linkedin_api_error(e, action_name, params)
+        return _handle_linkedin_api_error(e, action_name)
 
-
-def linkedin_get_basic_report(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    action_name = "linkedin_get_basic_report"
-    logger.info(f"Ejecutando {action_name} con params (token omitido del log): %s", {k:v for k,v in params.items() if k not in ['access_token']})
+def linkedin_get_analytics(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene un reporte analítico. Requiere un rango de fechas."""
+    action_name = "linkedin_get_analytics"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
 
     try:
-        account_urn = _get_linkedin_ad_account_urn(params)
+        account_urn = _get_ad_account_urn(params)
         headers = _get_linkedin_api_headers(params)
 
-        # Documentación AdAnalyticsV2: https://learn.microsoft.com/en-us/linkedin/marketing/integrations/ads-reporting/ads-reporting?view=li-lms-2024-01&tabs=http
-        # Endpoint: /v2/adAnalyticsV2
         url = f"{LINKEDIN_API_BASE_URL}/v2/adAnalyticsV2"
         
-        # Parámetros de la query. Tu borrador tenía: ?q=analytics&pivot=CAMPAIGN&accounts[0]={account_id}
-        # El formato correcto es con `dateRange`, `timeGranularity`, `pivot`, `fields`, etc.
-        # Y el account se especifica como un filtro.
-        
-        query_api_params: Dict[str, Any] = {
+        required_params = ["start_day", "start_month", "start_year", "end_day", "end_month", "end_year"]
+        if not all(params.get(p) for p in required_params):
+            return {"status": "error", "message": f"Se requieren todos los parámetros de fecha: {required_params}", "http_status": 400}
+
+        query_params = {
             "q": "analytics",
-            "pivot": params.get("pivot", "CAMPAIGN"), # CAMPAIGN, CREATIVE, COMPANY, ACCOUNT, etc.
-            "dateRange.start.day": params.get("start_day"), # Ejemplo: 1
-            "dateRange.start.month": params.get("start_month"), # Ejemplo: 1
-            "dateRange.start.year": params.get("start_year"), # Ejemplo: 2023
+            "pivot": f"urn:li:sponsoredCampaign:{params.get('campaign_id')}" if params.get('campaign_id') else 'CAMPAIGN',
+            "dateRange.start.day": params.get("start_day"),
+            "dateRange.start.month": params.get("start_month"),
+            "dateRange.start.year": params.get("start_year"),
             "dateRange.end.day": params.get("end_day"),
             "dateRange.end.month": params.get("end_month"),
             "dateRange.end.year": params.get("end_year"),
-            "timeGranularity": params.get("time_granularity", "DAILY"), # DAILY, MONTHLY, ALL
-            "accounts[0]": account_urn # Especificar la cuenta para el reporte
+            "timeGranularity": params.get("time_granularity", "DAILY"),
+            "accounts[0]": account_urn,
+            "fields": params.get("fields", "impressions,clicks,costInLocalCurrency,dateRange")
         }
-        
-        # Validar que las fechas sean proveídas (al menos año, mes, día)
-        if not all([query_api_params["dateRange.start.day"], query_api_params["dateRange.start.month"], query_api_params["dateRange.start.year"],
-                    query_api_params["dateRange.end.day"], query_api_params["dateRange.end.month"], query_api_params["dateRange.end.year"]]):
-            return {"status": "error", "action": action_name, "message": "Se requieren 'start_day', 'start_month', 'start_year', 'end_day', 'end_month', 'end_year' para el rango de fechas.", "http_status": 400}
 
-        # Campos (métricas e IDs de dimensiones)
-        # Ejemplo de campos: impressions,clicks,spend,costPerImpression,campaign,creative
-        fields_report_param: Optional[str] = params.get("fields_report") # String separado por comas
-        if fields_report_param:
-            query_api_params["fields"] = fields_report_param
-        else: # Unos campos por defecto
-            query_api_params["fields"] = "impressions,clicks,spend,externalWebsiteConversions,dateRange,pivotValues"
+        query_params_cleaned = {k: v for k, v in query_params.items() if v is not None}
 
-
-        # Remover claves None para no enviarlas
-        query_api_params_cleaned = {k: v for k, v in query_api_params.items() if v is not None}
-
-        logger.info(f"Obteniendo reporte básico de LinkedIn para cuenta URN '{account_urn}'. Params: {query_api_params_cleaned}")
-        response = requests.get(url, headers=headers, params=query_api_params_cleaned, timeout=max(settings.DEFAULT_API_TIMEOUT, 180)) # Reportes pueden tardar
+        logger.info(f"Obteniendo reporte analítico de LinkedIn para cuenta '{account_urn}' con params: {query_params_cleaned}")
+        response = requests.get(url, headers=headers, params=query_params_cleaned, timeout=max(settings.DEFAULT_API_TIMEOUT, 180))
         response.raise_for_status()
-        return {"status": "success", "action": action_name, "data": response.json(), "http_status": response.status_code}
-    except ValueError as ve:
-        return {"status": "error", "action": action_name, "message": str(ve), "http_status": 400 if "account_id" in str(ve) else 401}
+        return {"status": "success", "data": response.json()}
     except Exception as e:
-        return _handle_linkedin_api_error(e, action_name, params)
-
-# Aquí se podrían añadir funciones para crear/actualizar campañas, ad sets, ads, etc.
-# Ejemplo placeholder:
-# def linkedin_create_campaign(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
-#     params = params or {}
-#     action_name = "linkedin_create_campaign"
-#     logger.info(f"Ejecutando {action_name} con params (payload omitido): ...")
-#     # ... lógica para construir payload y llamar a POST /v2/adCampaignsV2 ...
-#     return {"status": "not_implemented", "message": "Función no implementada."}
-
-# --- FIN DEL MÓDULO actions/linkedin_ads_actions.py ---
+        return _handle_linkedin_api_error(e, action_name)

@@ -1,16 +1,16 @@
 # app/actions/googleads_actions.py
 import logging
 from typing import Dict, List, Optional, Any
-
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
 from google.protobuf import json_format
-from google.protobuf.field_mask_pb2 import FieldMask
 
 from app.core.config import settings
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
+
+# --- INICIALIZACIÓN DEL CLIENTE Y HELPERS ROBUSTOS ---
 
 _google_ads_client_instance: Optional[GoogleAdsClient] = None
 
@@ -19,142 +19,224 @@ def get_google_ads_client() -> GoogleAdsClient:
     global _google_ads_client_instance
     if _google_ads_client_instance:
         return _google_ads_client_instance
-    
+
     config = {
         "developer_token": settings.GOOGLE_ADS.DEVELOPER_TOKEN,
         "client_id": settings.GOOGLE_ADS.CLIENT_ID,
         "client_secret": settings.GOOGLE_ADS.CLIENT_SECRET,
         "refresh_token": settings.GOOGLE_ADS.REFRESH_TOKEN,
-        "login_customer_id": settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID,
+        "login_customer_id": str(settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID else None,
         "use_proto_plus": True,
     }
-    if not all(k in config and config[k] for k in ["developer_token", "client_id", "client_secret", "refresh_token"]):
+    if not all(config.get(k) for k in ["developer_token", "client_id", "client_secret", "refresh_token"]):
         raise ValueError("Faltan credenciales de Google Ads en la configuración.")
-    
-    if config.get("login_customer_id"):
-        config["login_customer_id"] = str(config["login_customer_id"]).replace("-", "")
-    
+    logger.info("Inicializando cliente de Google Ads...")
     _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
     return _google_ads_client_instance
 
-def _handle_google_ads_exception(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
-    errors = [{"message": error.message} for error in ex.failure.errors]
-    logger.error(f"Google Ads API Exception en '{action_name}': {errors}", exc_info=True)
-    message = errors[0]['message'] if errors else "Error en API de Google Ads."
-    return {"status": "error", "action": action_name, "message": message, "details": {"errors": errors}, "http_status": 400}
+def _handle_google_ads_api_error(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
+    """Formatea una GoogleAdsException en una respuesta de error estándar."""
+    error_details = []
+    for error in ex.failure.errors:
+        error_details.append({
+            "message": error.message,
+            "error_code": str(error.error_code),
+            "trigger": str(error.trigger.string_value) if hasattr(error.trigger, 'string_value') else None,
+            "location": [str(loc) for loc in error.location.field_path_elements] if hasattr(error.location, 'field_path_elements') else None,
+        })
+    logger.error(f"Google Ads API Exception en '{action_name}': {error_details}")
+    return {
+        "status": "error", "action": action_name,
+        "message": "Error en la API de Google Ads. Revise los detalles.",
+        "details": {"errors": error_details, "request_id": ex.request_id},
+        "http_status": 400
+    }
 
-def _format_response(row: Any) -> Dict[str, Any]:
-    return json_format.MessageToDict(row._pb, preserving_proto_field_name=True)
-
-def googleads_search_stream(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    customer_id = params.get("customer_id") or settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID
-    query = params.get("query")
-    if not customer_id or not query:
-        return {"status": "error", "message": "'customer_id' y 'query' son requeridos.", "http_status": 400}
+def _execute_search_query(customer_id: str, query: str, action_name: str) -> Dict[str, Any]:
+    """Ejecuta una consulta GAQL y devuelve los resultados."""
+    logger.info(f"Ejecutando acción '{action_name}' con query: {query}")
     try:
         gads_client = get_google_ads_client()
-        search_request = gads_client.get_type("SearchGoogleAdsStreamRequest")
-        search_request.customer_id = str(customer_id).replace("-", "")
-        search_request.query = query
-        service = gads_client.get_service("GoogleAdsService")
-        stream = service.search_stream(request=search_request)
-        results = [_format_response(row) for batch in stream for row in batch.results]
-        return {"status": "success", "data": {"results": results}}
+        ga_service = gads_client.get_service("GoogleAdsService")
+        stream = ga_service.search_stream(customer_id=customer_id, query=query)
+        results = [json_format.MessageToDict(row._pb) for batch in stream for row in batch.results]
+        return {"status": "success", "data": results, "total_retrieved": len(results)}
     except GoogleAdsException as ex:
-        return _handle_google_ads_exception(ex, "googleads_search_stream")
+        return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
-        return {"status": "error", "message": f"Error inesperado: {str(e)}", "http_status": 500}
+        logger.exception(f"Error inesperado en '{action_name}': {e}")
+        return {"status": "error", "message": str(e), "http_status": 500}
 
-def _build_update_operation(gads_client: GoogleAdsClient, operation_type_name: str, resource_type_name: str, update_data: Dict[str, Any]) -> Any:
-    """Construye una operación de 'update' de forma manual y explícita."""
-    operation = gads_client.get_type(operation_type_name)
-    resource_update = getattr(operation, "update")
-    
-    resource_name = update_data.get("resource_name")
-    if not resource_name:
-        raise ValueError("El campo 'resource_name' es obligatorio para una operación de 'update'.")
-    
-    resource_update.resource_name = resource_name
-    
-    update_paths = []
-    
-    # Manejo explícito de campos conocidos y sus enums
-    if resource_type_name == "Campaign":
-        if "status" in update_data:
-            status_str = update_data["status"]
-            resource_update.status = gads_client.enums.CampaignStatusEnum[status_str]
-            update_paths.append("status")
-    # Aquí se añadirían otros 'if' para manejar campos de AdGroup, Ad, etc.
-    
-    gads_client.copy_from(operation.update_mask, FieldMask(paths=update_paths))
-    return operation
-
-def _execute_mutate_operation(
-    service_name: str, 
-    operation_type_name: str, 
-    resource_type_name: str,
-    mutate_method_name: str, 
-    request_type_name: str, 
-    client_unused: Optional[AuthenticatedHttpClient], 
-    params: Dict[str, Any]
-) -> Dict[str, Any]:
-    action_name = f"googleads_mutate_{resource_type_name.lower().replace('adgroupad', 'ad').replace('adgroupcriterion', 'keyword')}s"
-    customer_id = params.get("customer_id") or settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID
-    operations_payload = params.get("operations")
-    if not customer_id or not operations_payload:
-        return {"status": "error", "action": action_name, "message": "'customer_id' y 'operations' son requeridos.", "http_status": 400}
-    
-    customer_id_clean = str(customer_id).replace("-", "")
-    
+def _execute_mutate_operations(customer_id: str, operations: list, service_name: str, action_name: str) -> Dict[str, Any]:
+    """Ejecuta operaciones de mutación y devuelve la respuesta."""
+    logger.info(f"Ejecutando acción '{action_name}' con {len(operations)} operaciones en el servicio '{service_name}'.")
     try:
         gads_client = get_google_ads_client()
-        service_client = gads_client.get_service(service_name)
-        
-        sdk_operations = []
-        for op_dict in operations_payload:
-            if "update" in op_dict and isinstance(op_dict["update"], dict):
-                sdk_operations.append(_build_update_operation(gads_client, operation_type_name, resource_type_name, op_dict["update"]))
-            elif "remove" in op_dict and isinstance(op_dict["remove"], str):
-                operation = gads_client.get_type(operation_type_name)
-                operation.remove = op_dict["remove"]
-                sdk_operations.append(operation)
-            # Aquí iría la lógica para "create"
-            else:
-                continue
-        
-        if not sdk_operations:
-            return {"status": "error", "action": action_name, "message": "No se proveyeron operaciones válidas.", "http_status": 400}
-        
-        request = gads_client.get_type(request_type_name)
-        request.customer_id = customer_id_clean
-        request.operations.extend(sdk_operations)
-        request.validate_only = params.get("validate_only", False)
-        
-        response = getattr(service_client, mutate_method_name)(request=request)
-        
-        formatted_response = {"results": [_format_response(r) for r in response.results]}
-        if response.partial_failure_error:
-            # Manejo de error parcial
-            pass
-            
-        return {"status": "success", "data": formatted_response}
-
+        service = gads_client.get_service(service_name)
+        response = service.mutate(customer_id=customer_id, operations=operations)
+        return {"status": "success", "data": json_format.MessageToDict(response._pb)}
     except GoogleAdsException as ex:
-        return _handle_google_ads_exception(ex, action_name)
+        return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
-        logger.exception(f"Error inesperado en {action_name}: {e}")
-        return {"status": "error", "action": action_name, "message": f"Error inesperado en el servidor: {str(e)}", "http_status": 500}
+        logger.exception(f"Error inesperado en '{action_name}': {e}")
+        return {"status": "error", "message": str(e), "http_status": 500}
 
+def _get_customer_id(params: Dict[str, Any]) -> Optional[str]:
+    """Obtiene y limpia el customer_id de los parámetros o de la configuración."""
+    customer_id = params.get("customer_id", settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID)
+    return str(customer_id).replace("-", "") if customer_id else None
 
-def googleads_mutate_campaigns(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    return _execute_mutate_operation("CampaignService", "CampaignOperation", "Campaign", "mutate_campaigns", "MutateCampaignsRequest", client, params)
+# --- ACCIONES DE CAMPAÑAS ---
 
-def googleads_mutate_adgroups(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    return _execute_mutate_operation("AdGroupService", "AdGroupOperation", "AdGroup", "mutate_ad_groups", "MutateAdGroupsRequest", client, params)
+def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    if not customer_id: return {"status": "error", "message": "Se requiere 'customer_id'."}
+    status_filter = params.get("status")
+    where_clause = f"WHERE campaign.status = '{status_filter}'" if status_filter else ""
+    query = f"SELECT campaign.id, campaign.name, campaign.status FROM campaign {where_clause} ORDER BY campaign.name"
+    return _execute_search_query(customer_id, query, "googleads_get_campaigns")
 
-def googleads_mutate_ads(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    return _execute_mutate_operation("AdGroupAdService", "AdGroupAdOperation", "AdGroupAd", "mutate_ad_group_ads", "MutateAdGroupAdsRequest", client, params)
+def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    campaign_name = params.get("name")
+    if not all([customer_id, campaign_name]):
+        return {"status": "error", "message": "Se requieren 'customer_id' y 'name' para la campaña."}
 
-def googleads_mutate_keywords(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
-    return _execute_mutate_operation("AdGroupCriterionService", "AdGroupCriterionOperation", "AdGroupCriterion", "mutate_ad_group_criteria", "MutateAdGroupCriteriaRequest", client, params)
+    gads_client = get_google_ads_client()
+    operation = gads_client.get_type("CampaignOperation")
+    campaign = operation.create
+    campaign.name = campaign_name
+    campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
+    campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
+    campaign.manual_cpc.enhanced_cpc_enabled = True
+    campaign.network_settings.target_Google Search = True
+
+    campaign_budget_service = gads_client.get_service("CampaignBudgetService")
+    budget_operation = gads_client.get_type("CampaignBudgetOperation")
+    budget = budget_operation.create
+    budget.name = f"Budget for {campaign_name} - {params.get('budget_micros', 500000)}"
+    budget.delivery_method = gads_client.enums.BudgetDeliveryMethodEnum.STANDARD
+    budget.amount_micros = params.get("budget_micros", 500000)
+    budget_response = campaign_budget_service.mutate_campaign_budgets(customer_id=customer_id, operations=[budget_operation])
+    campaign.campaign_budget = budget_response.results[0].resource_name
+    
+    return _execute_mutate_operations(customer_id, [operation], "CampaignService", "googleads_create_campaign")
+
+def googleads_update_campaign_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    campaign_id = params.get("campaign_id")
+    status = params.get("status")
+    if not all([customer_id, campaign_id, status]):
+        return {"status": "error", "message": "Se requieren 'customer_id', 'campaign_id' y 'status'."}
+
+    gads_client = get_google_ads_client()
+    campaign_service = gads_client.get_service("CampaignService")
+    operation = gads_client.get_type("CampaignOperation")
+    campaign = operation.update
+    campaign.resource_name = campaign_service.campaign_path(customer_id, campaign_id)
+    campaign.status = gads_client.enums.CampaignStatusEnum[status].value
+    operation.update_mask.paths.append("status")
+    return _execute_mutate_operations(customer_id, [operation], "CampaignService", "googleads_update_campaign_status")
+
+# --- ACCIONES DE GRUPOS DE ANUNCIOS ---
+
+def googleads_get_ad_groups(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    campaign_id = params.get("campaign_id")
+    if not all([customer_id, campaign_id]):
+        return {"status": "error", "message": "Se requieren 'customer_id' y 'campaign_id'."}
+    query = f"SELECT ad_group.id, ad_group.name, ad_group.status FROM ad_group WHERE campaign.id = {campaign_id}"
+    return _execute_search_query(customer_id, query, "googleads_get_ad_groups")
+
+def googleads_create_ad_group(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    campaign_id = params.get("campaign_id")
+    ad_group_name = params.get("name")
+    if not all([customer_id, campaign_id, ad_group_name]):
+        return {"status": "error", "message": "Se requieren 'customer_id', 'campaign_id' y 'name'."}
+
+    gads_client = get_google_ads_client()
+    campaign_service = gads_client.get_service("CampaignService")
+    operation = gads_client.get_type("AdGroupOperation")
+    ad_group = operation.create
+    ad_group.name = ad_group_name
+    ad_group.status = gads_client.enums.AdGroupStatusEnum.ENABLED
+    ad_group.campaign = campaign_service.campaign_path(customer_id, campaign_id)
+    ad_group.type_ = gads_client.enums.AdGroupTypeEnum.SEARCH_STANDARD
+    ad_group.cpc_bid_micros = params.get("cpc_bid_micros", 1000000)
+    return _execute_mutate_operations(customer_id, [operation], "AdGroupService", "googleads_create_ad_group")
+    
+# --- ACCIONES DE ANUNCIOS (RESPONSIVE SEARCH AD) ---
+
+def googleads_get_ads(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    ad_group_id = params.get("ad_group_id")
+    if not all([customer_id, ad_group_id]):
+        return {"status": "error", "message": "Se requieren 'customer_id' y 'ad_group_id'."}
+    query = f"SELECT ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.status FROM ad_group_ad WHERE ad_group.id = {ad_group_id}"
+    return _execute_search_query(customer_id, query, "googleads_get_ads")
+
+def googleads_create_responsive_search_ad(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    ad_group_id = params.get("ad_group_id")
+    headlines = params.get("headlines")
+    descriptions = params.get("descriptions")
+    final_urls = params.get("final_urls")
+    if not all([customer_id, ad_group_id, headlines, descriptions, final_urls]):
+        return {"status": "error", "message": "Se requieren 'customer_id', 'ad_group_id', 'headlines', 'descriptions' y 'final_urls'."}
+
+    gads_client = get_google_ads_client()
+    ad_group_service = gads_client.get_service("AdGroupService")
+    operation = gads_client.get_type("AdGroupAdOperation")
+    ad_group_ad = operation.create
+    ad_group_ad.ad_group = ad_group_service.ad_group_path(customer_id, ad_group_id)
+    ad_group_ad.status = gads_client.enums.AdGroupAdStatusEnum.ENABLED
+    
+    ad = ad_group_ad.ad
+    ad.final_urls.extend(final_urls)
+    ad.responsive_search_ad.headlines.extend([gads_client.get_type("AdTextAsset", text=h) for h in headlines])
+    ad.responsive_search_ad.descriptions.extend([gads_client.get_type("AdTextAsset", text=d) for d in descriptions])
+    
+    return _execute_mutate_operations(customer_id, [operation], "AdGroupAdService", "googleads_create_responsive_search_ad")
+
+# --- ACCIONES DE PALABRAS CLAVE ---
+
+def googleads_get_keywords(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    ad_group_id = params.get("ad_group_id")
+    if not all([customer_id, ad_group_id]):
+        return {"status": "error", "message": "Se requieren 'customer_id' y 'ad_group_id'."}
+    query = f"SELECT ad_group_criterion.criterion_id, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type FROM ad_group_criterion WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group.id = {ad_group_id}"
+    return _execute_search_query(customer_id, query, "googleads_get_keywords")
+
+def googleads_add_keywords(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    ad_group_id = params.get("ad_group_id")
+    keywords = params.get("keywords")
+    if not all([customer_id, ad_group_id, keywords]):
+        return {"status": "error", "message": "Se requieren 'customer_id', 'ad_group_id' y 'keywords' (lista)."}
+
+    gads_client = get_google_ads_client()
+    ad_group_service = gads_client.get_service("AdGroupService")
+    ad_group_resource_name = ad_group_service.ad_group_path(customer_id, ad_group_id)
+
+    operations = []
+    for keyword_text in keywords:
+        operation = gads_client.get_type("AdGroupCriterionOperation")
+        criterion = operation.create
+        criterion.ad_group = ad_group_resource_name
+        criterion.status = gads_client.enums.AdGroupCriterionStatusEnum.ENABLED
+        criterion.keyword.text = keyword_text
+        criterion.keyword.match_type = gads_client.enums.KeywordMatchTypeEnum.BROAD
+        operations.append(operation)
+        
+    return _execute_mutate_operations(customer_id, operations, "AdGroupCriterionService", "googleads_add_keywords")
+
+# --- ACCIONES DE REPORTES ---
+
+def googleads_get_performance_report(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    customer_id = _get_customer_id(params)
+    if not customer_id: return {"status": "error", "message": "Se requieren 'customer_id'."}
+    date_range = params.get("date_range", "LAST_7_DAYS")
+    query = f"SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, metrics.cost_micros FROM campaign WHERE segments.date DURING {date_range} ORDER BY metrics.impressions DESC"
+    return _execute_search_query(customer_id, query, "googleads_get_performance_report")
