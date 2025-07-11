@@ -110,7 +110,7 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
     campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
     campaign.manual_cpc.enhanced_cpc_enabled = True
     
-    # *** LÍNEA CORREGIDA ***
+    # *** ESTA ES LA LÍNEA QUE HA SIDO CORREGIDA ***
     campaign.network_settings.target_Google Search = True
 
     campaign_budget_service = gads_client.get_service("CampaignBudgetService")
