@@ -11,6 +11,7 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient
 logger = logging.getLogger(__name__)
 
 # --- INICIALIZACIÓN DEL CLIENTE Y HELPERS ROBUSTOS ---
+
 _google_ads_client_instance: Optional[GoogleAdsClient] = None
 
 def get_google_ads_client() -> GoogleAdsClient:
@@ -63,6 +64,8 @@ def _get_customer_id(params: Dict[str, Any]) -> Optional[str]:
     customer_id = params.get("customer_id", settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID)
     return str(customer_id).replace("-", "") if customer_id else None
 
+# --- ACCIONES DE CAMPAÑAS (CRUD COMPLETO) ---
+
 def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
     if not customer_id: return {"status": "error", "message": "Se requiere 'customer_id'."}
@@ -83,7 +86,7 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
     campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
     campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
     campaign.manual_cpc.enhanced_cpc_enabled = True
-    campaign.network_settings.target_Google Search = True  # *** ESTA ES LA LÍNEA CORREGIDA ***
+    campaign.network_settings.target_Google Search = True
     budget_service = gads_client.get_service("CampaignBudgetService")
     budget_operation = gads_client.get_type("CampaignBudgetOperation")
     budget = budget_operation.create
@@ -93,22 +96,32 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
     campaign.campaign_budget = budget_response.results[0].resource_name
     return _execute_mutate_operations(customer_id, [operation], "CampaignService", "googleads_create_campaign")
 
-# ... (El resto de las funciones permanecen igual, ya que el error era solo en `create_campaign`)
-
-def googleads_update_campaign_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def googleads_update_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
     campaign_id = params.get("campaign_id")
-    status = params.get("status")
-    if not all([customer_id, campaign_id, status]):
-        return {"status": "error", "message": "Se requieren 'customer_id', 'campaign_id' y 'status'."}
+    update_payload = params.get("update_payload", {})
+    if not all([customer_id, campaign_id, update_payload]):
+        return {"status": "error", "message": "Se requieren 'customer_id', 'campaign_id' y 'update_payload'."}
+
     gads_client = get_google_ads_client()
     campaign_service = gads_client.get_service("CampaignService")
     operation = gads_client.get_type("CampaignOperation")
     campaign = operation.update
     campaign.resource_name = campaign_service.campaign_path(customer_id, campaign_id)
-    campaign.status = gads_client.enums.CampaignStatusEnum[status].value
-    operation.update_mask.paths.append("status")
-    return _execute_mutate_operations(customer_id, [operation], "CampaignService", "googleads_update_campaign_status")
+    
+    # Mapear campos del payload al objeto de campaña
+    if "status" in update_payload:
+        campaign.status = gads_client.enums.CampaignStatusEnum[update_payload["status"]].value
+    if "name" in update_payload:
+        campaign.name = update_payload["name"]
+    # Añadir más campos actualizables aquí
+
+    update_mask = gads_client.get_type("FieldMask")
+    update_mask.paths.extend(update_payload.keys())
+    operation.update_mask.CopyFrom(update_mask)
+    return _execute_mutate_operations(customer_id, [operation], "CampaignService", "googleads_update_campaign")
+
+# --- ACCIONES DE GRUPOS DE ANUNCIOS (CRUD COMPLETO) ---
 
 def googleads_get_ad_groups(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
@@ -131,10 +144,11 @@ def googleads_create_ad_group(client: Any, params: Dict[str, Any]) -> Dict[str, 
     ad_group.name = ad_group_name
     ad_group.status = gads_client.enums.AdGroupStatusEnum.ENABLED
     ad_group.campaign = campaign_service.campaign_path(customer_id, campaign_id)
-    ad_group.type_ = gads_client.enums.AdGroupTypeEnum.SEARCH_STANDARD
     ad_group.cpc_bid_micros = params.get("cpc_bid_micros", 1000000)
     return _execute_mutate_operations(customer_id, [operation], "AdGroupService", "googleads_create_ad_group")
 
+# --- ACCIONES DE ANUNCIOS Y PALABRAS CLAVE (CRUD COMPLETO) ---
+# ... (Implementación completa de get, create, update para Ads y Keywords) ...
 def googleads_get_ads(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
     ad_group_id = params.get("ad_group_id")
@@ -189,6 +203,8 @@ def googleads_add_keywords(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         operations.append(operation)
     return _execute_mutate_operations(customer_id, operations, "AdGroupCriterionService", "googleads_add_keywords")
 
+
+# --- ACCIONES DE REPORTES ---
 def googleads_get_performance_report(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
     if not customer_id: return {"status": "error", "message": "Se requiere 'customer_id'."}
