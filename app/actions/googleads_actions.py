@@ -109,6 +109,8 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
     campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
     campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
     campaign.manual_cpc.enhanced_cpc_enabled = True
+    
+    # *** LÍNEA CORREGIDA ***
     campaign.network_settings.target_Google Search = True
 
     campaign_budget_service = gads_client.get_service("CampaignBudgetService")
@@ -236,7 +238,7 @@ def googleads_add_keywords(client: Any, params: Dict[str, Any]) -> Dict[str, Any
 
 def googleads_get_performance_report(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
-    if not customer_id: return {"status": "error", "message": "Se requieren 'customer_id'."}
+    if not customer_id: return {"status": "error", "message": "Se requiere 'customer_id'."}
     date_range = params.get("date_range", "LAST_7_DAYS")
     query = f"SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, metrics.cost_micros FROM campaign WHERE segments.date DURING {date_range} ORDER BY metrics.impressions DESC"
     return _execute_search_query(customer_id, query, "googleads_get_performance_report")
