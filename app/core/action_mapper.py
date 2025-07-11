@@ -1,45 +1,17 @@
 # app/core/action_mapper.py
-# -*- coding: utf-8 -*-
-"""
-Mapeo central de todas las acciones soportadas por el asistente.
-Cada clave representa el string 'action' esperado en la solicitud JSON,
-y el valor es la referencia a la función Python que debe ejecutarla.
-"""
 import logging
-
-# Importar todos los módulos de acciones desde la carpeta 'app.actions'
-from app.actions import azuremgmt_actions
-from app.actions import bookings_actions
-from app.actions import calendario_actions
-from app.actions import correo_actions
-from app.actions import forms_actions
-from app.actions import github_actions 
-from app.actions import graph_actions 
-from app.actions import office_actions
-from app.actions import onedrive_actions
-from app.actions import openai_actions
-from app.actions import planner_actions
-from app.actions import power_automate_actions
-from app.actions import powerbi_actions
-from app.actions import sharepoint_actions
-from app.actions import stream_actions
-from app.actions import teams_actions
-from app.actions import todo_actions
-from app.actions import userprofile_actions
-from app.actions import users_actions
-from app.actions import vivainsights_actions
-from app.actions import googleads_actions 
-from app.actions import metaads_actions
-# Nuevas importaciones
-from app.actions import hubspot_actions
-from app.actions import linkedin_ads_actions
-from app.actions import notion_actions
-from app.actions import tiktok_ads_actions
-from app.actions import youtube_ads_actions # Aunque lo llamemos youtube_data_actions conceptualmente
+from app.actions import (
+    azuremgmt_actions, bookings_actions, calendario_actions, correo_actions,
+    forms_actions, github_actions, googleads_actions, graph_actions,
+    hubspot_actions, linkedin_ads_actions, metaads_actions, notion_actions,
+    office_actions, onedrive_actions, openai_actions, planner_actions,
+    power_automate_actions, powerbi_actions, sharepoint_actions,
+    stream_actions, teams_actions, tiktok_ads_actions, todo_actions,
+    userprofile_actions, users_actions, vivainsights_actions, youtube_ads_actions
+)
 
 logger = logging.getLogger(__name__)
 
-# --- El Gran Mapa de Acciones ---
 ACTION_MAP = {
 
     # --- Azure Management Actions ---
@@ -94,14 +66,57 @@ ACTION_MAP = {
     "github_list_repos": github_actions.github_list_repos,
     "github_create_issue": github_actions.github_create_issue,
     "github_get_repo_details": github_actions.github_get_repo_details,
+    
+    # --- Google Ads Actions ---
+    "googleads_get_campaigns": googleads_actions.googleads_get_campaigns,
+    "googleads_create_campaign": googleads_actions.googleads_create_campaign,
+    "googleads_update_campaign_status": googleads_actions.googleads_update_campaign_status,
+    "googleads_get_ad_groups": googleads_actions.googleads_get_ad_groups,
+    "googleads_create_ad_group": googleads_actions.googleads_create_ad_group,
+    "googleads_get_ads": googleads_actions.googleads_get_ads,
+    "googleads_create_responsive_search_ad": googleads_actions.googleads_create_responsive_search_ad,
+    "googleads_get_keywords": googleads_actions.googleads_get_keywords,
+    "googleads_add_keywords": googleads_actions.googleads_add_keywords,
+    "googleads_get_performance_report": googleads_actions.googleads_get_performance_report,
 
-    # --- Graph Actions (Genéricas y _compat para asistente) ---
-    "graph_generic_get": graph_actions.generic_get,                 
-    "graph_generic_post": graph_actions.generic_post,               
-    "graph_generic_get_compat": graph_actions.generic_get_compat,   
-    "graph_generic_post_compat": graph_actions.generic_post_compat, 
+    # --- Graph Actions (Genéricas) ---
+    "graph_generic_get": graph_actions.generic_get,
+    "graph_generic_post": graph_actions.generic_post,
+    "graph_generic_get_compat": graph_actions.generic_get_compat,
+    "graph_generic_post_compat": graph_actions.generic_post_compat,
 
-    # --- Office Actions (Word, Excel) ---
+    # --- HubSpot CRM Actions ---
+    "hubspot_get_contacts": hubspot_actions.hubspot_get_contacts,
+    "hubspot_create_contact": hubspot_actions.hubspot_create_contact,
+    "hubspot_update_contact": hubspot_actions.hubspot_update_contact,
+    "hubspot_delete_contact": hubspot_actions.hubspot_delete_contact,
+    "hubspot_get_deals": hubspot_actions.hubspot_get_deals,
+    "hubspot_create_deal": hubspot_actions.hubspot_create_deal,
+    "hubspot_update_deal": hubspot_actions.hubspot_update_deal,
+    "hubspot_delete_deal": hubspot_actions.hubspot_delete_deal,
+
+    # --- LinkedIn Ads Actions ---
+    "linkedin_find_ad_accounts": linkedin_ads_actions.linkedin_find_ad_accounts,
+    "linkedin_get_campaigns": linkedin_ads_actions.linkedin_get_campaigns,
+    "linkedin_get_analytics": linkedin_ads_actions.linkedin_get_analytics,
+
+    # --- Meta Ads Actions ---
+    "metaads_list_campaigns": metaads_actions.metaads_list_campaigns,
+    "metaads_create_campaign": metaads_actions.metaads_create_campaign,
+    "metaads_update_campaign": metaads_actions.metaads_update_campaign,
+    "metaads_delete_campaign": metaads_actions.metaads_delete_campaign,
+    "metaads_get_insights": metaads_actions.metaads_get_insights,
+
+    # --- Notion Actions ---
+    "notion_search_general": notion_actions.notion_search_general,
+    "notion_get_database": notion_actions.notion_get_database,
+    "notion_query_database": notion_actions.notion_query_database,
+    "notion_retrieve_page": notion_actions.notion_retrieve_page,
+    "notion_create_page": notion_actions.notion_create_page,
+    "notion_update_page": notion_actions.notion_update_page,
+    "notion_delete_block": notion_actions.notion_delete_block,
+
+    # --- Office Actions ---
     "office_crear_documento_word": office_actions.crear_documento_word,
     "office_reemplazar_contenido_word": office_actions.reemplazar_contenido_word,
     "office_obtener_documento_word_binario": office_actions.obtener_documento_word_binario,
@@ -141,11 +156,11 @@ ACTION_MAP = {
     "planner_list_buckets": planner_actions.list_buckets,
     "planner_create_bucket": planner_actions.create_bucket,
 
-    # --- Power Automate Actions (Logic Apps) ---
-    "pa_listar_flows": power_automate_actions.listar_flows,
-    "pa_obtener_flow": power_automate_actions.obtener_flow,
-    "pa_ejecutar_flow": power_automate_actions.ejecutar_flow,
-    "pa_obtener_estado_ejecucion_flow": power_automate_actions.obtener_estado_ejecucion_flow,
+    # --- Power Automate Actions ---
+    "pa_listar_flows": power_automate_actions.pa_listar_flows,
+    "pa_obtener_flow": power_automate_actions.pa_obtener_flow,
+    "pa_ejecutar_flow": power_automate_actions.pa_ejecutar_flow,
+    "pa_obtener_estado_ejecucion_flow": power_automate_actions.pa_obtener_estado_ejecucion_flow,
 
     # --- Power BI Actions ---
     "powerbi_list_reports": powerbi_actions.list_reports,
@@ -214,6 +229,11 @@ ACTION_MAP = {
     "teams_get_meeting_details": teams_actions.get_meeting_details,
     "teams_list_members": teams_actions.list_members,
 
+    # --- TikTok Ads Actions (REFACTORIZADO) ---
+    "tiktok_get_ad_accounts": tiktok_ads_actions.tiktok_get_ad_accounts,
+    "tiktok_get_campaigns": tiktok_ads_actions.tiktok_get_campaigns,
+    "tiktok_get_analytics_report": tiktok_ads_actions.tiktok_get_analytics_report,
+
     # --- ToDo Actions ---
     "todo_list_task_lists": todo_actions.list_task_lists,
     "todo_create_task_list": todo_actions.create_task_list,
@@ -224,7 +244,7 @@ ACTION_MAP = {
     "todo_delete_task": todo_actions.delete_task,
 
     # --- User Profile Actions ---
-    "profile_get_my_profile": userprofile_actions.profile_get_my_profile, # Considerar renombrar la clave si se desea
+    "profile_get_my_profile": userprofile_actions.profile_get_my_profile,
     "profile_get_my_manager": userprofile_actions.profile_get_my_manager,
     "profile_get_my_direct_reports": userprofile_actions.profile_get_my_direct_reports,
     "profile_get_my_photo": userprofile_actions.profile_get_my_photo,
@@ -247,63 +267,11 @@ ACTION_MAP = {
     "viva_get_my_analytics": vivainsights_actions.get_my_analytics,
     "viva_get_focus_plan": vivainsights_actions.get_focus_plan,
     
-    # --- Google Ads Actions ---
-    "googleads_search_stream": googleads_actions.googleads_search_stream,
-    "googleads_mutate_campaigns": googleads_actions.googleads_mutate_campaigns,
-    "googleads_mutate_adgroups": googleads_actions.googleads_mutate_adgroups,
-    "googleads_mutate_ads": googleads_actions.googleads_mutate_ads, 
-    "googleads_mutate_keywords": googleads_actions.googleads_mutate_keywords,
-
-    # --- Meta Ads Actions ---
-    "metaads_list_campaigns": metaads_actions.metaads_list_campaigns,
-    "metaads_create_campaign": metaads_actions.metaads_create_campaign,
-    "metaads_update_campaign": metaads_actions.metaads_update_campaign,
-    "metaads_delete_campaign": metaads_actions.metaads_delete_campaign,
-    "metaads_get_insights": metaads_actions.metaads_get_insights,
-
-    # --- HubSpot CRM Actions ---
-    "hubspot_get_contacts": hubspot_actions.hubspot_get_contacts,
-    "hubspot_create_contact": hubspot_actions.hubspot_create_contact,
-    "hubspot_update_contact": hubspot_actions.hubspot_update_contact,
-    "hubspot_delete_contact": hubspot_actions.hubspot_delete_contact,
-    "hubspot_get_deals": hubspot_actions.hubspot_get_deals,
-    "hubspot_create_deal": hubspot_actions.hubspot_create_deal,
-    "hubspot_update_deal": hubspot_actions.hubspot_update_deal,
-    "hubspot_delete_deal": hubspot_actions.hubspot_delete_deal,
-
-    # --- LinkedIn Ads Actions ---
-    "linkedin_get_ad_accounts": linkedin_ads_actions.linkedin_get_ad_accounts,
-    "linkedin_list_campaigns": linkedin_ads_actions.linkedin_list_campaigns,
-    "linkedin_get_basic_report": linkedin_ads_actions.linkedin_get_basic_report,
-    # "linkedin_create_campaign": linkedin_ads_actions.linkedin_create_campaign, # Si se implementa
-
-    # --- Notion Actions ---
-    "notion_search_general": notion_actions.notion_search_general, # Renombrada desde list_databases
-    "notion_get_database": notion_actions.notion_get_database,     # Nueva para obtener DB por ID
-    "notion_query_database": notion_actions.notion_query_database,
-    "notion_retrieve_page": notion_actions.notion_retrieve_page,
-    "notion_create_page": notion_actions.notion_create_page,
-    "notion_update_page": notion_actions.notion_update_page,
-    "notion_delete_block": notion_actions.notion_delete_block,
-    # "notion_search": notion_actions.notion_search, # Esta era la misma que notion_search_general, se puede omitir o apuntar a la misma.
-                                                    # Por claridad, he mantenido notion_search_general. Si necesitas la clave "notion_search", puedes añadirla:
-    # "notion_search": notion_actions.notion_search_general,
-
-
-    # --- TikTok Ads Actions ---
-    "tiktok_get_ad_accounts": tiktok_ads_actions.tiktok_get_ad_accounts,
-    "tiktok_list_campaigns": tiktok_ads_actions.tiktok_list_campaigns,
-    "tiktok_create_campaign": tiktok_ads_actions.tiktok_create_campaign,
-    "tiktok_update_campaign": tiktok_ads_actions.tiktok_update_campaign,
-    "tiktok_get_basic_report": tiktok_ads_actions.tiktok_get_basic_report,
-    
     # --- YouTube Data API Actions ---
-    "youtube_get_channel_stats": youtube_ads_actions.youtube_get_channel_stats, # El módulo se llama youtube_ads_actions.py
-    # "Youtube_videos": youtube_ads_actions.Youtube_videos, # Si se implementa
-    # "youtube_get_video_details": youtube_ads_actions.youtube_get_video_details, # Si se implementa
+    "youtube_data_get_channel_details": youtube_ads_actions.youtube_data_get_channel_details,
+    "youtube_data_search_videos": youtube_ads_actions.youtube_data_search_videos,
+    "youtube_data_get_video_details": youtube_ads_actions.youtube_data_get_video_details,
 }
 
 num_actions = len(ACTION_MAP)
-logger.info(f"ACTION_MAP (app.core.action_mapper) cargado y actualizado. Número total de acciones definidas: {num_actions}")
-
-# --- FIN DEL MÓDULO core/action_mapper.py ---
+logger.info(f"ACTION_MAP cargado. Total de {num_actions} acciones mapeadas y listas para usar.")

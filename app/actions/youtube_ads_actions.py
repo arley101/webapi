@@ -1,135 +1,155 @@
 # app/actions/youtube_ads_actions.py
-# Renombrado conceptualmente a youtube_data_actions.py si solo se usa Data API.
-# Por ahora, mantenemos el nombre del archivo original.
-
 import logging
 import requests
 import json
 from typing import Dict, Any, Optional
 
-# Importar la configuración (aunque no se use directamente para el token en esta versión, es buena práctica)
-from app.core.config import settings 
+from app.core.config import settings
 from app.shared.helpers.http_client import AuthenticatedHttpClient
-# AuthenticatedHttpClient no se usa aquí porque YouTube Data API usa su propio Bearer token
-# o API Key, no DefaultAzureCredential.
-# from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
 
 YOUTUBE_API_V3_BASE_URL = "https://www.googleapis.com/youtube/v3"
 
-def _get_youtube_api_headers(access_token: Optional[str] = None, api_key: Optional[str] = None) -> Dict[str, str]:
-    """
-    Prepara los headers para las solicitudes a la YouTube Data API.
-    Prioriza el access_token si se proporciona.
-    """
+# --- HELPERS INTERNOS ROBUSTOS ---
+
+def _get_youtube_auth_params(params: Dict[str, Any]) -> Dict[str, str]:
+    """Prepara los parámetros de autenticación para la API de YouTube."""
+    api_key = params.get("api_key", settings.YOUTUBE_API_KEY)
+    access_token = params.get("access_token", settings.YOUTUBE_ACCESS_TOKEN)
+    
+    if api_key:
+        return {"key": api_key}
+    if access_token:
+        # El token de acceso se pasa en el header, no como parámetro de URL
+        return {}
+    
+    raise ValueError("Se requiere 'api_key' o 'access_token' para las acciones de YouTube.")
+
+def _get_youtube_headers(params: Dict[str, Any]) -> Dict[str, str]:
+    """Prepara los headers, incluyendo el token de acceso si se proporciona."""
     headers = {"Accept": "application/json"}
+    access_token = params.get("access_token", settings.YOUTUBE_ACCESS_TOKEN)
     if access_token:
         headers["Authorization"] = f"Bearer {access_token}"
-    elif api_key:
-        # El API Key se pasa como parámetro de URL 'key', no en header generalmente para YouTube Data API
-        # Pero si se necesitara en header para algún caso, aquí se manejaría.
-        # Por ahora, el API Key se añadirá a los params de la solicitud GET.
-        pass
-    else:
-        raise ValueError("Se requiere un 'access_token' o un 'api_key' para las solicitudes a YouTube Data API.")
     return headers
 
-def _handle_youtube_api_error(
-    e: Exception,
-    action_name: str,
-    params_for_log: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """Helper para manejar errores de YouTube Data API."""
-    log_message = f"Error en YouTube Data API Action '{action_name}'"
-    if params_for_log:
-        # Omitir campos sensibles si es necesario
-        safe_params = {k:v for k,v in params_for_log.items() if k not in ['access_token', 'api_key']}
-        log_message += f" con params: {safe_params}"
+def _handle_youtube_api_error(e: Exception, action_name: str) -> Dict[str, Any]:
+    """Maneja errores de la API de YouTube de forma estandarizada."""
+    logger.error(f"Error en YouTube Action '{action_name}': {type(e).__name__} - {e}", exc_info=True)
     
-    logger.error(f"{log_message}: {type(e).__name__} - {str(e)}", exc_info=True)
-    
-    details_str = str(e)
-    status_code_int = 500
+    status_code = 500
+    details = str(e)
     api_error_info = None
 
     if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
-        status_code_int = e.response.status_code
+        status_code = e.response.status_code
         try:
             error_data = e.response.json()
-            # La estructura de error de Google APIs suele ser: {"error": {"code": XXX, "message": "...", "errors": [...]}}
-            api_error_info = error_data.get("error", error_data) 
-            details_str = api_error_info.get("message", e.response.text)
+            api_error_info = error_data.get("error", error_data)
+            details = api_error_info.get("message", e.response.text)
         except json.JSONDecodeError:
-            details_str = e.response.text[:500] if e.response.text else "No response body"
+            details = e.response.text
             
     return {
-        "status": "error",
-        "action": action_name,
-        "message": f"Error interactuando con YouTube Data API: {details_str}",
-        "details": {
-            "raw_exception_type": type(e).__name__,
-            "raw_exception_message": str(e),
-            "youtube_api_error": api_error_info # Contiene la estructura del error de la API de Google
-        },
-        "http_status": status_code_int,
+        "status": "error", "action": action_name,
+        "message": f"Error interactuando con YouTube Data API: {details}",
+        "details": {"youtube_api_error": api_error_info, "raw_response": details},
+        "http_status": status_code
     }
 
-# Acción para obtener estadísticas de un canal de YouTube
-# Nota: El parámetro 'client: AuthenticatedHttpClient' no se usa aquí
-def youtube_get_channel_stats(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    action_name = "youtube_get_channel_stats"
-    logger.info(f"Ejecutando {action_name} con params (token/key omitidos del log): %s", {k:v for k,v in params.items() if k not in ['access_token', 'api_key']})
+# --- ACCIONES PRINCIPALES (YOUTUBE DATA API) ---
 
-    access_token: Optional[str] = params.get("access_token")
-    api_key: Optional[str] = params.get("api_key") # Alternativa si solo se necesitan datos públicos
-    channel_id: Optional[str] = params.get("channel_id")
-    part: str = params.get("part", "snippet,statistics,brandingSettings,contentDetails") # Campos a solicitar
+def youtube_data_get_channel_details(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene detalles y estadísticas de uno o más canales por su ID."""
+    action_name = "youtube_data_get_channel_details"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
 
-    if not channel_id:
-        return {"status": "error", "action": action_name, "message": "'channel_id' es requerido.", "http_status": 400}
-    if not access_token and not api_key:
-        return {"status": "error", "action": action_name, "message": "Se requiere 'access_token' o 'api_key' para esta acción.", "http_status": 401}
+    channel_ids = params.get("channel_ids") # Puede ser una lista de IDs o un solo ID string
+    if not channel_ids:
+        return {"status": "error", "message": "'channel_ids' (lista o string) es requerido.", "http_status": 400}
+    
+    # Asegurar que sea un string separado por comas
+    id_string = ",".join(channel_ids) if isinstance(channel_ids, list) else channel_ids
 
     try:
-        headers = _get_youtube_api_headers(access_token=access_token, api_key=api_key)
+        auth_params = _get_youtube_auth_params(params)
+        headers = _get_youtube_headers(params)
         
-        url_params: Dict[str, Any] = {
-            "part": part,
-            "id": channel_id
+        url_params = {
+            "part": params.get("part", "snippet,statistics,contentDetails"),
+            "id": id_string,
+            **auth_params
         }
-        if api_key and not access_token: # Si se usa API Key, se añade como parámetro de URL
-            url_params["key"] = api_key
-            
+        
         url = f"{YOUTUBE_API_V3_BASE_URL}/channels"
         
-        logger.info(f"Solicitando estadísticas de canal de YouTube ID '{channel_id}'. Part: '{part}'")
         response = requests.get(url, headers=headers, params=url_params, timeout=settings.DEFAULT_API_TIMEOUT)
-        response.raise_for_status() # Lanza HTTPError para 4xx/5xx
-        
-        response_data = response.json()
-        # La respuesta para canales suele ser una lista de items, incluso si solo se pide un ID.
-        if response_data.get("items") and isinstance(response_data["items"], list) and len(response_data["items"]) > 0:
-            channel_data = response_data["items"][0] # Tomar el primer (y único esperado) item
-            return {"status": "success", "action": action_name, "data": channel_data, "http_status": response.status_code}
-        else:
-            logger.warning(f"No se encontraron 'items' en la respuesta de YouTube para channel_id '{channel_id}'. Respuesta: {response_data}")
-            return {"status": "error", "action": action_name, "message": f"No se encontró información para el canal ID '{channel_id}'.", "details": response_data, "http_status": 404}
-
-    except ValueError as ve: # Por ejemplo, de _get_youtube_api_headers
-        return {"status": "error", "action": action_name, "message": str(ve), "http_status": 400}
+        response.raise_for_status()
+        return {"status": "success", "data": response.json()}
     except Exception as e:
-        return _handle_youtube_api_error(e, action_name, params)
+        return _handle_youtube_api_error(e, action_name)
 
-# --- Aquí podrías añadir más funciones para YouTube Data API ---
-# Ejemplos:
-# def Youtube_videos(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
-#     # params: q (query), maxResults, order, videoCategoryId, etc.
-#     pass
+def youtube_data_search_videos(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Busca videos basados en una consulta de texto y otros filtros."""
+    action_name = "youtube_data_search_videos"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
 
-# def youtube_get_video_details(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
-#     # params: video_id, part (snippet,statistics,contentDetails,player)
-#     pass
+    query_text = params.get("query")
+    if not query_text:
+        return {"status": "error", "message": "'query' de búsqueda es requerido.", "http_status": 400}
+    
+    try:
+        auth_params = _get_youtube_auth_params(params)
+        headers = _get_youtube_headers(params)
 
-# --- FIN DEL MÓDULO actions/youtube_data_actions.py (nombre conceptual) ---
+        url_params = {
+            "part": "snippet",
+            "q": query_text,
+            "type": "video",
+            "maxResults": min(int(params.get("max_results", 25)), 50),
+            **auth_params
+        }
+        
+        # Añadir filtros opcionales
+        if params.get("channel_id"):
+            url_params["channelId"] = params.get("channel_id")
+        if params.get("order"): # relevance, date, rating, title, viewCount
+            url_params["order"] = params.get("order")
+
+        url = f"{YOUTUBE_API_V3_BASE_URL}/search"
+        
+        response = requests.get(url, headers=headers, params=url_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        return {"status": "success", "data": response.json()}
+    except Exception as e:
+        return _handle_youtube_api_error(e, action_name)
+
+def youtube_data_get_video_details(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene detalles y estadísticas de uno o más videos por su ID."""
+    action_name = "youtube_data_get_video_details"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+
+    video_ids = params.get("video_ids")
+    if not video_ids:
+        return {"status": "error", "message": "'video_ids' (lista o string) es requerido.", "http_status": 400}
+        
+    id_string = ",".join(video_ids) if isinstance(video_ids, list) else video_ids
+
+    try:
+        auth_params = _get_youtube_auth_params(params)
+        headers = _get_youtube_headers(params)
+
+        url_params = {
+            "part": params.get("part", "snippet,statistics,contentDetails,player"),
+            "id": id_string,
+            **auth_params
+        }
+        
+        url = f"{YOUTUBE_API_V3_BASE_URL}/videos"
+        
+        response = requests.get(url, headers=headers, params=url_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        return {"status": "success", "data": response.json()}
+    except Exception as e:
+        return _handle_youtube_api_error(e, action_name)
