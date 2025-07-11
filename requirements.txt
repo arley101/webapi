@@ -1,7 +1,7 @@
 # FastAPI y servidor ASGI
 fastapi==0.111.1
 uvicorn[standard]==0.30.3
-gunicorn==22.0.0
+gunicorn==23.0.0
 
 # Pydantic y configuración
 pydantic==2.11.4
@@ -23,12 +23,12 @@ protobuf>=3.19.0 # Google Ads usa protobuf extensivamente
 facebook-business>=19.0.0 # Permite actualizaciones
 
 # HTTP y utilidades generales
-requests==2.32.3
+requests==2.32.4
 PyYAML>=5.4 # A menudo útil para configuraciones o requerida por otros SDKs
 
 # Dependencias de criptografía y MSAL (a menudo requeridas por azure-identity u otros flujos de auth)
 # Estas versiones son las que tenías, si causan problemas, se pueden flexibilizar o actualizar.
-cryptography==43.0.3
+cryptography==44.0.1
 cffi>=1.14
 pycparser>=2.22
 msal>=1.24.0
