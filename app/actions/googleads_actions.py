@@ -85,7 +85,7 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
     campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
     campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
     campaign.manual_cpc.enhanced_cpc_enabled = True
-    campaign.network_settings.target_Google Search = True
+    campaign.network_settings.target_google_search = True
     budget_service = gads_client.get_service("CampaignBudgetService")
     budget_operation = gads_client.get_type("CampaignBudgetOperation")
     budget = budget_operation.create

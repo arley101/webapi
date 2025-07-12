@@ -4,7 +4,6 @@ import requests
 import json 
 from azure.identity import DefaultAzureCredential, CredentialUnavailableError
 from azure.core.exceptions import ClientAuthenticationError
-
 from typing import List, Optional, Any, Dict, Union
 
 from app.core.config import settings
@@ -23,7 +22,7 @@ class AuthenticatedHttpClient:
         
         self.default_graph_scope: List[str] = settings.GRAPH_API_DEFAULT_SCOPE
         if not self.default_graph_scope or not isinstance(self.default_graph_scope, list) or not self.default_graph_scope[0]:
-            logger.warning("GRAPH_API_DEFAULT_SCOPE no está configurado correctamente en settings o está vacío.")
+            logger.warning("GRAPH_API_DEFAULT_SCOPE no está configurado correctamente en settings o está vacío. Esto podría causar problemas para el método get().")
 
         self.session.headers.update({
             'User-Agent': f'{settings.APP_NAME}/{settings.APP_VERSION}',
@@ -31,10 +30,10 @@ class AuthenticatedHttpClient:
         })
         logger.info(f"AuthenticatedHttpClient inicializado. User-Agent: {settings.APP_NAME}/{settings.APP_VERSION}, Default Timeout: {self.default_timeout}s, Default Graph Scope: {self.default_graph_scope}")
 
-    def _get_access_token(self, scope: List[str]) -> str:
+    def _get_access_token(self, scope: List[str]) -> Optional[str]:
         if not scope or not isinstance(scope, list) or not all(isinstance(s, str) for s in scope):
             logger.error("Se requiere un scope válido (lista de strings no vacía) para obtener el token de acceso. Scope recibido: %s", scope)
-            raise ValueError("Scope inválido para obtener token de acceso.")
+            return None
         try:
             logger.debug(f"Solicitando token para scope: {scope}")
             token_result = self.credential.get_token(*scope)
@@ -42,28 +41,30 @@ class AuthenticatedHttpClient:
             return token_result.token
         except (CredentialUnavailableError, ClientAuthenticationError) as e:
             logger.error(f"Error de credencial de Azure al obtener token para {scope}: {e}.")
-            raise ConnectionRefusedError(f"No se pudo obtener el token para el scope {scope}. Verifique la configuración de la identidad administrada.") from e
+            return None
         except Exception as e: 
             logger.exception(f"Error inesperado al obtener token para {scope}: {e}") 
-            raise ConnectionError(f"Error inesperado al obtener token: {e}") from e
+            return None
 
     def request(self, method: str, url: str, scope: List[str], **kwargs: Any) -> requests.Response:
         log_context = f"Request: {method} {url.split('?')[0]}"
         logger.debug(f"{log_context} - Iniciando solicitud con scope: {scope}")
 
         access_token = self._get_access_token(scope)
-        
+        if not access_token:
+            logger.error(f"{log_context} - Fallo al obtener token de acceso para scope {scope}.")
+            raise ValueError(f"No se pudo obtener el token de acceso para el scope {scope}. Verifique la configuración de credenciales y los logs.")
+
         request_headers = kwargs.pop('headers', {}).copy()
         request_headers['Authorization'] = f'Bearer {access_token}'
 
-        if 'json' in kwargs or 'json_data' in kwargs:
+        if 'json' in kwargs or ('data' in kwargs and isinstance(kwargs['data'], (dict, list))):
             if 'Content-Type' not in request_headers:
                 request_headers['Content-Type'] = 'application/json'
         
-        if 'json_data' in kwargs and 'json' not in kwargs:
-             kwargs['json'] = kwargs.pop('json_data')
-
         timeout = kwargs.pop('timeout', self.default_timeout)
+        if 'json_data' in kwargs and 'json' not in kwargs :
+             kwargs['json'] = kwargs.pop('json_data')
 
         logger.debug(f"{log_context} - Headers: { {k: (v if k != 'Authorization' else '[TOKEN OMITIDO]') for k,v in request_headers.items()} }, Timeout: {timeout}s")
         
@@ -95,29 +96,44 @@ class AuthenticatedHttpClient:
             logger.exception(f"{log_context} - Error inesperado durante la solicitud: {e}")
             raise
 
-    def get(self, url: str, scope: Optional[List[str]] = None, headers: Optional[Dict[str, str]] = None, params: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Any:
-        scope_to_use = scope or self.default_graph_scope
-        if not scope_to_use:
+    def get(self, url: str, scope: Optional[List[str]] = None, headers: Optional[Dict[str, str]] = None, params: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Union[Dict[str, Any], str, bytes]:
+        """
+        Realiza una solicitud GET utilizando la sesión y el token de autenticación.
+        Devuelve el objeto de respuesta completo si la solicitud es exitosa, 
+        o el contenido binario si es un stream.
+        """
+        current_scope_to_use = scope or self.default_graph_scope
+        if not current_scope_to_use:
             raise ValueError("No se pudo determinar el scope para la solicitud GET.")
-        
-        response = self.request('GET', url, scope_to_use, headers=headers, params=params, **kwargs)
+
+        response = self.request('GET', url, current_scope_to_use, headers=headers, params=params, **kwargs)
         
         if kwargs.get('stream'):
             return response.content
-        
-        # *** ESTE ES EL COMPORTAMIENTO CORREGIDO Y RESTAURADO ***
-        # El código que llama a esta función es ahora responsable de llamar a .json()
-        # Esto restaura la compatibilidad con todo tu código original.
-        return response
+
+        # *** ESTA ES LA LÓGICA RESTAURADA Y CORRECTA ***
+        # Ahora, son las funciones de acción las responsables de llamar a .json()
+        # lo que hace que este cliente sea compatible con todo tu código.
+        try:
+            return response.json()
+        except requests.exceptions.JSONDecodeError:
+            logger.warning(f"Respuesta GET a {url} no es JSON. Devolviendo texto crudo.")
+            return response.text
 
     def post(self, url: str, scope: List[str], **kwargs: Any) -> requests.Response:
+        if 'json_data' in kwargs and 'json' not in kwargs:
+            kwargs['json'] = kwargs.pop('json_data')
         return self.request('POST', url, scope, **kwargs)
 
     def put(self, url: str, scope: List[str], **kwargs: Any) -> requests.Response:
+        if 'json_data' in kwargs and 'json' not in kwargs:
+            kwargs['json'] = kwargs.pop('json_data')
         return self.request('PUT', url, scope, **kwargs)
 
     def delete(self, url: str, scope: List[str], **kwargs: Any) -> requests.Response: 
         return self.request('DELETE', url, scope, **kwargs)
 
     def patch(self, url: str, scope: List[str], **kwargs: Any) -> requests.Response:
+        if 'json_data' in kwargs and 'json' not in kwargs:
+            kwargs['json'] = kwargs.pop('json_data')
         return self.request('PATCH', url, scope, **kwargs)
