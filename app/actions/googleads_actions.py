@@ -11,14 +11,12 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient
 logger = logging.getLogger(__name__)
 
 # --- INICIALIZACIÓN DEL CLIENTE Y HELPERS ROBUSTOS ---
-
 _google_ads_client_instance: Optional[GoogleAdsClient] = None
 
 def get_google_ads_client() -> GoogleAdsClient:
     global _google_ads_client_instance
     if _google_ads_client_instance:
         return _google_ads_client_instance
-
     config = {
         "developer_token": settings.GOOGLE_ADS.DEVELOPER_TOKEN,
         "client_id": settings.GOOGLE_ADS.CLIENT_ID,
@@ -87,7 +85,7 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
     campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
     campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
     campaign.manual_cpc.enhanced_cpc_enabled = True
-    campaign.network_settings.target_google_search = True
+    campaign.network_settings.target_Google Search = True
     budget_service = gads_client.get_service("CampaignBudgetService")
     budget_operation = gads_client.get_type("CampaignBudgetOperation")
     budget = budget_operation.create
