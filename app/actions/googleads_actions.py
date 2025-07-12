@@ -11,12 +11,14 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient
 logger = logging.getLogger(__name__)
 
 # --- INICIALIZACIÓN DEL CLIENTE Y HELPERS ROBUSTOS ---
+
 _google_ads_client_instance: Optional[GoogleAdsClient] = None
 
 def get_google_ads_client() -> GoogleAdsClient:
     global _google_ads_client_instance
     if _google_ads_client_instance:
         return _google_ads_client_instance
+
     config = {
         "developer_token": settings.GOOGLE_ADS.DEVELOPER_TOKEN,
         "client_id": settings.GOOGLE_ADS.CLIENT_ID,
@@ -63,7 +65,7 @@ def _get_customer_id(params: Dict[str, Any]) -> Optional[str]:
     customer_id = params.get("customer_id", settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID)
     return str(customer_id).replace("-", "") if customer_id else None
 
-# --- ACCIONES COMPLETAS ---
+# --- ACCIONES COMPLETAS Y FUNCIONALES ---
 
 def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
