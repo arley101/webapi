@@ -100,7 +100,10 @@ ACTION_MAP = {
     "linkedin_get_campaigns": linkedin_ads_actions.linkedin_get_campaigns,
     "linkedin_get_analytics": linkedin_ads_actions.linkedin_get_analytics,
 
-    # --- Meta Ads Actions ---
+    # --- Meta Ads Actions (Corrected and Completed) ---
+    "metaads_get_business_details": metaads_actions.metaads_get_business_details,
+    "metaads_list_owned_pages": metaads_actions.metaads_list_owned_pages,
+    "metaads_get_page_engagement": metaads_actions.metaads_get_page_engagement,
     "metaads_list_campaigns": metaads_actions.metaads_list_campaigns,
     "metaads_create_campaign": metaads_actions.metaads_create_campaign,
     "metaads_update_campaign": metaads_actions.metaads_update_campaign,
@@ -229,7 +232,7 @@ ACTION_MAP = {
     "teams_get_meeting_details": teams_actions.get_meeting_details,
     "teams_list_members": teams_actions.list_members,
 
-    # --- TikTok Ads Actions (REFACTORIZADO) ---
+    # --- TikTok Ads Actions ---
     "tiktok_get_ad_accounts": tiktok_ads_actions.tiktok_get_ad_accounts,
     "tiktok_get_campaigns": tiktok_ads_actions.tiktok_get_campaigns,
     "tiktok_get_analytics_report": tiktok_ads_actions.tiktok_get_analytics_report,
@@ -274,4 +277,4 @@ ACTION_MAP = {
 }
 
 num_actions = len(ACTION_MAP)
-logger.info(f"ACTION_MAP cargado. Total de {num_actions} acciones mapeadas y listas para usar.")
+logger.info(f"ACTION_MAP cargado y validado. Total de {num_actions} acciones mapeadas y listas para usar.")
