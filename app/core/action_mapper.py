@@ -100,7 +100,7 @@ ACTION_MAP = {
     "linkedin_get_campaigns": linkedin_ads_actions.linkedin_get_campaigns,
     "linkedin_get_analytics": linkedin_ads_actions.linkedin_get_analytics,
 
-    # --- Meta Ads Actions (Corrected and Completed) ---
+    # --- Meta Ads Actions (RESTORED, CORRECTED AND COMPLETED) ---
     "metaads_get_business_details": metaads_actions.metaads_get_business_details,
     "metaads_list_owned_pages": metaads_actions.metaads_list_owned_pages,
     "metaads_get_page_engagement": metaads_actions.metaads_get_page_engagement,
