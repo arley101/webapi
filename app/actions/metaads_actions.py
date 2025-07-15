@@ -52,170 +52,143 @@ def _handle_meta_ads_api_error(e: Exception, action_name: str) -> Dict[str, Any]
     logger.error(f"Error in Meta Ads Action '{action_name}': {type(e).__name__} - {e}", exc_info=True)
     status_code, error_message = 500, str(e)
     details = {}
+    user_title = None
+    user_message = None
 
     if isinstance(e, FacebookRequestError):
         status_code = e.http_status() or 500
         error_message = e.api_error_message() or "Unknown Facebook API Error"
+        
+        # Robust check for optional error attributes
+        if hasattr(e, 'api_error_user_title'):
+            user_title = e.api_error_user_title()
+        if hasattr(e, 'api_error_user_message'):
+            user_message = e.api_error_user_message()
+
         details = {
             "api_error_code": e.api_error_code(),
             "api_error_subcode": e.api_error_subcode(),
             "api_error_message": e.api_error_message(),
-            "api_error_user_title": e.api_error_user_title(),
-            "api_error_user_msg": e.api_error_user_message(),
+            "api_error_user_title": user_title,
+            "api_error_user_msg": user_message,
             "raw_response": e.get_response(as_dict=True)
         }
-    return {"status": "error", "action": action_name, "message": error_message, "http_status": status_code, "details": details}
+    return {"status": "error", "action": action_name, "message": user_message or error_message, "http_status": status_code, "details": details}
 
 # --- ACTIONS FOR PERMISSION DEMONSTRATION ---
 
 def metaads_get_business_details(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Demonstrates 'business_management' by fetching business details."""
     action_name = "metaads_get_business_details"
-    logger.info(f"Executing {action_name} for business_id: {params.get('business_id')}")
     try:
         _get_meta_ads_api_client(params)
         business_id = params.get("business_id")
-        if not business_id:
-            raise ValueError("'business_id' is required.")
-
+        if not business_id: raise ValueError("'business_id' is required.")
         business = Business(business_id)
-        fields_to_get = params.get("fields", ["id", "name", "verification_status"])
-        business_info = business.api_get(fields=fields_to_get)
-        
+        business_info = business.api_get(fields=params.get("fields", ["id", "name", "verification_status"]))
         return {"status": "success", "data": business_info.export_all_data()}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
 def metaads_list_owned_pages(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Demonstrates 'pages_show_list' by listing pages owned by a business to retrieve a Page Token."""
     action_name = "metaads_list_owned_pages"
-    logger.info(f"Executing {action_name} for business_id: {params.get('business_id')}")
     try:
         _get_meta_ads_api_client(params)
         business_id = params.get("business_id")
-        if not business_id:
-            raise ValueError("'business_id' is required.")
-        
+        if not business_id: raise ValueError("'business_id' is required.")
         business = Business(business_id)
-        fields_to_get = params.get("fields", ["id", "name", "access_token"]) # access_token is crucial here
-        owned_pages = business.get_owned_pages(fields=fields_to_get)
-        
-        pages_list = [page.export_all_data() for page in owned_pages]
-        return {"status": "success", "data": pages_list}
+        owned_pages = business.get_owned_pages(fields=params.get("fields", ["id", "name", "access_token"]))
+        return {"status": "success", "data": [page.export_all_data() for page in owned_pages]}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
 def metaads_get_page_engagement(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Demonstrates 'pages_read_engagement' using a specific Page Access Token."""
     action_name = "metaads_get_page_engagement"
-    logger.info(f"Executing {action_name} for page_id: {params.get('page_id')}")
-    
     original_api_instance = FacebookAdsApi.get_default_api()
     try:
         page_id = params.get("page_id")
         page_access_token = params.get("page_access_token")
-        if not page_id or not page_access_token:
-            raise ValueError("'page_id' and 'page_access_token' are required.")
-
-        temp_api_instance = FacebookAdsApi.init(access_token=page_access_token, api_version="v19.0")
+        if not page_id or not page_access_token: raise ValueError("'page_id' and 'page_access_token' are required.")
         
-        # ***** CORRECCIÓN FINAL Y DEFINITIVA *****
-        # El ID se pasa como el primer argumento posicional, sin palabra clave.
-        page = Page(page_id, api=temp_api_instance)
-        # ***** FIN DE LA CORRECCIÓN *****
-
-        fields_to_get = params.get("fields", ["id", "name", "engagement"])
-        page_info = page.api_get(fields=fields_to_get)
+        temp_api_instance = FacebookAdsApi.init(access_token=page_access_token, api_version="v19.0")
+        page = Page(page_id, api=temp_api_instance) # Correct positional argument
+        page_info = page.api_get(fields=params.get("fields", ["id", "name", "engagement"]))
         
         return {"status": "success", "data": page_info.export_all_data()}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
     finally:
-        if original_api_instance:
-            FacebookAdsApi.set_default_api(original_api_instance)
-            logger.info("Facebook API client reverted to default System User instance.")
+        if original_api_instance: FacebookAdsApi.set_default_api(original_api_instance)
 
 # --- OTHER ACTIONS ---
-
 def metaads_list_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name = "metaads_list_campaigns"
-    logger.info(f"Executing {action_name} for ad_account_id: {params.get('ad_account_id')}")
     try:
         _get_meta_ads_api_client(params)
         ad_account_id = params.get("ad_account_id")
-        if not ad_account_id:
-            raise ValueError("'ad_account_id' is required.")
+        if not ad_account_id: raise ValueError("'ad_account_id' is required.")
         
         ad_account = AdAccount(f"act_{str(ad_account_id).replace('act_', '')}")
-        fields_to_get = params.get("fields", ["id", "name", "status", "objective"])
-        campaigns = ad_account.get_campaigns(fields=fields_to_get)
-
-        campaigns_list = [campaign.export_all_data() for campaign in campaigns]
-        return {"status": "success", "data": campaigns_list}
+        campaigns = ad_account.get_campaigns(fields=params.get("fields", ["id", "name", "status", "objective"]))
+        
+        return {"status": "success", "data": [campaign.export_all_data() for campaign in campaigns]}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
 def metaads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name = "metaads_create_campaign"
-    logger.info(f"Executing {action_name} for ad_account_id: {params.get('ad_account_id')}")
     try:
         _get_meta_ads_api_client(params)
         ad_account_id = params.get("ad_account_id")
         campaign_payload = params.get("campaign_payload")
-        if not ad_account_id or not campaign_payload:
-            raise ValueError("'ad_account_id' and 'campaign_payload' are required.")
-
+        if not ad_account_id or not campaign_payload: raise ValueError("'ad_account_id' and 'campaign_payload' are required.")
+        
         ad_account = AdAccount(f"act_{str(ad_account_id).replace('act_', '')}")
         created_campaign = ad_account.create_campaign(params=campaign_payload)
-
+        
         return {"status": "success", "data": created_campaign.export_all_data()}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
 def metaads_update_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
     action_name = "metaads_update_campaign"
     try:
         _get_meta_ads_api_client(params)
         campaign_id = params.get("campaign_id")
         update_payload = params.get("update_payload")
-        if not campaign_id or not update_payload:
-            raise ValueError("'campaign_id' and 'update_payload' are required.")
+        if not campaign_id or not update_payload: raise ValueError("'campaign_id' and 'update_payload' are required.")
         
         campaign = Campaign(campaign_id)
         campaign.api_update(params=update_payload)
+        
         return {"status": "success", "data": {"id": campaign_id, "success": True}}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
 def metaads_delete_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
     action_name = "metaads_delete_campaign"
     try:
         _get_meta_ads_api_client(params)
         campaign_id = params.get("campaign_id")
-        if not campaign_id:
-            raise ValueError("'campaign_id' is required.")
+        if not campaign_id: raise ValueError("'campaign_id' is required.")
         
         campaign = Campaign(campaign_id)
         campaign.api_delete()
+        
         return {"status": "success", "message": f"Campaign '{campaign_id}' deleted."}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
 def metaads_get_insights(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
     action_name = "metaads_get_insights"
     try:
         _get_meta_ads_api_client(params)
         ad_account_id = params.get("ad_account_id")
         insights_params = params.get("insights_params")
-        if not ad_account_id or not insights_params:
-            raise ValueError("'ad_account_id' and 'insights_params' are required.")
+        if not ad_account_id or not insights_params: raise ValueError("'ad_account_id' and 'insights_params' are required.")
             
         ad_account = AdAccount(f"act_{str(ad_account_id).replace('act_', '')}")
         insights = ad_account.get_insights(params=insights_params)
-        insights_list = [insight.export_all_data() for insight in insights]
-        return {"status": "success", "data": insights_list}
+        
+        return {"status": "success", "data": [insight.export_all_data() for insight in insights]}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
