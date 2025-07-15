@@ -117,13 +117,12 @@ def metaads_get_page_engagement(client: Any, params: Dict[str, Any]) -> Dict[str
         if not page_id or not page_access_token:
             raise ValueError("'page_id' and 'page_access_token' are required.")
 
-        # Temporarily initialize a new API client with the Page Token
         temp_api_instance = FacebookAdsApi.init(access_token=page_access_token, api_version="v19.0")
         
-        # ***** CORRECTION IS HERE *****
-        # The keyword argument must be 'id', not 'f_id'.
-        page = Page(id=page_id, api=temp_api_instance)
-        # ***** END OF CORRECTION *****
+        # ***** CORRECCIÓN FINAL Y DEFINITIVA *****
+        # El ID se pasa como el primer argumento posicional, sin palabra clave.
+        page = Page(page_id, api=temp_api_instance)
+        # ***** FIN DE LA CORRECCIÓN *****
 
         fields_to_get = params.get("fields", ["id", "name", "engagement"])
         page_info = page.api_get(fields=fields_to_get)
@@ -132,7 +131,6 @@ def metaads_get_page_engagement(client: Any, params: Dict[str, Any]) -> Dict[str
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
     finally:
-        # IMPORTANT: Revert to the default system user API instance
         if original_api_instance:
             FacebookAdsApi.set_default_api(original_api_instance)
             logger.info("Facebook API client reverted to default System User instance.")
@@ -140,7 +138,6 @@ def metaads_get_page_engagement(client: Any, params: Dict[str, Any]) -> Dict[str
 # --- OTHER ACTIONS ---
 
 def metaads_list_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Demonstrates 'ads_read' by listing campaigns."""
     action_name = "metaads_list_campaigns"
     logger.info(f"Executing {action_name} for ad_account_id: {params.get('ad_account_id')}")
     try:
@@ -159,7 +156,6 @@ def metaads_list_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         return _handle_meta_ads_api_error(e, action_name)
 
 def metaads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Demonstrates 'ads_management' by creating a campaign."""
     action_name = "metaads_create_campaign"
     logger.info(f"Executing {action_name} for ad_account_id: {params.get('ad_account_id')}")
     try:
