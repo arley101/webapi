@@ -23,19 +23,15 @@ def _get_meta_ads_api_client(params: Dict[str, Any]) -> FacebookAdsApi:
     """Initializes and returns a FacebookAdsApi instance, ensuring credentials are used correctly."""
     global _meta_ads_api_instance
 
-    # This function now correctly uses the token from your configuration (settings.META_ADS.ACCESS_TOKEN)
-    # as instructed. Ensure your environment variables are set correctly for the deployment.
     access_token = settings.META_ADS.ACCESS_TOKEN
     app_id = settings.META_ADS.APP_ID
     app_secret = settings.META_ADS.APP_SECRET
     
-    # An override is possible via params for specific cases, but it will default to your settings.
     access_token = params.get("system_user_token_override", access_token)
 
     if not all([app_id, app_secret, access_token]):
         raise ValueError("Meta Ads credentials (META_ADS_APP_ID, META_ADS_APP_SECRET, META_ADS_ACCESS_TOKEN) must be configured in your environment.")
 
-    # Only re-initialize if it's a new token override
     if _meta_ads_api_instance and not params.get("system_user_token_override"):
          return _meta_ads_api_instance
 
@@ -70,7 +66,7 @@ def _handle_meta_ads_api_error(e: Exception, action_name: str) -> Dict[str, Any]
         }
     return {"status": "error", "action": action_name, "message": error_message, "http_status": status_code, "details": details}
 
-# --- ACTIONS FOR PERMISSION DEMONSTRATION (NOW CORRECT) ---
+# --- ACTIONS FOR PERMISSION DEMONSTRATION ---
 
 def metaads_get_business_details(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Demonstrates 'business_management' by fetching business details."""
@@ -124,7 +120,11 @@ def metaads_get_page_engagement(client: Any, params: Dict[str, Any]) -> Dict[str
         # Temporarily initialize a new API client with the Page Token
         temp_api_instance = FacebookAdsApi.init(access_token=page_access_token, api_version="v19.0")
         
-        page = Page(f_id=page_id, api=temp_api_instance)
+        # ***** CORRECTION IS HERE *****
+        # The keyword argument must be 'id', not 'f_id'.
+        page = Page(id=page_id, api=temp_api_instance)
+        # ***** END OF CORRECTION *****
+
         fields_to_get = params.get("fields", ["id", "name", "engagement"])
         page_info = page.api_get(fields=fields_to_get)
         
@@ -137,7 +137,7 @@ def metaads_get_page_engagement(client: Any, params: Dict[str, Any]) -> Dict[str
             FacebookAdsApi.set_default_api(original_api_instance)
             logger.info("Facebook API client reverted to default System User instance.")
 
-# --- EXISTING AND VERIFIED ACTIONS ---
+# --- OTHER ACTIONS ---
 
 def metaads_list_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Demonstrates 'ads_read' by listing campaigns."""
