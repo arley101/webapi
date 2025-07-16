@@ -75,7 +75,7 @@ ACTION_MAP = {
     "googleads_get_campaigns": googleads_actions.googleads_get_campaigns,
     "googleads_create_campaign": googleads_actions.googleads_create_campaign,
     "googleads_get_ad_groups": googleads_actions.googleads_get_ad_groups,
-
+    
     # --- Graph Actions (Genéricas) ---
     "graph_generic_get": graph_actions.generic_get,
     "graph_generic_post": graph_actions.generic_post,
@@ -103,8 +103,8 @@ ACTION_MAP = {
     "metaads_list_campaigns": metaads_actions.metaads_list_campaigns,
     "metaads_create_campaign": metaads_actions.metaads_create_campaign,
     "metaads_update_campaign": metaads_actions.metaads_update_campaign,
-    "metaads_delete_campaign": metaads_actions.metaads_delete_campaign,
-    "metaads_get_insights": metaads_actions.metaads_get_insights,
+    "metaads_delete_campaign": metaads_actions.delete_campaign,
+    "metaads_get_insights": metaads_actions.get_insights,
 
     # --- Notion Actions ---
     "notion_search_general": notion_actions.notion_search_general,
