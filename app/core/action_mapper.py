@@ -7,7 +7,8 @@ from app.actions import (
     office_actions, onedrive_actions, openai_actions, planner_actions,
     power_automate_actions, powerbi_actions, sharepoint_actions,
     stream_actions, teams_actions, tiktok_ads_actions, todo_actions,
-    userprofile_actions, users_actions, vivainsights_actions, youtube_ads_actions
+    userprofile_actions, users_actions, vivainsights_actions,
+    youtube_channel_actions, gemini_actions  # Importaciones actualizadas
 )
 
 logger = logging.getLogger(__name__)
@@ -62,6 +63,9 @@ ACTION_MAP = {
     "forms_get_form": forms_actions.get_form,
     "forms_get_form_responses": forms_actions.get_form_responses,
 
+    # --- Gemini Actions ---
+    "gemini_simple_text_prompt": gemini_actions.gemini_simple_text_prompt,
+
     # --- GitHub Actions ---
     "github_list_repos": github_actions.github_list_repos,
     "github_create_issue": github_actions.github_create_issue,
@@ -70,21 +74,12 @@ ACTION_MAP = {
     # --- Google Ads Actions ---
     "googleads_get_campaigns": googleads_actions.googleads_get_campaigns,
     "googleads_create_campaign": googleads_actions.googleads_create_campaign,
-    "googleads_update_campaign_status": googleads_actions.googleads_update_campaign_status,
     "googleads_get_ad_groups": googleads_actions.googleads_get_ad_groups,
-    "googleads_create_ad_group": googleads_actions.googleads_create_ad_group,
-    "googleads_get_ads": googleads_actions.googleads_get_ads,
-    "googleads_create_responsive_search_ad": googleads_actions.googleads_create_responsive_search_ad,
-    "googleads_get_keywords": googleads_actions.googleads_get_keywords,
-    "googleads_add_keywords": googleads_actions.googleads_add_keywords,
-    "googleads_get_performance_report": googleads_actions.googleads_get_performance_report,
 
     # --- Graph Actions (Genéricas) ---
     "graph_generic_get": graph_actions.generic_get,
     "graph_generic_post": graph_actions.generic_post,
-    "graph_generic_get_compat": graph_actions.generic_get_compat,
-    "graph_generic_post_compat": graph_actions.generic_post_compat,
-
+    
     # --- HubSpot CRM Actions ---
     "hubspot_get_contacts": hubspot_actions.hubspot_get_contacts,
     "hubspot_create_contact": hubspot_actions.hubspot_create_contact,
@@ -98,9 +93,10 @@ ACTION_MAP = {
     # --- LinkedIn Ads Actions ---
     "linkedin_find_ad_accounts": linkedin_ads_actions.linkedin_find_ad_accounts,
     "linkedin_get_campaigns": linkedin_ads_actions.linkedin_get_campaigns,
+    "linkedin_get_campaign_groups": linkedin_ads_actions.linkedin_get_campaign_groups,
     "linkedin_get_analytics": linkedin_ads_actions.linkedin_get_analytics,
 
-    # --- Meta Ads Actions (RESTORED, CORRECTED AND COMPLETED) ---
+    # --- Meta Ads Actions ---
     "metaads_get_business_details": metaads_actions.metaads_get_business_details,
     "metaads_list_owned_pages": metaads_actions.metaads_list_owned_pages,
     "metaads_get_page_engagement": metaads_actions.metaads_get_page_engagement,
@@ -160,10 +156,13 @@ ACTION_MAP = {
     "planner_create_bucket": planner_actions.create_bucket,
 
     # --- Power Automate Actions ---
-    "pa_listar_flows": power_automate_actions.pa_listar_flows,
-    "pa_obtener_flow": power_automate_actions.pa_obtener_flow,
-    "pa_ejecutar_flow": power_automate_actions.pa_ejecutar_flow,
-    "pa_obtener_estado_ejecucion_flow": power_automate_actions.pa_obtener_estado_ejecucion_flow,
+    "pa_list_flows": power_automate_actions.pa_list_flows,
+    "pa_get_flow": power_automate_actions.pa_get_flow,
+    "pa_create_or_update_flow": power_automate_actions.pa_create_or_update_flow,
+    "pa_delete_flow": power_automate_actions.pa_delete_flow,
+    "pa_run_flow_trigger": power_automate_actions.pa_run_flow_trigger,
+    "pa_get_flow_run_history": power_automate_actions.pa_get_flow_run_history,
+    "pa_get_flow_run_details": power_automate_actions.pa_get_flow_run_details,
 
     # --- Power BI Actions ---
     "powerbi_list_reports": powerbi_actions.list_reports,
@@ -270,10 +269,11 @@ ACTION_MAP = {
     "viva_get_my_analytics": vivainsights_actions.get_my_analytics,
     "viva_get_focus_plan": vivainsights_actions.get_focus_plan,
     
-    # --- YouTube Data API Actions ---
-    "youtube_data_get_channel_details": youtube_ads_actions.youtube_data_get_channel_details,
-    "youtube_data_search_videos": youtube_ads_actions.youtube_data_search_videos,
-    "youtube_data_get_video_details": youtube_ads_actions.youtube_data_get_video_details,
+    # --- YouTube Channel Actions ---
+    "youtube_upload_video": youtube_channel_actions.youtube_upload_video,
+    "youtube_update_video_details": youtube_channel_actions.youtube_update_video_details,
+    "youtube_list_comments": youtube_channel_actions.youtube_list_comments,
+    "youtube_reply_to_comment": youtube_channel_actions.youtube_reply_to_comment,
 }
 
 num_actions = len(ACTION_MAP)

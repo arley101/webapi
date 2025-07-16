@@ -6,7 +6,6 @@ from google.ads.googleads.errors import GoogleAdsException
 from google.protobuf import json_format
 
 from app.core.config import settings
-from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +16,8 @@ def get_google_ads_client() -> GoogleAdsClient:
     global _google_ads_client_instance
     if _google_ads_client_instance:
         return _google_ads_client_instance
+    
+    # Cargar credenciales desde la configuración centralizada
     config = {
         "developer_token": settings.GOOGLE_ADS.DEVELOPER_TOKEN,
         "client_id": settings.GOOGLE_ADS.CLIENT_ID,
@@ -27,6 +28,7 @@ def get_google_ads_client() -> GoogleAdsClient:
     }
     if not all(config.get(k) for k in ["developer_token", "client_id", "client_secret", "refresh_token"]):
         raise ValueError("Faltan credenciales de Google Ads en la configuración.")
+    
     logger.info("Inicializando cliente de Google Ads...")
     _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
     return _google_ads_client_instance
@@ -59,132 +61,59 @@ def _execute_mutate_operations(customer_id: str, operations: list, service_name:
     except Exception as e:
         return {"status": "error", "message": str(e), "http_status": 500}
 
-def _get_customer_id(params: Dict[str, Any]) -> Optional[str]:
+def _get_customer_id(params: Dict[str, Any]) -> str:
     customer_id = params.get("customer_id", settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID)
-    return str(customer_id).replace("-", "") if customer_id else None
+    if not customer_id: raise ValueError("Se requiere 'customer_id'.")
+    return str(customer_id).replace("-", "")
 
 # --- ACCIONES COMPLETAS Y FUNCIONALES ---
 
 def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
-    if not customer_id: return {"status": "error", "message": "Se requiere 'customer_id'."}
     status_filter = params.get("status")
-    where_clause = f"WHERE campaign.status = '{status_filter}'" if status_filter else ""
-    query = f"SELECT campaign.id, campaign.name, campaign.status FROM campaign {where_clause} ORDER BY campaign.name"
+    where_clause = f"WHERE campaign.status = '{status_filter.upper()}'" if status_filter else ""
+    query = f"SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type FROM campaign {where_clause} ORDER BY campaign.name"
     return _execute_search_query(customer_id, query, "googleads_get_campaigns")
 
 def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
     campaign_name = params.get("name")
-    if not all([customer_id, campaign_name]):
-        return {"status": "error", "message": "Se requieren 'customer_id' y 'name' para la campaña."}
+    if not campaign_name: raise ValueError("Se requiere el parámetro 'name' para la campaña.")
+    
     gads_client = get_google_ads_client()
+    
+    # Crear presupuesto primero
+    budget_operation = gads_client.get_type("CampaignBudgetOperation")
+    budget = budget_operation.create
+    budget.name = f"Budget for {campaign_name} - {id(campaign_name)}"
+    budget.amount_micros = params.get("budget_micros", 500000)
+    budget.delivery_method = gads_client.enums.BudgetDeliveryMethodEnum.STANDARD
+    budget_service = gads_client.get_service("CampaignBudgetService")
+    budget_response = budget_service.mutate_campaign_budgets(customer_id=customer_id, operations=[budget_operation])
+    budget_resource_name = budget_response.results[0].resource_name
+
+    # Crear campaña y asignarle el presupuesto
     operation = gads_client.get_type("CampaignOperation")
     campaign = operation.create
     campaign.name = campaign_name
-    campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
+    campaign.campaign_budget = budget_resource_name
     campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
-    campaign.manual_cpc.enhanced_cpc_enabled = True
-    campaign.network_settings.target_google_search = True
-    budget_service = gads_client.get_service("CampaignBudgetService")
-    budget_operation = gads_client.get_type("CampaignBudgetOperation")
-    budget = budget_operation.create
-    budget.name = f"Budget for {campaign_name}"
-    budget.amount_micros = params.get("budget_micros", 500000)
-    budget_response = budget_service.mutate_campaign_budgets(customer_id=customer_id, operations=[budget_operation])
-    campaign.campaign_budget = budget_response.results[0].resource_name
+    
+    campaign_type = params.get("type", "SEARCH").upper()
+    if campaign_type == "PERFORMANCE_MAX":
+        campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
+        campaign.bidding_strategy_type = gads_client.enums.BiddingStrategyTypeEnum.MAXIMIZE_CONVERSION_VALUE
+        campaign.maximize_conversion_value.target_roas = params.get("target_roas", 0.0)
+    else: # Default a Search
+        campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
+        campaign.bidding_strategy_type = gads_client.enums.BiddingStrategyTypeEnum.MANUAL_CPC
+        campaign.network_settings.target_google_search = True
+    
     return _execute_mutate_operations(customer_id, [operation], "CampaignService", "googleads_create_campaign")
-
-def googleads_update_campaign_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    customer_id = _get_customer_id(params)
-    campaign_id = params.get("campaign_id")
-    status = params.get("status")
-    if not all([customer_id, campaign_id, status]):
-        return {"status": "error", "message": "Se requieren 'customer_id', 'campaign_id' y 'status'."}
-    gads_client = get_google_ads_client()
-    campaign_service = gads_client.get_service("CampaignService")
-    operation = gads_client.get_type("CampaignOperation")
-    campaign = operation.update
-    campaign.resource_name = campaign_service.campaign_path(customer_id, campaign_id)
-    campaign.status = gads_client.enums.CampaignStatusEnum[status].value
-    operation.update_mask.paths.append("status")
-    return _execute_mutate_operations(customer_id, [operation], "CampaignService", "googleads_update_campaign_status")
 
 def googleads_get_ad_groups(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
     campaign_id = params.get("campaign_id")
-    if not all([customer_id, campaign_id]): return {"status": "error", "message": "Se requieren 'customer_id' y 'campaign_id'."}
+    if not campaign_id: raise ValueError("Se requiere 'campaign_id'.")
     query = f"SELECT ad_group.id, ad_group.name, ad_group.status FROM ad_group WHERE campaign.id = {campaign_id}"
     return _execute_search_query(customer_id, query, "googleads_get_ad_groups")
-
-def googleads_create_ad_group(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    customer_id = _get_customer_id(params)
-    campaign_id = params.get("campaign_id")
-    ad_group_name = params.get("name")
-    if not all([customer_id, campaign_id, ad_group_name]):
-        return {"status": "error", "message": "Se requieren 'customer_id', 'campaign_id' y 'name'."}
-    gads_client = get_google_ads_client()
-    campaign_service = gads_client.get_service("CampaignService")
-    operation = gads_client.get_type("AdGroupOperation")
-    ad_group = operation.create
-    ad_group.name = ad_group_name
-    ad_group.campaign = campaign_service.campaign_path(customer_id, campaign_id)
-    ad_group.status = gads_client.enums.AdGroupStatusEnum.ENABLED
-    return _execute_mutate_operations(customer_id, [operation], "AdGroupService", "googleads_create_ad_group")
-
-def googleads_get_ads(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    customer_id = _get_customer_id(params)
-    ad_group_id = params.get("ad_group_id")
-    if not all([customer_id, ad_group_id]): return {"status": "error", "message": "Se requieren 'customer_id' y 'ad_group_id'."}
-    query = f"SELECT ad_group_ad.ad.id, ad_group_ad.ad.type, ad_group_ad.status FROM ad_group_ad WHERE ad_group.id = {ad_group_id}"
-    return _execute_search_query(customer_id, query, "googleads_get_ads")
-
-def googleads_create_responsive_search_ad(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    customer_id = _get_customer_id(params)
-    ad_group_id = params.get("ad_group_id")
-    headlines = params.get("headlines")
-    descriptions = params.get("descriptions")
-    final_urls = params.get("final_urls")
-    if not all([customer_id, ad_group_id, headlines, descriptions, final_urls]):
-        return {"status": "error", "message": "Faltan parámetros requeridos."}
-    gads_client = get_google_ads_client()
-    ad_group_service = gads_client.get_service("AdGroupService")
-    operation = gads_client.get_type("AdGroupAdOperation")
-    ad_group_ad = operation.create
-    ad_group_ad.ad_group = ad_group_service.ad_group_path(customer_id, ad_group_id)
-    ad = ad_group_ad.ad
-    ad.final_urls.extend(final_urls)
-    ad.responsive_search_ad.headlines.extend([gads_client.get_type("AdTextAsset", text=h) for h in headlines])
-    ad.responsive_search_ad.descriptions.extend([gads_client.get_type("AdTextAsset", text=d) for d in descriptions])
-    return _execute_mutate_operations(customer_id, [operation], "AdGroupAdService", "googleads_create_responsive_search_ad")
-
-def googleads_get_keywords(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    customer_id = _get_customer_id(params)
-    ad_group_id = params.get("ad_group_id")
-    if not all([customer_id, ad_group_id]): return {"status": "error", "message": "Se requieren 'customer_id' y 'ad_group_id'."}
-    query = f"SELECT ad_group_criterion.criterion_id, ad_group_criterion.keyword.text FROM ad_group_criterion WHERE ad_group_criterion.type = 'KEYWORD' AND ad_group.id = {ad_group_id}"
-    return _execute_search_query(customer_id, query, "googleads_get_keywords")
-
-def googleads_add_keywords(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    customer_id = _get_customer_id(params)
-    ad_group_id = params.get("ad_group_id")
-    keywords = params.get("keywords")
-    if not all([customer_id, ad_group_id, keywords]): return {"status": "error", "message": "Faltan parámetros requeridos."}
-    gads_client = get_google_ads_client()
-    ad_group_service = gads_client.get_service("AdGroupService")
-    ad_group_resource_name = ad_group_service.ad_group_path(customer_id, ad_group_id)
-    operations = []
-    for keyword_text in keywords:
-        operation = gads_client.get_type("AdGroupCriterionOperation")
-        criterion = operation.create
-        criterion.ad_group = ad_group_resource_name
-        criterion.keyword.text = keyword_text
-        operations.append(operation)
-    return _execute_mutate_operations(customer_id, operations, "AdGroupCriterionService", "googleads_add_keywords")
-
-def googleads_get_performance_report(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    customer_id = _get_customer_id(params)
-    if not customer_id: return {"status": "error", "message": "Se requiere 'customer_id'."}
-    date_range = params.get("date_range", "LAST_7_DAYS")
-    query = f"SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, metrics.cost_micros FROM campaign WHERE segments.date DURING {date_range}"
-    return _execute_search_query(customer_id, query, "googleads_get_performance_report")
