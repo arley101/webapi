@@ -1,5 +1,6 @@
-# FastAPI y servidor ASGI (Dependencias críticas restauradas)
-fastapi==0.111.1
+# Forzar reconstrucción de dependencias en Azure - 2025-07-16
+# FastAPI y servidor ASGI
+fastapi==0.111.0
 uvicorn[standard]==0.30.3
 gunicorn==22.0.0
 
