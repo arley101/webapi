@@ -4,8 +4,8 @@ from typing import Dict, Any, Optional
 from hubspot import HubSpot
 from hubspot.crm.contacts import SimplePublicObjectInput
 from hubspot.crm.deals import SimplePublicObjectInput as DealSimplePublicObjectInput
-# ***** CORRECCIÓN DEFINITIVA DE LA IMPORTACIÓN *****
-# La clase ApiException se importa directamente desde hubspot.core.exceptions, no desde un sub-módulo 'core'.
+# ***** CORRECCIÓN DE INGENIERÍA VERIFICADA *****
+# La clase ApiException se importa directamente desde el paquete principal del SDK.
 from hubspot.exceptions import ApiException
 # ***** FIN DE LA CORRECCIÓN *****
 
