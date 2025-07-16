@@ -6,7 +6,7 @@ from hubspot.crm.contacts import SimplePublicObjectInput
 from hubspot.crm.deals import SimplePublicObjectInput as DealSimplePublicObjectInput
 # ***** CORRECCIÓN DE INGENIERÍA VERIFICADA *****
 # La clase ApiException se importa directamente desde el paquete principal del SDK.
-from hubspot.exceptions import ApiException
+from hubspot.core.exceptions import ApiException
 # ***** FIN DE LA CORRECCIÓN *****
 
 from app.core.config import settings

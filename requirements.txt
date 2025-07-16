@@ -1,4 +1,3 @@
-# Forzar reconstrucción de dependencias en Azure - 2025-07-16
 # FastAPI y servidor ASGI
 fastapi==0.111.1
 uvicorn[standard]==0.30.3
