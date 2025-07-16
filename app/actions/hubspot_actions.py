@@ -4,7 +4,10 @@ from typing import Dict, Any, Optional
 from hubspot import HubSpot
 from hubspot.crm.contacts import SimplePublicObjectInput
 from hubspot.crm.deals import SimplePublicObjectInput as DealSimplePublicObjectInput
+# ***** CORRECCIÓN DEFINITIVA *****
+# La clase ApiException se importa directamente desde hubspot.core.exceptions
 from hubspot.core.exceptions import ApiException
+# ***** FIN DE LA CORRECCIÓN *****
 
 from app.core.config import settings
 
