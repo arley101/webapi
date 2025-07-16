@@ -5,7 +5,8 @@ from hubspot import HubSpot
 from hubspot.crm.contacts import SimplePublicObjectInput
 from hubspot.crm.deals import SimplePublicObjectInput as DealSimplePublicObjectInput
 # ***** CORRECCIÓN DEFINITIVA DE LA IMPORTACIÓN *****
-from hubspot.core.exceptions import ApiException
+# La clase ApiException se importa directamente desde hubspot.core.exceptions, no desde un sub-módulo 'core'.
+from hubspot.exceptions import ApiException
 # ***** FIN DE LA CORRECCIÓN *****
 
 from app.core.config import settings
