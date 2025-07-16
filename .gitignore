@@ -148,7 +148,7 @@ antenv/
 venv/
 __pycache__/
 *.pyc
-
+inspector.py
 # Archivos de sistema operativo
 .DS_Store
 
