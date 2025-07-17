@@ -11,6 +11,7 @@ from facebook_business.adobjects.page import Page
 from facebook_business.exceptions import FacebookRequestError
 
 from app.core.config import settings
+from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,6 @@ def metaads_get_page_engagement(client: Any, params: Dict[str, Any]) -> Dict[str
         page_id = params.get("page_id")
         if not page_id: raise ValueError("'page_id' es requerido.")
         
-        # Usa la API inicializada con el token de sistema del negocio
         api = _get_meta_ads_api_client(params)
         page = Page(page_id, api=api)
         page_info = page.api_get(fields=params.get("fields", ["id", "name", "engagement", "fan_count"]))
