@@ -2,7 +2,7 @@
 # FastAPI and ASGI Server
 fastapi==0.111.1
 uvicorn[standard]==0.30.3
-gunicorn==22.0.0
+gunicorn==23.0.0
 
 # Pydantic and Configuration
 pydantic==2.8.2
@@ -23,11 +23,11 @@ google-auth-oauthlib==1.2.0
 google-generativeai==0.7.1
 
 # HTTP and Utilities
-requests==2.32.3
+requests==2.32.4
 PyYAML==6.0.1
 
 # Cryptography Dependencies
-cryptography==42.0.8
+cryptography==44.0.1
 msal==1.29.0
 msal-extensions==1.1.0
 PyJWT[crypto]>=2.8.0
