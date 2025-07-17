@@ -14,7 +14,7 @@ azure-identity==1.17.1
 azure-core>=1.30.0
 
 # External APIs SDKs
-google-ads-api==26.0.0
+google-ads==25.0.0
 facebook-business==19.0.2
 hubspot-api-client==9.0.1
 google-api-python-client==2.136.0
@@ -31,12 +31,3 @@ cryptography==42.0.8
 msal==1.29.0
 msal-extensions==1.1.0
 PyJWT[crypto]>=2.8.0
-
-# Other necessary dependencies
-six>=1.16.0
-urllib3<3,>=1.21.1
-idna<4,>=2.5
-charset-normalizer<4,>=2
-certifi>=2017.4.17
-annotated-types>=0.7.0
-typing-extensions>=4.12.2

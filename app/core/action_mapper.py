@@ -89,13 +89,13 @@ ACTION_MAP = {
     "hubspot_update_deal": hubspot_actions.hubspot_update_deal,
     "hubspot_delete_deal": hubspot_actions.hubspot_delete_deal,
 
-    # LinkedIn Ads Actions (4) - COMPLETADO
+    # LinkedIn Ads Actions (4)
     "linkedin_find_ad_accounts": linkedin_ads_actions.linkedin_find_ad_accounts,
     "linkedin_get_campaigns": linkedin_ads_actions.linkedin_get_campaigns,
     "linkedin_get_campaign_groups": linkedin_ads_actions.linkedin_get_campaign_groups,
     "linkedin_get_analytics": linkedin_ads_actions.linkedin_get_analytics,
 
-    # Meta Ads Actions (8) - CORREGIDO
+    # Meta Ads Actions (8)
     "metaads_get_business_details": metaads_actions.metaads_get_business_details,
     "metaads_list_owned_pages": metaads_actions.metaads_list_owned_pages,
     "metaads_get_page_engagement": metaads_actions.metaads_get_page_engagement,
@@ -154,7 +154,7 @@ ACTION_MAP = {
     "planner_list_buckets": planner_actions.list_buckets,
     "planner_create_bucket": planner_actions.create_bucket,
 
-    # Power Automate Actions (7) - COMPLETADO
+    # Power Automate Actions (7)
     "pa_list_flows": power_automate_actions.pa_list_flows,
     "pa_get_flow": power_automate_actions.pa_get_flow,
     "pa_create_or_update_flow": power_automate_actions.pa_create_or_update_flow,
