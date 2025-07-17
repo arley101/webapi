@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 from hubspot import HubSpot
 from hubspot.crm.contacts import SimplePublicObjectInput
 from hubspot.crm.deals import SimplePublicObjectInput as DealSimplePublicObjectInput
-from hubspot.auth.oauth import ApiException
+from hubspot.auth.oauth import ApiException # <-- LA RUTA CORRECTA QUE USTED DESCUBRIÓ
 
 from app.core.config import settings
 
