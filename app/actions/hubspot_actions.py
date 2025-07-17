@@ -4,9 +4,7 @@ from typing import Dict, Any, Optional
 from hubspot import HubSpot
 from hubspot.crm.contacts import SimplePublicObjectInput
 from hubspot.crm.deals import SimplePublicObjectInput as DealSimplePublicObjectInput
-# ***** CORRECCIÓN FINAL BASADA EN DIAGNÓSTICO REAL *****
-from hubspot.auth.oauth import ApiException
-# ***** FIN DE LA CORRECCIÓN *****
+from hubspot.auth.oauth import ApiException # <-- ESTA ES LA LÍNEA CORREGIDA SEGÚN SU EVIDENCIA
 
 from app.core.config import settings
 

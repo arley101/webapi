@@ -5,6 +5,7 @@ import json
 from typing import Dict, Any, Optional
 
 from app.core.config import settings
+from app.shared.helpers.http_client import AuthenticatedHttpClient 
 
 logger = logging.getLogger(__name__)
 

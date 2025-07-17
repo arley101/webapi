@@ -10,12 +10,12 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient
 logger = logging.getLogger(__name__)
 
 POWER_AUTOMATE_API_BASE_URL = "https://management.azure.com"
-DEFAULT_API_VERSION = "2019-05-01" 
+DEFAULT_API_VERSION = "2019-05-01"
 
 def _handle_pa_api_error(e: Exception, action_name: str, params_for_log: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     log_message = f"Error en Power Automate Action '{action_name}'"
     if params_for_log:
-        safe_params = {k: v for k, v in params_for_log.items() if k not in ['flow_definition', 'trigger_url', 'payload']}
+        safe_params = {k: v for k, v in params_for_log.items() if k not in ['flow_definition', 'trigger_url', 'payload', 'properties']}
         log_message += f" con params: {safe_params}"
     
     logger.error(f"{log_message}: {type(e).__name__} - {str(e)}", exc_info=True)
@@ -41,7 +41,7 @@ def _handle_pa_api_error(e: Exception, action_name: str, params_for_log: Optiona
         "http_status": status_code
     }
 
-def _get_common_arm_params(params: Dict[str, Any]) -> Dict[str, Optional[str]]:
+def _get_common_arm_params(params: Dict[str, Any]) -> Dict[str, str]:
     subscription_id = params.get('subscription_id', settings.AZURE_SUBSCRIPTION_ID)
     resource_group = params.get('resource_group', settings.AZURE_RESOURCE_GROUP)
     
@@ -50,7 +50,7 @@ def _get_common_arm_params(params: Dict[str, Any]) -> Dict[str, Optional[str]]:
     if not resource_group:
          raise ValueError("Se requiere 'resource_group' en los parámetros o en la configuración del entorno.")
 
-    return { "subscription_id": subscription_id, "resource_group": resource_group }
+    return { "subscription_id": str(subscription_id), "resource_group": str(resource_group) }
 
 def pa_list_flows(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name = "pa_list_flows"

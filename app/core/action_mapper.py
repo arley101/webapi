@@ -14,8 +14,7 @@ from app.actions import (
 logger = logging.getLogger(__name__)
 
 ACTION_MAP = {
-
-    # --- Azure Management Actions ---
+    # Azure Management Actions (10)
     "azure_list_resource_groups": azuremgmt_actions.list_resource_groups,
     "azure_list_resources_in_rg": azuremgmt_actions.list_resources_in_rg,
     "azure_get_resource": azuremgmt_actions.get_resource,
@@ -27,7 +26,7 @@ ACTION_MAP = {
     "azure_trigger_logic_app": azuremgmt_actions.trigger_logic_app,
     "azure_get_logic_app_run_history": azuremgmt_actions.get_logic_app_run_history,
 
-    # --- Bookings Actions ---
+    # Bookings Actions (8)
     "bookings_list_businesses": bookings_actions.list_businesses,
     "bookings_get_business": bookings_actions.get_business,
     "bookings_list_services": bookings_actions.list_services,
@@ -37,7 +36,7 @@ ACTION_MAP = {
     "bookings_cancel_appointment": bookings_actions.cancel_appointment,
     "bookings_list_appointments": bookings_actions.list_appointments,
 
-    # --- Calendario Actions ---
+    # Calendario Actions (7)
     "calendar_list_events": calendario_actions.calendar_list_events,
     "calendar_create_event": calendario_actions.calendar_create_event,
     "calendar_get_event": calendario_actions.get_event,
@@ -46,7 +45,7 @@ ACTION_MAP = {
     "calendar_find_meeting_times": calendario_actions.find_meeting_times,
     "calendar_get_schedule": calendario_actions.get_schedule,
 
-    # --- Correo Actions ---
+    # Correo Actions (10)
     "email_list_messages": correo_actions.list_messages,
     "email_get_message": correo_actions.get_message,
     "email_send_message": correo_actions.send_message,
@@ -58,29 +57,29 @@ ACTION_MAP = {
     "email_create_folder": correo_actions.create_folder,
     "email_search_messages": correo_actions.search_messages,
 
-    # --- Forms Actions ---
+    # Forms Actions (3)
     "forms_list_forms": forms_actions.list_forms,
     "forms_get_form": forms_actions.get_form,
     "forms_get_form_responses": forms_actions.get_form_responses,
 
-    # --- Gemini Actions ---
+    # Gemini Actions (1)
     "gemini_simple_text_prompt": gemini_actions.gemini_simple_text_prompt,
 
-    # --- GitHub Actions ---
+    # GitHub Actions (3)
     "github_list_repos": github_actions.github_list_repos,
     "github_create_issue": github_actions.github_create_issue,
     "github_get_repo_details": github_actions.github_get_repo_details,
     
-    # --- Google Ads Actions ---
+    # Google Ads Actions (3)
     "googleads_get_campaigns": googleads_actions.googleads_get_campaigns,
     "googleads_create_campaign": googleads_actions.googleads_create_campaign,
     "googleads_get_ad_groups": googleads_actions.googleads_get_ad_groups,
     
-    # --- Graph Actions (Genéricas) ---
+    # Graph Actions (Genéricas) (2)
     "graph_generic_get": graph_actions.generic_get,
     "graph_generic_post": graph_actions.generic_post,
     
-    # --- HubSpot CRM Actions ---
+    # HubSpot CRM Actions (8)
     "hubspot_get_contacts": hubspot_actions.hubspot_get_contacts,
     "hubspot_create_contact": hubspot_actions.hubspot_create_contact,
     "hubspot_update_contact": hubspot_actions.hubspot_update_contact,
@@ -90,23 +89,23 @@ ACTION_MAP = {
     "hubspot_update_deal": hubspot_actions.hubspot_update_deal,
     "hubspot_delete_deal": hubspot_actions.hubspot_delete_deal,
 
-    # --- LinkedIn Ads Actions ---
+    # LinkedIn Ads Actions (4) - COMPLETADO
     "linkedin_find_ad_accounts": linkedin_ads_actions.linkedin_find_ad_accounts,
     "linkedin_get_campaigns": linkedin_ads_actions.linkedin_get_campaigns,
     "linkedin_get_campaign_groups": linkedin_ads_actions.linkedin_get_campaign_groups,
     "linkedin_get_analytics": linkedin_ads_actions.linkedin_get_analytics,
 
-    # --- Meta Ads Actions ---
+    # Meta Ads Actions (8) - CORREGIDO
     "metaads_get_business_details": metaads_actions.metaads_get_business_details,
     "metaads_list_owned_pages": metaads_actions.metaads_list_owned_pages,
     "metaads_get_page_engagement": metaads_actions.metaads_get_page_engagement,
     "metaads_list_campaigns": metaads_actions.metaads_list_campaigns,
     "metaads_create_campaign": metaads_actions.metaads_create_campaign,
     "metaads_update_campaign": metaads_actions.metaads_update_campaign,
-    "metaads_delete_campaign": metaads_actions.delete_campaign,
+    "metaads_delete_campaign": metaads_actions.metaads_delete_campaign,
     "metaads_get_insights": metaads_actions.get_insights,
 
-    # --- Notion Actions ---
+    # Notion Actions (7)
     "notion_search_general": notion_actions.notion_search_general,
     "notion_get_database": notion_actions.notion_get_database,
     "notion_query_database": notion_actions.notion_query_database,
@@ -115,7 +114,7 @@ ACTION_MAP = {
     "notion_update_page": notion_actions.notion_update_page,
     "notion_delete_block": notion_actions.notion_delete_block,
 
-    # --- Office Actions ---
+    # Office Actions (8)
     "office_crear_documento_word": office_actions.crear_documento_word,
     "office_reemplazar_contenido_word": office_actions.reemplazar_contenido_word,
     "office_obtener_documento_word_binario": office_actions.obtener_documento_word_binario,
@@ -125,7 +124,7 @@ ACTION_MAP = {
     "office_crear_tabla_excel": office_actions.crear_tabla_excel,
     "office_agregar_filas_tabla_excel": office_actions.agregar_filas_tabla_excel,
 
-    # --- OneDrive Actions ---
+    # OneDrive Actions (11)
     "onedrive_list_items": onedrive_actions.list_items,
     "onedrive_get_item": onedrive_actions.get_item,
     "onedrive_upload_file": onedrive_actions.upload_file,
@@ -138,13 +137,13 @@ ACTION_MAP = {
     "onedrive_get_sharing_link": onedrive_actions.get_sharing_link,
     "onedrive_update_item_metadata": onedrive_actions.update_item_metadata,
 
-    # --- Azure OpenAI Actions ---
+    # Azure OpenAI Actions (4)
     "openai_chat_completion": openai_actions.chat_completion,
     "openai_completion": openai_actions.completion,
     "openai_get_embedding": openai_actions.get_embedding,
     "openai_list_models": openai_actions.list_models,
 
-    # --- Planner Actions ---
+    # Planner Actions (9)
     "planner_list_plans": planner_actions.list_plans,
     "planner_get_plan": planner_actions.get_plan,
     "planner_list_tasks": planner_actions.list_tasks,
@@ -155,7 +154,7 @@ ACTION_MAP = {
     "planner_list_buckets": planner_actions.list_buckets,
     "planner_create_bucket": planner_actions.create_bucket,
 
-    # --- Power Automate Actions ---
+    # Power Automate Actions (7) - COMPLETADO
     "pa_list_flows": power_automate_actions.pa_list_flows,
     "pa_get_flow": power_automate_actions.pa_get_flow,
     "pa_create_or_update_flow": power_automate_actions.pa_create_or_update_flow,
@@ -164,14 +163,14 @@ ACTION_MAP = {
     "pa_get_flow_run_history": power_automate_actions.pa_get_flow_run_history,
     "pa_get_flow_run_details": power_automate_actions.pa_get_flow_run_details,
 
-    # --- Power BI Actions ---
+    # Power BI Actions (5)
     "powerbi_list_reports": powerbi_actions.list_reports,
     "powerbi_export_report": powerbi_actions.export_report,
     "powerbi_list_dashboards": powerbi_actions.list_dashboards,
     "powerbi_list_datasets": powerbi_actions.list_datasets,
     "powerbi_refresh_dataset": powerbi_actions.refresh_dataset,
 
-    # --- SharePoint Actions ---
+    # SharePoint Actions (28)
     "sp_list_lists": sharepoint_actions.list_lists,
     "sp_get_list": sharepoint_actions.get_list,
     "sp_create_list": sharepoint_actions.create_list,
@@ -208,13 +207,13 @@ ACTION_MAP = {
     "sp_list_item_permissions": sharepoint_actions.list_item_permissions,
     "sp_export_list_to_format": sharepoint_actions.sp_export_list_to_format,
 
-    # --- Stream Actions ---
+    # Stream Actions (4)
     "stream_get_video_playback_url": stream_actions.get_video_playback_url,
     "stream_listar_videos": stream_actions.listar_videos,
     "stream_obtener_metadatos_video": stream_actions.obtener_metadatos_video,
     "stream_obtener_transcripcion_video": stream_actions.obtener_transcripcion_video,
 
-    # --- Teams Actions ---
+    # Teams Actions (15)
     "teams_list_joined_teams": teams_actions.list_joined_teams,
     "teams_get_team": teams_actions.get_team,
     "teams_list_channels": teams_actions.list_channels,
@@ -231,12 +230,12 @@ ACTION_MAP = {
     "teams_get_meeting_details": teams_actions.get_meeting_details,
     "teams_list_members": teams_actions.list_members,
 
-    # --- TikTok Ads Actions ---
+    # TikTok Ads Actions (3)
     "tiktok_get_ad_accounts": tiktok_ads_actions.tiktok_get_ad_accounts,
     "tiktok_get_campaigns": tiktok_ads_actions.tiktok_get_campaigns,
     "tiktok_get_analytics_report": tiktok_ads_actions.tiktok_get_analytics_report,
 
-    # --- ToDo Actions ---
+    # ToDo Actions (7)
     "todo_list_task_lists": todo_actions.list_task_lists,
     "todo_create_task_list": todo_actions.create_task_list,
     "todo_list_tasks": todo_actions.list_tasks,
@@ -245,14 +244,14 @@ ACTION_MAP = {
     "todo_update_task": todo_actions.update_task,
     "todo_delete_task": todo_actions.delete_task,
 
-    # --- User Profile Actions ---
+    # User Profile Actions (5)
     "profile_get_my_profile": userprofile_actions.profile_get_my_profile,
     "profile_get_my_manager": userprofile_actions.profile_get_my_manager,
     "profile_get_my_direct_reports": userprofile_actions.profile_get_my_direct_reports,
     "profile_get_my_photo": userprofile_actions.profile_get_my_photo,
     "profile_update_my_profile": userprofile_actions.profile_update_my_profile, 
 
-    # --- Users Actions (Directory) ---
+    # Users (Directory) Actions (11)
     "user_list_users": users_actions.list_users,
     "user_get_user": users_actions.get_user,
     "user_create_user": users_actions.create_user,
@@ -265,11 +264,11 @@ ACTION_MAP = {
     "user_remove_group_member": users_actions.remove_group_member,
     "user_check_group_membership": users_actions.check_group_membership,
 
-    # --- Viva Insights Actions ---
+    # Viva Insights Actions (2)
     "viva_get_my_analytics": vivainsights_actions.get_my_analytics,
     "viva_get_focus_plan": vivainsights_actions.get_focus_plan,
     
-    # --- YouTube Channel Actions ---
+    # YouTube Channel Actions (4)
     "youtube_upload_video": youtube_channel_actions.youtube_upload_video,
     "youtube_update_video_details": youtube_channel_actions.youtube_update_video_details,
     "youtube_list_comments": youtube_channel_actions.youtube_list_comments,
