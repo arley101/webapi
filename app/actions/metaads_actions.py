@@ -141,7 +141,7 @@ def metaads_delete_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, An
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
-def metaads_get_insights(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def get_insights(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name = "metaads_get_insights"
     try:
         _get_meta_ads_api_client(params)

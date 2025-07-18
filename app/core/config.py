@@ -28,6 +28,14 @@ class TikTokAdsCredentials(BaseSettings):
     DEFAULT_ADVERTISER_ID: Optional[str] = None
     model_config = SettingsConfigDict(env_prefix='TIKTOK_ADS_', env_file='.env', extra='ignore')
 
+class XAdsCredentials(BaseSettings):
+    CONSUMER_KEY: Optional[str] = None
+    CONSUMER_SECRET: Optional[str] = None
+    ACCESS_TOKEN: Optional[str] = None
+    ACCESS_TOKEN_SECRET: Optional[str] = None
+    ACCOUNT_ID: Optional[str] = None
+    model_config = SettingsConfigDict(env_prefix='X_ADS_', env_file='.env', extra='ignore')
+
 class Settings(BaseSettings):
     APP_NAME: str = "EliteDynamicsAPI"
     APP_VERSION: str = "1.0.0" 
@@ -67,6 +75,7 @@ class Settings(BaseSettings):
     GOOGLE_ADS: GoogleAdsCredentials = GoogleAdsCredentials()
     META_ADS: MetaAdsCredentials = MetaAdsCredentials()
     TIKTOK_ADS: TikTokAdsCredentials = TikTokAdsCredentials()
+    X_ADS: XAdsCredentials = XAdsCredentials()
     
     LINKEDIN_ACCESS_TOKEN: Optional[str] = None
     DEFAULT_LINKEDIN_AD_ACCOUNT_ID: Optional[str] = None 
@@ -78,6 +87,8 @@ class Settings(BaseSettings):
     
     YOUTUBE_API_KEY: Optional[str] = None 
     YOUTUBE_ACCESS_TOKEN: Optional[str] = None
+    
+    GEMINI_API_KEY: Optional[str] = None
 
     @field_validator("OPENAI_API_DEFAULT_SCOPE", mode='before')
     @classmethod
@@ -105,9 +116,3 @@ class Settings(BaseSettings):
     )
 
 settings = Settings()
-
-if __name__ == "__main__":
-    print(f"App Name: {settings.APP_NAME}")
-    # ... (otros prints) ...
-    print(f"--- HubSpot Config ---")
-    print(f"  Private App Token: {'Presente' if settings.HUBSPOT_PRIVATE_APP_TOKEN else 'No configurado'}")
