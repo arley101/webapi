@@ -26,14 +26,14 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Resolve Project Dependencies and Zip
+      - name: Create ZIP deployment package
         run: |
-          # Oryx en Azure se encargará de instalar las dependencias desde requirements.txt.
-          # Este paso solo prepara el paquete para el despliegue.
-          echo "Creando paquete de despliegue desde la raíz del repositorio..."
-          zip -r deployment.zip . -x ".git/*" ".github/*" "antenv/*" ".venv/*" ".vscode/*" "local_dev_utils/*"
+          echo "Empaquetando el contenido del repositorio para el despliegue..."
+          # Este comando empaqueta todo el contenido del directorio actual en deployment.zip
+          zip -r deployment.zip .
 
       - name: Deploy to Azure Web App
+        id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
