@@ -1,6 +1,6 @@
 # .github/workflows/main.yml
 
-name: Build and deploy Python app to Azure Web App - EliteDynamicsAPI
+name: Deploy EliteDynamicsAPI to Azure App Service
 
 on:
   push:
@@ -33,4 +33,4 @@ jobs:
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-        package: ${{ env.PACKAGE_PATH }} # <-- SE HA CAMBIADO PARA APUNTAR AL CÓDIGO FUENTE
+        package: ${{ env.PACKAGE_PATH }} # <-- ESTE ES EL CAMBIO CLAVE
