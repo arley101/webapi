@@ -5,9 +5,6 @@ import google.generativeai as genai
 from app.core.config import settings
 from typing import Any, Dict
 
-# Importar el ACTION_MAP para que el modelo conozca las herramientas disponibles
-from app.core.action_mapper import ACTION_MAP
-
 logger = logging.getLogger(__name__)
 
 def _configure_gemini():
@@ -47,6 +44,10 @@ def gemini_orchestrate_task(client: Any, params: Dict[str, Any]) -> Dict[str, An
     Takes a high-level objective and generates a structured plan of actions to be executed.
     """
     action_name = "gemini_orchestrate_task"
+    # --- INICIO DE LA CORRECCIÓN ---
+    # Se importa ACTION_MAP aquí adentro para romper la dependencia circular.
+    from app.core.action_mapper import ACTION_MAP
+    # --- FIN DE LA CORRECCIÓN ---
     try:
         _configure_gemini()
         
@@ -81,7 +82,7 @@ def gemini_orchestrate_task(client: Any, params: Dict[str, Any]) -> Dict[str, An
         {{
             "plan": [
                 {{
-                    "action": "profile_get_my_manager",
+                    "action": "profile_get_my_profile",
                     "params": {{
                         "user_id": "me"
                     }}
