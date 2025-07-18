@@ -29,7 +29,7 @@ hubspot-api-client==9.0.0
 google-generativeai==0.7.1
 
 # X (Twitter) Ads API
-twitter-ads==3.2.1
+twitter-ads==9.0.0
 
 # HTTP y utilidades generales
 requests==2.32.3
