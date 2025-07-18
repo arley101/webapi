@@ -9,33 +9,28 @@ on:
   workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: elitedynamicsapi   # El nombre de tu App Service
-  PYTHON_VERSION: '3.11'                # La versión de Python que usa tu App Service
-  PACKAGE_PATH: '.'                     # Ruta a tu aplicación (la raíz del repositorio)
+  AZURE_WEBAPP_NAME: elitedynamicsapi
+  PYTHON_VERSION: '3.11'
+  PACKAGE_PATH: '.' # Indica que la aplicación está en la raíz del repositorio
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
+    - name: Set up Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Create ZIP deployment package
-        run: |
-          echo "Empaquetando el contenido del repositorio para el despliegue..."
-          # Este comando empaqueta todo el contenido del directorio actual en deployment.zip
-          zip -r deployment.zip .
+    # EL PASO DE CREACIÓN DEL ZIP HA SIDO ELIMINADO
 
-      - name: Deploy to Azure Web App
-        id: deploy-to-webapp
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
-          package: deployment.zip
+    - name: Deploy to Azure Web App
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+        package: ${{ env.PACKAGE_PATH }} # <-- SE HA CAMBIADO PARA APUNTAR AL CÓDIGO FUENTE
