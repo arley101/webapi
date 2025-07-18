@@ -1,45 +1,41 @@
-name: Deploy EliteDynamicsAPI to Azure App Service
+# .github/workflows/main.yml
+
+name: Build and deploy Python app to Azure Web App - EliteDynamicsAPI
 
 on:
   push:
     branches:
-      - main # Se dispara cuando haces push a la rama 'main'
-  workflow_dispatch: # Permite ejecutarlo manualmente desde la pestaña Actions en GitHub
+      - main
+  workflow_dispatch:
 
 env:
-  AZURE_WEBAPP_NAME: elitedynamicsapi   # Nombre de tu App Service
-  PYTHON_VERSION: '3.11'              # Versión de Python que usa tu App Service
+  AZURE_WEBAPP_NAME: elitedynamicsapi   # El nombre de tu App Service
+  PYTHON_VERSION: '3.11'                # La versión de Python que usa tu App Service
+  PACKAGE_PATH: '.'                     # Ruta a tu aplicación (la raíz del repositorio)
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    # environment: production # Descomenta si tienes un entorno de GitHub configurado para producción
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up Python ${{ env.PYTHON_VERSION }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Create ZIP deployment package
-      # Este comando empaqueta el contenido de la raíz del repositorio.
-      # Asegúrate de que 'app/' y 'requirements.txt' estén en la raíz.
-      run: |
-        echo "Empaquetando el contenido del repositorio..."
-        ls -la # Muestra el contenido para depuración
-        zip -r deployment.zip . -x ".git/*" ".github/*" ".venv/*" ".vscode/*" ".env" "*.zip" "docs/*" "tests/*" "local_dev_utils/*" ".*" 
-        # Ajusta las exclusiones según sea necesario.
-        # ".*" excluye archivos ocultos que no sean .gitignore o .gitattributes si están en una subcarpeta
-        # Considera explícitamente excluir archivos/carpetas de desarrollo local si no están en .gitignore
+      - name: Resolve Project Dependencies and Zip
+        run: |
+          # Oryx en Azure se encargará de instalar las dependencias desde requirements.txt.
+          # Este paso solo prepara el paquete para el despliegue.
+          echo "Creando paquete de despliegue desde la raíz del repositorio..."
+          zip -r deployment.zip . -x ".git/*" ".github/*" "antenv/*" ".venv/*" ".vscode/*" "local_dev_utils/*"
 
-    - name: Deploy to Azure Web App
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME }}
-        publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }} # Secreto configurado en GitHub
-        package: deployment.zip
-        # No es necesario especificar 'type: zip' ya que es el default para un archivo .zip
-        # No es necesario 'startup-command' si el Procfile o la configuración de Azure App Service es correcta (gunicorn app.main:app)
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: deployment.zip
