@@ -1,5 +1,6 @@
 # app/core/action_mapper.py
 import logging
+from typing import Dict, Any, Callable
 from app.actions import (
     azuremgmt_actions, bookings_actions, calendario_actions, correo_actions,
     forms_actions, github_actions, googleads_actions, graph_actions,
@@ -8,12 +9,12 @@ from app.actions import (
     power_automate_actions, powerbi_actions, sharepoint_actions,
     stream_actions, teams_actions, tiktok_ads_actions, todo_actions,
     userprofile_actions, users_actions, vivainsights_actions,
-    youtube_channel_actions, gemini_actions, x_ads_actions
+    youtube_channel_actions, gemini_actions, x_ads_actions, webresearch_actions
 )
 
 logger = logging.getLogger(__name__)
 
-ACTION_MAP = {
+ACTION_MAP: Dict[str, Callable] = {
     # Azure Management Actions (10)
     "azure_list_resource_groups": azuremgmt_actions.list_resource_groups,
     "azure_list_resources_in_rg": azuremgmt_actions.list_resources_in_rg,
@@ -71,10 +72,15 @@ ACTION_MAP = {
     "github_create_issue": github_actions.github_create_issue,
     "github_get_repo_details": github_actions.github_get_repo_details,
     
-    # Google Ads Actions (3)
+    # Google Ads Actions (8)
     "googleads_get_campaigns": googleads_actions.googleads_get_campaigns,
     "googleads_create_campaign": googleads_actions.googleads_create_campaign,
     "googleads_get_ad_groups": googleads_actions.googleads_get_ad_groups,
+    "googleads_get_campaign": googleads_actions.googleads_get_campaign,
+    "googleads_update_campaign_status": googleads_actions.googleads_update_campaign_status,
+    "googleads_create_performance_max_campaign": googleads_actions.googleads_create_performance_max_campaign,
+    "googleads_create_remarketing_list": googleads_actions.googleads_create_remarketing_list,
+    "googleads_get_campaign_performance": googleads_actions.googleads_get_campaign_performance,
     
     # Graph Actions (Genéricas) (2)
     "graph_generic_get": graph_actions.generic_get,
@@ -90,13 +96,16 @@ ACTION_MAP = {
     "hubspot_update_deal": hubspot_actions.hubspot_update_deal,
     "hubspot_delete_deal": hubspot_actions.hubspot_delete_deal,
 
-    # LinkedIn Ads Actions (4)
-    "linkedin_find_ad_accounts": linkedin_ads_actions.linkedin_find_ad_accounts,
-    "linkedin_get_campaigns": linkedin_ads_actions.linkedin_get_campaigns,
-    "linkedin_get_campaign_groups": linkedin_ads_actions.linkedin_get_campaign_groups,
-    "linkedin_get_analytics": linkedin_ads_actions.linkedin_get_analytics,
+    # LinkedIn Ads Actions
+    "linkedin_get_ad_accounts": linkedin_ads_actions.linkedin_get_ad_accounts,
+    "linkedin_list_campaigns": linkedin_ads_actions.linkedin_list_campaigns,
+    "linkedin_get_basic_report": linkedin_ads_actions.linkedin_get_basic_report,
+    "linkedin_create_campaign_group": linkedin_ads_actions.linkedin_create_campaign_group,
+    "linkedin_update_campaign_group_status": linkedin_ads_actions.linkedin_update_campaign_group_status,
+    "linkedin_get_campaign_analytics_by_day": linkedin_ads_actions.linkedin_get_campaign_analytics_by_day,
+    "linkedin_get_account_analytics_by_company": linkedin_ads_actions.linkedin_get_account_analytics_by_company,
 
-    # Meta Ads Actions (8)
+    # Meta Ads Actions (13)
     "metaads_get_business_details": metaads_actions.metaads_get_business_details,
     "metaads_list_owned_pages": metaads_actions.metaads_list_owned_pages,
     "metaads_get_page_engagement": metaads_actions.metaads_get_page_engagement,
@@ -105,6 +114,11 @@ ACTION_MAP = {
     "metaads_update_campaign": metaads_actions.metaads_update_campaign,
     "metaads_delete_campaign": metaads_actions.metaads_delete_campaign,
     "metaads_get_insights": metaads_actions.get_insights,
+    "metaads_get_campaign_details": metaads_actions.metaads_get_campaign_details,
+    "metaads_create_ad_set": metaads_actions.metaads_create_ad_set,
+    "metaads_get_ad_set_details": metaads_actions.metaads_get_ad_set_details,
+    "metaads_create_ad": metaads_actions.metaads_create_ad_set,
+    "metaads_get_account_insights": metaads_actions.metaads_get_account_insights,
 
     # Notion Actions (7)
     "notion_search_general": notion_actions.notion_search_general,
@@ -144,9 +158,10 @@ ACTION_MAP = {
     "openai_get_embedding": openai_actions.get_embedding,
     "openai_list_models": openai_actions.list_models,
 
-    # Planner Actions (9)
+    # Planner Actions (10 - actualizado con la nueva acción)
     "planner_list_plans": planner_actions.list_plans,
     "planner_get_plan": planner_actions.get_plan,
+    "planner_get_plan_by_name": planner_actions.planner_get_plan_by_name,  # Nueva acción agregada
     "planner_list_tasks": planner_actions.list_tasks,
     "planner_create_task": planner_actions.create_task,
     "planner_get_task": planner_actions.get_task,
@@ -231,10 +246,14 @@ ACTION_MAP = {
     "teams_get_meeting_details": teams_actions.get_meeting_details,
     "teams_list_members": teams_actions.list_members,
 
-    # TikTok Ads Actions (3)
+    # TikTok Ads Actions (7)
     "tiktok_get_ad_accounts": tiktok_ads_actions.tiktok_get_ad_accounts,
     "tiktok_get_campaigns": tiktok_ads_actions.tiktok_get_campaigns,
     "tiktok_get_analytics_report": tiktok_ads_actions.tiktok_get_analytics_report,
+    "tiktok_create_campaign": tiktok_ads_actions.tiktok_create_campaign,
+    "tiktok_update_campaign_status": tiktok_ads_actions.tiktok_update_campaign_status,
+    "tiktok_create_ad_group": tiktok_ads_actions.tiktok_create_ad_group,
+    "tiktok_create_ad": tiktok_ads_actions.tiktok_create_ad,
 
     # ToDo Actions (7)
     "todo_list_task_lists": todo_actions.list_task_lists,
@@ -281,6 +300,9 @@ ACTION_MAP = {
     "x_ads_update_campaign": x_ads_actions.x_ads_update_campaign,
     "x_ads_delete_campaign": x_ads_actions.x_ads_delete_campaign,
     "x_ads_get_analytics": x_ads_actions.x_ads_get_analytics,
+
+    # Web Research Actions (1)
+    "webresearch_fetch_url": webresearch_actions.fetch_url,
 }
 
 num_actions = len(ACTION_MAP)

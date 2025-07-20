@@ -117,3 +117,115 @@ def googleads_get_ad_groups(client: Any, params: Dict[str, Any]) -> Dict[str, An
     if not campaign_id: raise ValueError("Se requiere 'campaign_id'.")
     query = f"SELECT ad_group.id, ad_group.name, ad_group.status FROM ad_group WHERE campaign.id = {campaign_id}"
     return _execute_search_query(customer_id, query, "googleads_get_ad_groups")
+
+# --- NUEVAS FUNCIONES INTEGRADAS ---
+
+def googleads_get_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene detalles específicos de una campaña."""
+    customer_id = _get_customer_id(params)
+    campaign_id = params.get("campaign_id")
+    if not campaign_id:
+        raise ValueError("Se requiere 'campaign_id'.")
+    query = """
+        SELECT 
+            campaign.id, 
+            campaign.name, 
+            campaign.status, 
+            campaign.bidding_strategy_type, 
+            campaign.campaign_budget 
+        FROM campaign 
+        WHERE campaign.id = %s
+    """ % campaign_id
+    return _execute_search_query(customer_id, query, "googleads_get_campaign")
+
+def googleads_update_campaign_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Actualiza el estado de una campaña específica."""
+    customer_id = _get_customer_id(params)
+    campaign_id = params.get("campaign_id")
+    status = params.get("status")
+    if not campaign_id or not status:
+        raise ValueError("Se requieren 'campaign_id' y 'status'.")
+
+    try:
+        gads_client = get_google_ads_client()
+        campaign_service = gads_client.get_service("CampaignService")
+        operation = gads_client.get_type("CampaignOperation")
+        
+        campaign = operation.update
+        campaign.resource_name = campaign_service.campaign_path(customer_id, campaign_id)
+        campaign.status = gads_client.enums.CampaignStatusEnum[status.upper()]
+        
+        field_mask = gads_client.get_type("FieldMask")
+        field_mask.paths.append("status")
+        operation.update_mask.CopyFrom(field_mask)
+        
+        return _execute_mutate_operations(
+            customer_id, 
+            [operation], 
+            "CampaignService", 
+            "googleads_update_campaign_status"
+        )
+    except Exception as e:
+        logger.error(f"Error al actualizar estado de campaña: {str(e)}")
+        return {"status": "error", "message": str(e), "http_status": 500}
+
+def googleads_create_performance_max_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea una campaña Performance Max con configuraciones optimizadas."""
+    params['type'] = 'PERFORMANCE_MAX'
+    return googleads_create_campaign(client, params)
+
+def googleads_create_remarketing_list(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea una nueva lista de remarketing."""
+    customer_id = _get_customer_id(params)
+    name = params.get("name")
+    description = params.get("description")
+    membership_days = params.get("membership_days", 365)
+    
+    if not name:
+        raise ValueError("Se requiere 'name' para la lista.")
+
+    try:
+        gads_client = get_google_ads_client()
+        operation = gads_client.get_type("UserListOperation")
+        user_list = operation.create
+        user_list.name = name
+        user_list.description = description or f"Lista creada automáticamente - {name}"
+        user_list.membership_life_span = membership_days
+        user_list.crm_based_user_list.upload_key_type = (
+            gads_client.enums.CustomerMatchUploadKeyTypeEnum.CONTACT_INFO
+        )
+
+        return _execute_mutate_operations(
+            customer_id,
+            [operation],
+            "UserListService",
+            "googleads_create_remarketing_list"
+        )
+    except Exception as e:
+        logger.error(f"Error al crear lista de remarketing: {str(e)}")
+        return {"status": "error", "message": str(e), "http_status": 500}
+
+# --- FUNCIONES DE REPORTE Y ANÁLISIS ---
+
+def googleads_get_campaign_performance(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene métricas de rendimiento de campaña."""
+    customer_id = _get_customer_id(params)
+    campaign_id = params.get("campaign_id")
+    date_range = params.get("date_range", "LAST_30_DAYS")
+    
+    query = f"""
+        SELECT 
+            campaign.id,
+            campaign.name,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions
+        FROM campaign
+        WHERE campaign.id = {campaign_id}
+        AND segments.date DURING {date_range}
+    """
+    
+    return _execute_search_query(customer_id, query, "googleads_get_campaign_performance")
+
+# Puedes agregar más funciones según necesites...

@@ -6,6 +6,10 @@ from facebook_business.api import FacebookAdsApi
 from facebook_business.adobjects.business import Business
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.campaign import Campaign
+from facebook_business.adobjects.adset import AdSet
+from facebook_business.adobjects.adcreative import AdCreative
+from facebook_business.adobjects.customaudience import CustomAudience
+from facebook_business.adobjects.ad import Ad
 from facebook_business.adobjects.page import Page
 from facebook_business.exceptions import FacebookRequestError
 
@@ -149,6 +153,67 @@ def get_insights(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         insights_params = params.get("insights_params")
         if not ad_account_id or not insights_params:
             raise ValueError("'ad_account_id' y 'insights_params' son requeridos.")
+        ad_account = AdAccount(f"act_{str(ad_account_id).replace('act_', '')}")
+        insights = ad_account.get_insights(params=insights_params)
+        return {"status": "success", "data": [i.export_all_data() for i in insights]}
+    except Exception as e:
+        return _handle_meta_ads_api_error(e, action_name)
+
+def metaads_get_campaign_details(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "metaads_get_campaign_details"
+    try:
+        _get_meta_ads_api_client(params)
+        campaign_id = params.get("campaign_id")
+        fields = params.get("fields", ["id", "name", "status", "objective", "daily_budget", "lifetime_budget"])
+        if not campaign_id:
+            raise ValueError("'campaign_id' es requerido.")
+        
+        campaign = Campaign(campaign_id)
+        details = campaign.api_get(fields=fields)
+        return {"status": "success", "data": details.export_all_data()}
+    except Exception as e:
+        return _handle_meta_ads_api_error(e, action_name)
+
+def metaads_create_ad_set(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "metaads_create_ad_set"
+    try:
+        _get_meta_ads_api_client(params)
+        ad_account_id = params.get("ad_account_id")
+        ad_set_payload = params.get("ad_set_payload")
+        if not ad_account_id or not ad_set_payload:
+            raise ValueError("'ad_account_id' y 'ad_set_payload' son requeridos.")
+        
+        ad_account = AdAccount(f"act_{str(ad_account_id).replace('act_', '')}")
+        ad_set = ad_account.create_ad_set(params=ad_set_payload)
+        return {"status": "success", "data": ad_set.export_all_data()}
+    except Exception as e:
+        return _handle_meta_ads_api_error(e, action_name)
+
+def metaads_get_ad_set_details(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "metaads_get_ad_set_details"
+    try:
+        _get_meta_ads_api_client(params)
+        ad_set_id = params.get("ad_set_id")
+        fields = params.get("fields", ["id", "name", "status", "campaign_id", "targeting", "daily_budget"])
+        if not ad_set_id:
+            raise ValueError("'ad_set_id' es requerido.")
+
+        ad_set = AdSet(ad_set_id)
+        details = ad_set.api_get(fields=fields)
+        return {"status": "success", "data": details.export_all_data()}
+    except Exception as e:
+        return _handle_meta_ads_api_error(e, action_name)
+
+def metaads_get_account_insights(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    # Reemplaza la función existente get_insights con esta versión actualizada
+    action_name = "metaads_get_account_insights"
+    try:
+        _get_meta_ads_api_client(params)
+        ad_account_id = params.get("ad_account_id")
+        insights_params = params.get("insights_params", {})
+        if not ad_account_id:
+            raise ValueError("'ad_account_id' es requerido.")
+        
         ad_account = AdAccount(f"act_{str(ad_account_id).replace('act_', '')}")
         insights = ad_account.get_insights(params=insights_params)
         return {"status": "success", "data": [i.export_all_data() for i in insights]}

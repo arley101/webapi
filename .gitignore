@@ -156,5 +156,9 @@ inspector.py
 refactor_output/
 refactor_final.py
 cleanup.sh
+accion_mapper_integracion_1.py
+ManualDefinitivoAsistenteGPTp.md
+accion_mapper_integracion_2.py
+proxy_openapi.yaml
 # Archivos de logs
 *.log*
