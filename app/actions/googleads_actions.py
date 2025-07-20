@@ -1,5 +1,6 @@
 # app/actions/googleads_actions.py
 import logging
+import base64
 from typing import Dict, List, Optional, Any
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
@@ -14,7 +15,7 @@ _google_ads_client_instance: Optional[GoogleAdsClient] = None
 
 def get_google_ads_client() -> GoogleAdsClient:
     global _google_ads_client_instance
-    if _google_ads_client_instance:
+    if (_google_ads_client_instance):
         return _google_ads_client_instance
     
     # Cargar credenciales desde la configuración centralizada
@@ -227,5 +228,314 @@ def googleads_get_campaign_performance(client: Any, params: Dict[str, Any]) -> D
     """
     
     return _execute_search_query(customer_id, query, "googleads_get_campaign_performance")
+
+# --- NUEVAS FUNCIONES AVANZADAS ---
+
+def googleads_list_accessible_customers(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "googleads_list_accessible_customers"
+    try:
+        gads_client = get_google_ads_client()
+        customer_service = gads_client.get_service("CustomerService")
+        accessible_customers = customer_service.list_accessible_customers()
+        return {"status": "success", "data": {"resource_names": accessible_customers.resource_names}}
+    except GoogleAdsException as ex:
+        return _handle_google_ads_api_error(ex, action_name)
+    except Exception as e:
+        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+
+def googleads_get_campaign_by_name(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "googleads_get_campaign_by_name"
+    customer_id = _get_customer_id(params)
+    campaign_name = params.get("name")
+    if not campaign_name:
+        return {"status": "error", "action": action_name, "message": "El parámetro 'name' es requerido.", "http_status": 400}
+    
+    sanitized_name = campaign_name.replace("'", "\\'")
+    query = f"SELECT campaign.id, campaign.name, campaign.status, campaign.resource_name FROM campaign WHERE campaign.name = '{sanitized_name}' LIMIT 1"
+    response = _execute_search_query(customer_id, query, action_name)
+    
+    if response["status"] == "success":
+        if not response["data"]:
+            return {"status": "error", "action": action_name, "message": f"No se encontró campaña con nombre '{campaign_name}'.", "http_status": 404}
+        return {"status": "success", "data": response["data"][0]['campaign']}
+    return response
+
+def googleads_upload_click_conversion(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "googleads_upload_click_conversion"
+    try:
+        customer_id = _get_customer_id(params)
+        gclid = params.get("gclid")
+        conversion_action_id = params.get("conversion_action_id")
+        conversion_datetime = params.get("conversion_datetime")
+        conversion_value = params.get("conversion_value")
+
+        if not all([gclid, conversion_action_id, conversion_datetime, conversion_value is not None]):
+            raise ValueError("Se requieren 'gclid', 'conversion_action_id', 'conversion_datetime' y 'conversion_value'.")
+
+        gads_client = get_google_ads_client()
+        conversion_upload_service = gads_client.get_service("ConversionUploadService")
+        
+        click_conversion = gads_client.get_type("ClickConversion")
+        click_conversion.gclid = gclid
+        click_conversion.conversion_action = f"customers/{customer_id}/conversionActions/{conversion_action_id}"
+        click_conversion.conversion_date_time = conversion_datetime
+        click_conversion.conversion_value = float(conversion_value)
+        click_conversion.currency_code = params.get("currency_code", "USD")
+
+        request = gads_client.get_type("UploadClickConversionsRequest")
+        request.customer_id = customer_id
+        request.conversions.append(click_conversion)
+        request.partial_failure = True
+
+        response = conversion_upload_service.upload_click_conversions(request=request)
+        
+        response_dict = json_format.MessageToDict(response._pb)
+        if "partialFailureError" in response_dict:
+            return {"status": "partial_error", "message": "La carga de conversiones tuvo fallos parciales.", "data": response_dict}
+
+        return {"status": "success", "data": response_dict}
+    except GoogleAdsException as ex:
+        return _handle_google_ads_api_error(ex, action_name)
+    except Exception as e:
+        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+
+def googleads_upload_image_asset(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "googleads_upload_image_asset"
+    try:
+        customer_id = _get_customer_id(params)
+        image_base64 = params.get("image_base64_data")
+        asset_name = params.get("asset_name")
+
+        if not image_base64 or not asset_name:
+            raise ValueError("Se requieren 'image_base64_data' y 'asset_name'.")
+
+        gads_client = get_google_ads_client()
+        asset_operation = gads_client.get_type("AssetOperation")
+        asset = asset_operation.create
+        asset.name = asset_name
+        asset.type_ = gads_client.enums.AssetTypeEnum.IMAGE
+        asset.image_asset.data = base64.b64decode(image_base64)
+        
+        return _execute_mutate_operations(customer_id, [asset_operation], "AssetService", action_name)
+    except Exception as e:
+        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+
+def googleads_get_keyword_performance_report(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "googleads_get_keyword_performance_report"
+    customer_id = _get_customer_id(params)
+    date_range = params.get("date_range", "LAST_7_DAYS")
+    
+    query = f"""
+        SELECT
+            ad_group.name,
+            ad_group_criterion.criterion_id,
+            ad_group_criterion.keyword.text,
+            metrics.clicks,
+            metrics.impressions,
+            metrics.ctr,
+            metrics.average_cpc,
+            metrics.cost_micros
+        FROM keyword_view
+        WHERE segments.date DURING {date_range}
+        AND campaign.status = 'ENABLED'
+        AND ad_group.status = 'ENABLED'
+        ORDER BY metrics.clicks DESC
+        LIMIT 50
+    """
+    return _execute_search_query(customer_id, query, action_name)
+
+def googleads_get_campaign_performance_by_device(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "googleads_get_campaign_performance_by_device"
+    customer_id = _get_customer_id(params)
+    campaign_id = params.get("campaign_id")
+    date_range = params.get("date_range", "LAST_30_DAYS")
+
+    query = f"""
+        SELECT
+            campaign.id,
+            campaign.name,
+            segments.device,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.ctr
+        FROM campaign
+        WHERE campaign.id = {campaign_id}
+        AND segments.date DURING {date_range}
+        ORDER BY metrics.clicks DESC
+    """
+    return _execute_search_query(customer_id, query, action_name)
+
+def googleads_add_keywords_to_ad_group(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Agrega palabras clave a un grupo de anuncios."""
+    action_name = "googleads_add_keywords_to_ad_group"
+    try:
+        customer_id = _get_customer_id(params)
+        ad_group_id = params.get("ad_group_id")
+        keywords = params.get("keywords", [])
+
+        if not ad_group_id or not keywords:
+            raise ValueError("Se requieren 'ad_group_id' y 'keywords'")
+
+        gads_client = get_google_ads_client()
+        operations = []
+
+        for keyword in keywords:
+            operation = gads_client.get_type("AdGroupCriterionOperation")
+            criterion = operation.create
+            criterion.ad_group = gads_client.get_service("AdGroupService").ad_group_path(
+                customer_id, ad_group_id
+            )
+            criterion.status = gads_client.enums.AdGroupCriterionStatusEnum.ENABLED
+            criterion.keyword.text = keyword
+            criterion.keyword.match_type = gads_client.enums.KeywordMatchTypeEnum.EXACT
+            operations.append(operation)
+
+        return _execute_mutate_operations(
+            customer_id, 
+            operations, 
+            "AdGroupCriterionService", 
+            action_name
+        )
+    except Exception as e:
+        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+
+def googleads_apply_audience_to_ad_group(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Aplica una audiencia a un grupo de anuncios."""
+    action_name = "googleads_apply_audience_to_ad_group"
+    try:
+        customer_id = _get_customer_id(params)
+        ad_group_id = params.get("ad_group_id")
+        audience_id = params.get("audience_id")
+
+        if not ad_group_id or not audience_id:
+            raise ValueError("Se requieren 'ad_group_id' y 'audience_id'")
+
+        gads_client = get_google_ads_client()
+        operation = gads_client.get_type("AdGroupCriterionOperation")
+        criterion = operation.create
+        criterion.ad_group = gads_client.get_service("AdGroupService").ad_group_path(
+            customer_id, ad_group_id
+        )
+        criterion.user_list.user_list = gads_client.get_service("UserListService").user_list_path(
+            customer_id, audience_id
+        )
+
+        return _execute_mutate_operations(
+            customer_id,
+            [operation],
+            "AdGroupCriterionService",
+            action_name
+        )
+    except Exception as e:
+        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+
+def googleads_create_responsive_search_ad(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea un anuncio de búsqueda responsive."""
+    action_name = "googleads_create_responsive_search_ad"
+    try:
+        customer_id = _get_customer_id(params)
+        ad_group_id = params.get("ad_group_id")
+        headlines = params.get("headlines", [])
+        descriptions = params.get("descriptions", [])
+
+        if not ad_group_id or not headlines or not descriptions:
+            raise ValueError("Se requieren 'ad_group_id', 'headlines' y 'descriptions'")
+
+        gads_client = get_google_ads_client()
+        operation = gads_client.get_type("AdGroupAdOperation")
+        ad_group_ad = operation.create
+        ad_group_ad.ad_group = gads_client.get_service("AdGroupService").ad_group_path(
+            customer_id, ad_group_id
+        )
+        ad_group_ad.status = gads_client.enums.AdGroupAdStatusEnum.PAUSED
+
+        # Configurar el anuncio responsive
+        ad = ad_group_ad.ad
+        ad.responsive_search_ad.headlines = [
+            {"text": headline} for headline in headlines[:15]  # Máximo 15 títulos
+        ]
+        ad.responsive_search_ad.descriptions = [
+            {"text": description} for description in descriptions[:4]  # Máximo 4 descripciones
+        ]
+
+        return _execute_mutate_operations(
+            customer_id,
+            [operation],
+            "AdGroupAdService",
+            action_name
+        )
+    except Exception as e:
+        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+
+def googleads_get_ad_performance(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene el rendimiento de los anuncios."""
+    action_name = "googleads_get_ad_performance"
+    customer_id = _get_customer_id(params)
+    ad_group_id = params.get("ad_group_id")
+    date_range = params.get("date_range", "LAST_30_DAYS")
+
+    where_clause = f"AND ad_group.id = {ad_group_id}" if ad_group_id else ""
+    
+    query = f"""
+        SELECT
+            ad_group_ad.ad.id,
+            ad_group_ad.ad.responsive_search_ad.headlines,
+            ad_group_ad.ad.responsive_search_ad.descriptions,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.ctr
+        FROM ad_group_ad
+        WHERE segments.date DURING {date_range}
+        {where_clause}
+        ORDER BY metrics.clicks DESC
+    """
+    
+    return _execute_search_query(customer_id, query, action_name)
+
+def googleads_upload_offline_conversion(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Carga conversiones offline."""
+    action_name = "googleads_upload_offline_conversion"
+    try:
+        customer_id = _get_customer_id(params)
+        conversion_action_id = params.get("conversion_action_id")
+        conversion_data = params.get("conversion_data", [])
+
+        if not conversion_action_id or not conversion_data:
+            raise ValueError("Se requieren 'conversion_action_id' y 'conversion_data'")
+
+        gads_client = get_google_ads_client()
+        operations = []
+
+        for data in conversion_data:
+            operation = gads_client.get_type("OfflineUserDataJobOperation")
+            job = operation.create
+            job.type_ = gads_client.enums.OfflineUserDataJobTypeEnum.STORE_SALES_UPLOAD_FIRST_PARTY
+            job.store_sales_metadata.loyalty_fraction = 1.0
+            job.store_sales_metadata.transaction_upload_fraction = 1.0
+
+            user_data = job.user_data.add()
+            user_data.transaction_attribute.conversion_action = (
+                f"customers/{customer_id}/conversionActions/{conversion_action_id}"
+            )
+            user_data.transaction_attribute.currency_code = data.get("currency_code", "USD")
+            user_data.transaction_attribute.transaction_amount_micros = int(
+                float(data.get("transaction_amount", 0)) * 1_000_000
+            )
+            user_data.transaction_attribute.transaction_date_time = data.get(
+                "transaction_date_time"
+            )
+
+        return _execute_mutate_operations(
+            customer_id,
+            operations,
+            "OfflineUserDataJobService",
+            action_name
+        )
+    except Exception as e:
+        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
 
 # Puedes agregar más funciones según necesites...

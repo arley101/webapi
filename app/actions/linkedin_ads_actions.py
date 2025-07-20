@@ -14,6 +14,11 @@ LINKEDIN_API_BASE_URL = "https://api.linkedin.com"
 LINKEDIN_API_VERSION_HEADER = "202401" # Ejemplo, ajusta a una versión reciente y válida
 LINKEDIN_RESTLI_VERSION_HEADER = "2.0.0"
 
+# Constantes adicionales para nuevas funciones
+DEFAULT_CAMPAIGN_FIELDS = "id,name,status,type,objective,format,creativeSpec,targetingCriteria,budget,bidding"
+DEFAULT_AD_FIELDS = "id,name,status,type,creatives,campaign,targeting,stats"
+DEFAULT_ANALYTICS_FIELDS = "impressions,clicks,likes,shares,comments,costInLocalCurrency,conversionValue"
+
 def _get_linkedin_api_headers(params: Dict[str, Any]) -> Dict[str, str]:
     """
     Prepara los headers para las solicitudes a la LinkedIn Ads API.
@@ -318,6 +323,281 @@ def linkedin_get_account_analytics_by_company(client: Any, params: Dict[str, Any
         return {"status": "success", "data": response.json()}
     except Exception as e:
         return _handle_linkedin_api_error(e, action_name)
+
+# Funciones CRUD para Campañas
+def linkedin_create_campaign(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_create_campaign"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        account_urn = _get_linkedin_ad_account_urn(params)
+        
+        required_fields = ['name', 'objective', 'budget', 'bidding']
+        if not all(params.get(field) for field in required_fields):
+            raise ValueError(f"Se requieren los campos: {', '.join(required_fields)}")
+
+        payload = {
+            "account": account_urn,
+            "name": params["name"],
+            "objective": params["objective"],
+            "status": params.get("status", "DRAFT"),
+            "budget": params["budget"],
+            "bidding": params["bidding"],
+            "targetingCriteria": params.get("targeting", {}),
+            "creativeSpec": params.get("creative_spec", {})
+        }
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/adCampaignsV2"
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "data": response.json(),
+            "campaign_id": response.headers.get("x-restli-id")
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+def linkedin_update_campaign(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_update_campaign"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        campaign_id = params.get("campaign_id")
+        if not campaign_id:
+            raise ValueError("Se requiere campaign_id")
+
+        update_fields = {k: v for k, v in params.items() 
+                        if k in ["name", "status", "budget", "bidding", "targetingCriteria", "creativeSpec"]}
+        
+        if not update_fields:
+            raise ValueError("Se requiere al menos un campo para actualizar")
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/adCampaignsV2/{campaign_id}"
+        payload = {"patch": {"$set": update_fields}}
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "message": f"Campaña {campaign_id} actualizada exitosamente"
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+def linkedin_delete_campaign(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_delete_campaign"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        campaign_id = params.get("campaign_id")
+        if not campaign_id:
+            raise ValueError("Se requiere campaign_id")
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/adCampaignsV2/{campaign_id}"
+        response = requests.delete(url, headers=headers, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "message": f"Campaña {campaign_id} eliminada exitosamente"
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+# Funciones CRUD para Anuncios
+def linkedin_create_ad(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_create_ad"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        campaign_id = params.get("campaign_id")
+        if not campaign_id:
+            raise ValueError("Se requiere campaign_id")
+
+        required_fields = ['name', 'type', 'creatives']
+        if not all(params.get(field) for field in required_fields):
+            raise ValueError(f"Se requieren los campos: {', '.join(required_fields)}")
+
+        payload = {
+            "campaign": f"urn:li:sponsoredCampaign:{campaign_id}",
+            "name": params["name"],
+            "type": params["type"],
+            "status": params.get("status", "DRAFT"),
+            "creatives": params["creatives"]
+        }
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/ads"
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "data": response.json(),
+            "ad_id": response.headers.get("x-restli-id")
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+def linkedin_update_ad(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_update_ad"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        ad_id = params.get("ad_id")
+        if not ad_id:
+            raise ValueError("Se requiere ad_id")
+
+        update_fields = {k: v for k, v in params.items() 
+                        if k in ["name", "status", "creatives"]}
+        
+        if not update_fields:
+            raise ValueError("Se requiere al menos un campo para actualizar")
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/ads/{ad_id}"
+        payload = {"patch": {"$set": update_fields}}
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "message": f"Anuncio {ad_id} actualizado exitosamente"
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+def linkedin_delete_ad(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_delete_ad"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        ad_id = params.get("ad_id")
+        if not ad_id:
+            raise ValueError("Se requiere ad_id")
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/ads/{ad_id}"
+        response = requests.delete(url, headers=headers, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "message": f"Anuncio {ad_id} eliminado exitosamente"
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+# Funciones de Análisis y Reportes
+def linkedin_get_creative_analytics(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_get_creative_analytics"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        account_urn = _get_linkedin_ad_account_urn(params)
+        
+        if not all(params.get(f) for f in ["start_date", "end_date"]):
+            raise ValueError("Se requieren start_date y end_date")
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/adAnalyticsV2"
+        payload = {
+            "dateRange": {
+                "start": params["start_date"],
+                "end": params["end_date"]
+            },
+            "timeGranularity": params.get("time_granularity", "DAILY"),
+            "accounts": [account_urn],
+            "pivot": "CREATIVE",
+            "fields": params.get("fields", DEFAULT_ANALYTICS_FIELDS)
+        }
+
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "data": response.json()
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+def linkedin_get_conversion_report(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_get_conversion_report"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        account_urn = _get_linkedin_ad_account_urn(params)
+        
+        if not all(params.get(f) for f in ["start_date", "end_date"]):
+            raise ValueError("Se requieren start_date y end_date")
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/adAnalyticsV2"
+        payload = {
+            "dateRange": {
+                "start": params["start_date"],
+                "end": params["end_date"]
+            },
+            "timeGranularity": params.get("time_granularity", "DAILY"),
+            "accounts": [account_urn],
+            "pivot": "CONVERSION",
+            "fields": "conversionValue,costInLocalCurrency,conversions,postClickConversions,postViewConversions"
+        }
+
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "data": response.json()
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+def linkedin_get_budget_usage(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_get_budget_usage"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        account_urn = _get_linkedin_ad_account_urn(params)
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/adAccounts/{account_urn}/budgetStatus"
+        response = requests.get(url, headers=headers, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "data": response.json()
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+def linkedin_get_audience_insights(client: Optional[Any], params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "linkedin_get_audience_insights"
+    try:
+        headers = _get_linkedin_api_headers(params)
+        account_urn = _get_linkedin_ad_account_urn(params)
+        campaign_id = params.get("campaign_id")
+        
+        if not campaign_id:
+            raise ValueError("Se requiere campaign_id")
+
+        url = f"{LINKEDIN_API_BASE_URL}/v2/campaignInsights"
+        query_params = {
+            "campaign": f"urn:li:sponsoredCampaign:{campaign_id}",
+            "fields": "audienceSize,demographicDistribution,industryDistribution,jobFunctionDistribution"
+        }
+
+        response = requests.get(url, headers=headers, params=query_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "data": response.json()
+        }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
 
 # Aquí se podrían añadir funciones para crear/actualizar campañas, ad sets, ads, etc.
 # Ejemplo placeholder:

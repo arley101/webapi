@@ -538,4 +538,53 @@ def list_members(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     logger.info(f"{log_context_detail}. Query: {query_api_params}, Max_items: {max_items_total or 'todos'}")
     return _teams_paged_request(client, url_base, scope_to_use, params, query_api_params, max_items_total, log_context_detail)
 
+def teams_get_team_by_name(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    logger.info("Ejecutando teams_get_team_by_name con params: %s", params)
+    action_name = "teams_get_team_by_name"
+    
+    team_name: Optional[str] = params.get("team_name")
+    user_identifier: Optional[str] = params.get("user_id", "me")
+    
+    if not team_name:
+        return _handle_teams_api_error(ValueError("'team_name' es requerido."), action_name, params)
+    
+    # Primero, listamos todos los equipos a los que pertenece el usuario
+    list_teams_params = {"user_id": user_identifier, "top_per_page": 50}
+    teams_response = list_joined_teams(client, list_teams_params)
+    
+    if teams_response.get("status") != "success":
+        logger.error(f"Error al listar los equipos para buscar '{team_name}': {teams_response}")
+        return teams_response
+    
+    teams_list = teams_response.get("data", {}).get("value", [])
+    
+    # Buscar un equipo cuyo nombre coincida exactamente o contenga el nombre buscado
+    matching_teams = []
+    exact_match = None
+    
+    for team in teams_list:
+        display_name = team.get("displayName", "")
+        if display_name.lower() == team_name.lower():
+            exact_match = team
+            break
+        elif team_name.lower() in display_name.lower():
+            matching_teams.append(team)
+    
+    # Priorizar coincidencia exacta, luego parcial
+    if exact_match:
+        logger.info(f"Equipo encontrado con coincidencia exacta: '{exact_match.get('displayName')}' (ID: {exact_match.get('id')})")
+        return {"status": "success", "data": exact_match}
+    elif matching_teams:
+        # Si hay múltiples coincidencias parciales, tomar la primera
+        best_match = matching_teams[0]
+        logger.info(f"Equipo encontrado con coincidencia parcial: '{best_match.get('displayName')}' (ID: {best_match.get('id')})")
+        if len(matching_teams) > 1:
+            logger.info(f"Se encontraron {len(matching_teams)} equipos adicionales que coinciden parcialmente con '{team_name}'")
+        return {"status": "success", "data": best_match}
+    else:
+        error_msg = f"No se encontró ningún equipo que coincida con '{team_name}'"
+        logger.warning(error_msg)
+        return _handle_teams_api_error(ValueError(error_msg), action_name, params)
+
 # --- FIN DEL MÓDULO actions/teams_actions.py ---

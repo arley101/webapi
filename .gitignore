@@ -160,5 +160,9 @@ accion_mapper_integracion_1.py
 ManualDefinitivoAsistenteGPTp.md
 accion_mapper_integracion_2.py
 proxy_openapi.yaml
+ACTION_MAP.JSON
+generate_action_map_json.py
+validate_action_map.py
+
 # Archivos de logs
 *.log*
