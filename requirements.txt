@@ -48,7 +48,7 @@ PyYAML>=5.4
 validators>=0.20.0
 
 # Seguridad, autenticación, tokens
-cryptography==43.0.3
+cryptography==44.0.1
 cffi>=1.14
 pycparser>=2.22
 msal>=1.24.0
