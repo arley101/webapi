@@ -91,3 +91,81 @@ def tiktok_get_analytics_report(client: Any, params: Dict[str, Any]) -> Dict[str
         return {"status": "success", "data": response.json()}
     except Exception as e:
         return _handle_tiktok_api_error(e, action_name)
+
+def tiktok_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "tiktok_create_campaign"
+    try:
+        advertiser_id = params.get("advertiser_id", settings.TIKTOK_ADS.DEFAULT_ADVERTISER_ID)
+        campaign_payload = params.get("campaign_payload")
+        if not advertiser_id or not campaign_payload: 
+            raise ValueError("'advertiser_id' y 'campaign_payload' son requeridos.")
+        
+        headers = _get_tiktok_api_headers(params)
+        url = f"{TIKTOK_BUSINESS_API_BASE_URL}/{TIKTOK_API_VERSION}/campaign/create/"
+        payload = {"advertiser_id": advertiser_id, **campaign_payload}
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        return {"status": "success", "data": response.json()}
+    except Exception as e:
+        return _handle_tiktok_api_error(e, action_name)
+
+def tiktok_update_campaign_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "tiktok_update_campaign_status"
+    try:
+        advertiser_id = params.get("advertiser_id", settings.TIKTOK_ADS.DEFAULT_ADVERTISER_ID)
+        campaign_id = params.get("campaign_id")
+        operation_status = params.get("operation_status")
+        
+        if not all([advertiser_id, campaign_id, operation_status]):
+            raise ValueError("'advertiser_id', 'campaign_id' y 'operation_status' son requeridos.")
+        
+        headers = _get_tiktok_api_headers(params)
+        url = f"{TIKTOK_BUSINESS_API_BASE_URL}/{TIKTOK_API_VERSION}/campaign/status/update/"
+        payload = {
+            "advertiser_id": advertiser_id,
+            "campaign_ids": [campaign_id],
+            "operation_status": operation_status
+        }
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        return {"status": "success", "data": response.json()}
+    except Exception as e:
+        return _handle_tiktok_api_error(e, action_name)
+
+def tiktok_create_ad_group(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "tiktok_create_ad_group"
+    try:
+        advertiser_id = params.get("advertiser_id", settings.TIKTOK_ADS.DEFAULT_ADVERTISER_ID)
+        adgroup_payload = params.get("adgroup_payload")
+        if not advertiser_id or not adgroup_payload:
+            raise ValueError("'advertiser_id' y 'adgroup_payload' son requeridos.")
+        
+        headers = _get_tiktok_api_headers(params)
+        url = f"{TIKTOK_BUSINESS_API_BASE_URL}/{TIKTOK_API_VERSION}/adgroup/create/"
+        payload = {"advertiser_id": advertiser_id, **adgroup_payload}
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        return {"status": "success", "data": response.json()}
+    except Exception as e:
+        return _handle_tiktok_api_error(e, action_name)
+
+def tiktok_create_ad(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    action_name = "tiktok_create_ad"
+    try:
+        advertiser_id = params.get("advertiser_id", settings.TIKTOK_ADS.DEFAULT_ADVERTISER_ID)
+        ad_payload = params.get("ad_payload")
+        if not advertiser_id or not ad_payload:
+            raise ValueError("'advertiser_id' y 'ad_payload' son requeridos.")
+        
+        headers = _get_tiktok_api_headers(params)
+        url = f"{TIKTOK_BUSINESS_API_BASE_URL}/{TIKTOK_API_VERSION}/ad/create/"
+        payload = {"advertiser_id": advertiser_id, **ad_payload}
+        
+        response = requests.post(url, headers=headers, json=payload, timeout=settings.DEFAULT_API_TIMEOUT)
+        response.raise_for_status()
+        return {"status": "success", "data": response.json()}
+    except Exception as e:
+        return _handle_tiktok_api_error(e, action_name)

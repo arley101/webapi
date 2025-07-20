@@ -531,13 +531,58 @@ def create_bucket(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     if order_hint: 
         body["orderHint"] = order_hint
     
-    logger.info(f"Creando bucket '{name}' en plan Planner '{plan_id}'. OrderHint: {order_hint or 'Default'}")
+    logger.info(f"Creando bucket '{name}' en plan Planner '{plcolectivan_id}'. OrderHint: {order_hint or 'Default'}")
     planner_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', 
                                getattr(settings, 'GRAPH_SCOPE_GROUP_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
         response = client.post(url, scope=planner_rw_scope, json_data=body)
         bucket_data = response.json()
         return {"status": "success", "data": bucket_data, "message": "Bucket creado."}
+    except Exception as e:
+        return _handle_planner_api_error(e, action_name, params)
+
+def planner_get_plan_by_name(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Busca un plan por nombre para un usuario específico."""
+    action_name = "planner_get_plan_by_name"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+
+    plan_name = params.get("name")
+    user_id = params.get("user_id")
+
+    if not plan_name or not user_id:
+        return {
+            "status": "error", 
+            "action": action_name, 
+            "message": "Se requieren los parámetros 'name' y 'user_id'.", 
+            "http_status": 400
+        }
+    
+    try:
+        # Reutilizamos la función list_plans existente
+        list_params = {
+            "owner_type": "user",
+            "owner_id": user_id,
+            "filter_query": f"title eq '{plan_name}'"
+        }
+        all_plans_response = list_plans(client, list_params)
+
+        if all_plans_response.get("status") != "success":
+            return all_plans_response
+
+        found_plans = all_plans_response.get("data", [])
+        if not found_plans:
+            return {
+                "status": "error", 
+                "action": action_name, 
+                "message": f"No se encontró ningún plan con el nombre '{plan_name}'.", 
+                "http_status": 404
+            }
+        
+        if len(found_plans) > 1:
+            logger.warning(f"Se encontraron múltiples planes con el nombre '{plan_name}'. Devolviendo el primero.")
+
+        return {"status": "success", "data": found_plans[0]}
+        
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
