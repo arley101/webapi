@@ -55,3 +55,6 @@ idna<4,>=2.5
 six>=1.11.0
 urllib3<3,>=1.21.1
 httpx
+
+# Validadores
+validators>=0.20.0
