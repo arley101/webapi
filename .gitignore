@@ -164,5 +164,8 @@ ACTION_MAP.JSON
 generate_action_map_json.py
 validate_action_map.py
 openapi: 3.1.yml
+validate_action_map.py
+validar.sh
+
 # Archivos de logs
 *.log*
