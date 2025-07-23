@@ -421,3 +421,64 @@ RESPUESTA (SOLO JSON):"""
         
     except Exception as e:
         return _handle_gemini_api_error(e, action_name)
+
+def gemini_suggest_action(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sugiere la mejor acción basada en una consulta en lenguaje natural.
+    Función específica para el proxy híbrido.
+    """
+    action_name = "gemini_suggest_action"
+    
+    try:
+        _configure_gemini()
+        
+        query = params.get("query")
+        if not query:
+            raise ValueError("El parámetro 'query' es requerido.")
+        
+        model_name = params.get("model", "gemini-1.5-flash")
+        
+        # Obtener acciones disponibles
+        available_actions_text = _get_categorized_actions()
+        
+        suggestion_prompt = f"""
+Eres un asistente experto que ayuda a usuarios a encontrar la acción correcta.
+
+Consulta del usuario: "{query}"
+
+{available_actions_text}
+
+Analiza la consulta y sugiere la mejor acción con sus parámetros.
+
+Responde en formato JSON:
+{{
+    "suggested_action": "nombre_accion_exacto",
+    "confidence": 0.0-1.0,
+    "suggested_params": {{
+        "param1": "valor_sugerido",
+        "param2": "otro_valor"
+    }},
+    "explanation": "Por qué esta acción es la mejor opción",
+    "alternative_actions": ["accion2", "accion3"]
+}}
+
+Si no hay una acción apropiada:
+{{
+    "error": "No hay acciones disponibles para esta consulta",
+    "suggestion": "Descripción de lo que el usuario podría intentar"
+}}
+
+RESPUESTA (SOLO JSON):"""
+        
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(suggestion_prompt)
+        
+        suggestion_json = _extract_json_from_text(response.text)
+        
+        if suggestion_json is None:
+            raise ValueError("No se pudo extraer sugerencia válida.")
+        
+        return {"status": "success", "data": suggestion_json}
+        
+    except Exception as e:
+        return _handle_gemini_api_error(e, action_name)
