@@ -163,6 +163,6 @@ proxy_openapi.yaml
 ACTION_MAP.JSON
 generate_action_map_json.py
 validate_action_map.py
-
+openapi: 3.1.yml
 # Archivos de logs
 *.log*
