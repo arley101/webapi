@@ -27,6 +27,12 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
+    - name: Create requirements.txt without enum34
+      run: |
+        # Remove enum34 if it exists
+        grep -v "enum34" requirements.txt > requirements_clean.txt || cp requirements.txt requirements_clean.txt
+        mv requirements_clean.txt requirements.txt
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
