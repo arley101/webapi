@@ -8,11 +8,11 @@ pydantic==2.11.4
 pydantic-settings==2.9.1
 python-dotenv==1.1.0
 
-# Azure SDK (para Microsoft Graph, Azure Management, etc.)
+# Azure SDK
 azure-identity==1.17.0
 azure-core==1.34.0
 
-# Google Ads y YouTube SDK
+# Google Services
 google-ads==26.1.0
 google-auth-oauthlib==1.2.2
 google-api-python-client==2.170.0
@@ -20,7 +20,7 @@ google-auth-httplib2==0.2.0
 google-generativeai==0.7.1
 protobuf==4.25.8
 
-# Facebook Business SDK (Meta Ads)
+# Facebook Business SDK
 facebook-business==19.0.0
 
 # HubSpot API Client
@@ -29,51 +29,41 @@ hubspot-api-client==9.0.0
 # Twitter / X Ads API
 twitter-ads==9.0.0
 
-# WooCommerce (solo WooCommerce API, no WordPress XML-RPC)
+# WooCommerce
 woocommerce==3.0.0
 
-# Web scraping, análisis de HTML y DOM
+# Web scraping
 beautifulsoup4==4.12.3
 lxml==5.2.1
 
-# HTTP, serialización y consumo de APIs
+# HTTP clients
 requests==2.32.3
 httpx==0.27.0
-PyYAML==6.0.2
 
-# Validación de URLs y datos
-validators==0.35.0
-
-# Seguridad, autenticación, tokens
+# Security & Auth
 cryptography==43.0.3
 msal==1.32.3
 msal-extensions==1.3.1
 PyJWT==2.10.1
 
-# Tipado avanzado y compatibilidad
+# Utilities
+PyYAML==6.0.2
+validators==0.35.0
 typing-extensions==4.13.2
 annotated-types==0.7.0
-
-# Dependencias de red y core
 certifi==2025.4.26
 charset-normalizer==3.4.2
 idna==3.10
 urllib3==2.4.0
 python-multipart==0.0.20
 
-# Notion API
+# APIs adicionales
 notion-client==2.2.1
-
-# LinkedIn API  
 linkedin-api==2.0.0
-
-# GitHub API
 PyGithub==1.59.1
 
-# Development & Testing
+# Development
 pytest==7.4.3
 pytest-asyncio==0.21.1
-
-# Date utilities
 python-dateutil==2.8.2
 pytz==2023.3
