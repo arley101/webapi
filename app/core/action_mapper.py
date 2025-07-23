@@ -108,10 +108,11 @@ FORMS_ACTIONS: Dict[str, Callable] = {
     "forms_get_form_responses": forms_actions.get_form_responses,
 }
 
-# Diccionario de acciones de Gemini (2 acciones)
+# Diccionario de acciones de Gemini (3 acciones)
 GEMINI_ACTIONS: Dict[str, Callable] = {
     "gemini_simple_text_prompt": gemini_actions.gemini_simple_text_prompt,
     "gemini_orchestrate_task": gemini_actions.gemini_orchestrate_task,
+    "gemini_suggest_action": gemini_actions.gemini_suggest_action,  # ⬅️ AGREGAR ESTA
 }
 
 # Diccionario de acciones de GitHub (3 acciones)
