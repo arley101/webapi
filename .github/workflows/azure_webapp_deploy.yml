@@ -2,7 +2,7 @@ name: Deploy Python App to Azure App Service - EliteDynamicsAPI
 
 on:
   push:
-    branches: [production]  # ⬅️ CAMBIO: Solo desde production
+    branches: [production]
   workflow_dispatch:
 
 permissions:
