@@ -27,22 +27,38 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Create requirements.txt without enum34
+    - name: Clean requirements.txt
       run: |
-        # Remove enum34 if it exists
+        # Remove enum34 if it exists (conflicts with Python 3.11)
         grep -v "enum34" requirements.txt > requirements_clean.txt || cp requirements.txt requirements_clean.txt
         mv requirements_clean.txt requirements.txt
+        echo "✅ Requirements cleaned"
 
-    - name: Install dependencies
+    - name: Install dependencies and validate
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
+        echo "✅ Dependencies installed"
+        
+        # Validate critical files exist
+        ls -la app/actions/gemini_actions.py
+        ls -la app/core/action_mapper.py
+        echo "✅ Critical files validated"
 
-    - name: Remove problematic files
+    - name: Prepare deployment package
       run: |
-        rm -f oryx-manifest.toml
+        # Remove problematic cache files
         find . -name "*.pyc" -delete
         find . -name "__pycache__" -type d -exec rm -rf {} + || true
+        
+        # Create deployment zip with explicit file inclusion
+        zip -r deployment.zip . \
+          -x "*.git*" "*.DS_Store*" "*.pytest_cache*" "*.mypy_cache*" \
+          -x "venv/*" ".venv/*" "env/*" ".env/*"
+        
+        echo "✅ Deployment package created"
+        echo "Package contents:"
+        unzip -l deployment.zip | head -20
 
     - name: Azure Login
       uses: azure/login@v2
@@ -51,9 +67,35 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+    - name: Stop Azure Web App (Force Clean Deploy)
+      run: |
+        az webapp stop --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+        echo "✅ App stopped for clean deployment"
+
     - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
-        package: '.'
+        package: 'deployment.zip'
         clean: true
+
+    - name: Start Azure Web App
+      run: |
+        az webapp start --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+        echo "✅ App started"
+
+    - name: Validate deployment
+      run: |
+        echo "⏳ Waiting for app to be ready..."
+        sleep 30
+        
+        # Test health endpoint
+        curl -f https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health || echo "❌ Health check failed"
+        
+        # Test critical function
+        curl -X POST https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics \
+          -H "Content-Type: application/json" \
+          -d '{"action": "gemini_suggest_action", "params": {"query": "test"}}' \
+          || echo "❌ Function test failed"
+        
+        echo "✅ Deployment validation completed"
