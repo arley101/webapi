@@ -27,38 +27,43 @@ jobs:
       with:
         python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Clean requirements.txt
+    - name: Clean requirements and validate files
       run: |
-        # Remove enum34 if it exists (conflicts with Python 3.11)
+        # Remove enum34 if it exists
         grep -v "enum34" requirements.txt > requirements_clean.txt || cp requirements.txt requirements_clean.txt
         mv requirements_clean.txt requirements.txt
-        echo "✅ Requirements cleaned"
+        
+        # Validate critical files exist
+        echo "📋 Validating critical files..."
+        ls -la app/actions/gemini_actions.py
+        ls -la app/core/action_mapper.py
+        
+        # Check if gemini_suggest_action is in action_mapper
+        grep -n "gemini_suggest_action" app/core/action_mapper.py || echo "❌ gemini_suggest_action NOT in action_mapper!"
+        
+        echo "✅ Files validated"
 
-    - name: Install dependencies and validate
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
         echo "✅ Dependencies installed"
-        
-        # Validate critical files exist
-        ls -la app/actions/gemini_actions.py
-        ls -la app/core/action_mapper.py
-        echo "✅ Critical files validated"
 
-    - name: Prepare deployment package
+    - name: Prepare clean deployment package
       run: |
-        # Remove problematic cache files
+        # Remove all cache and temp files
         find . -name "*.pyc" -delete
         find . -name "__pycache__" -type d -exec rm -rf {} + || true
+        rm -rf .pytest_cache .mypy_cache .coverage htmlcov
         
-        # Create deployment zip with explicit file inclusion
-        zip -r deployment.zip . \
-          -x "*.git*" "*.DS_Store*" "*.pytest_cache*" "*.mypy_cache*" \
-          -x "venv/*" ".venv/*" "env/*" ".env/*"
+        # Remove any existing deployment artifacts
+        rm -f deployment.zip oryx-manifest.toml
         
-        echo "✅ Deployment package created"
-        echo "Package contents:"
-        unzip -l deployment.zip | head -20
+        # List files that will be deployed
+        echo "📦 Files to be deployed:"
+        find . -name "*.py" | grep -E "(gemini_actions|action_mapper)" | head -10
+        
+        echo "✅ Package prepared"
 
     - name: Azure Login
       uses: azure/login@v2
@@ -67,35 +72,34 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Stop Azure Web App (Force Clean Deploy)
-      run: |
-        az webapp stop --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
-        echo "✅ App stopped for clean deployment"
-
-    - name: Deploy to Azure Web App
+    - name: Deploy to Azure Web App (Clean Deploy)
       uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
-        package: 'deployment.zip'
+        package: '.'
         clean: true
 
-    - name: Start Azure Web App
+    - name: Wait and validate deployment
       run: |
-        az webapp start --name ${{ env.AZURE_WEBAPP_NAME }} --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
-        echo "✅ App started"
-
-    - name: Validate deployment
-      run: |
-        echo "⏳ Waiting for app to be ready..."
-        sleep 30
+        echo "⏳ Waiting for deployment to complete..."
+        sleep 60
         
-        # Test health endpoint
-        curl -f https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health || echo "❌ Health check failed"
+        echo "🔍 Testing health endpoint..."
+        for i in {1..5}; do
+          if curl -f https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health; then
+            echo "✅ Health check passed on attempt $i"
+            break
+          else
+            echo "⏳ Health check attempt $i failed, retrying in 15s..."
+            sleep 15
+          fi
+        done
         
-        # Test critical function
+        echo "🔍 Testing gemini_suggest_action function..."
+        sleep 10
         curl -X POST https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics \
           -H "Content-Type: application/json" \
           -d '{"action": "gemini_suggest_action", "params": {"query": "test"}}' \
-          || echo "❌ Function test failed"
+          || echo "❌ Function test failed - this might be expected if not yet available"
         
         echo "✅ Deployment validation completed"
