@@ -573,7 +573,6 @@ category_counts = {
     WEBRESEARCH_CATEGORY: len(WEBRESEARCH_ACTIONS),
     WORDPRESS_CATEGORY + "/" + WOOCOMMERCE_CATEGORY: len(WORDPRESS_ACTIONS),
 }
-
 # Validación y logging
 for category, count in category_counts.items():
     logger.info(f"Categoría {category}: {count} acciones cargadas")
