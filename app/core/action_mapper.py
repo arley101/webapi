@@ -139,8 +139,8 @@ GEMINI_ACTIONS: Dict[str, Callable] = {
     "extract_key_information": gemini_actions.extract_key_information,
     "summarize_conversation": gemini_actions.summarize_conversation,
     "classify_message_intent": gemini_actions.classify_message_intent,
+    "gemini_suggest_action": gemini_actions.generate_response_suggestions,  # requerido por validador
 }
-
 # ============================================================================
 # MAPEO DE ACCIONES - GITHUB (3 acciones)
 # ============================================================================
