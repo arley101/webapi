@@ -62,7 +62,12 @@ coverage.xml
 .env.development
 .env.test
 .env.production
-
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+output.tar.gz
+.env
 # IDE
 .vscode/
 .idea/
