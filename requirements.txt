@@ -37,7 +37,7 @@ google-auth-httplib2==0.2.0
 # ============================================================================
 google-api-python-client==2.108.0
 google-cloud-core==2.3.3
-google-ads==22.1.0
+google-ads==21.3.0
 google-api-core==2.14.0
 google-resumable-media==2.6.0
 google-generativeai>=0.3.2
