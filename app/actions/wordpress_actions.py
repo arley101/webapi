@@ -1,528 +1,1019 @@
-# app/actions/wordpress_actions.py
-import logging
 import requests
-import mimetypes
 import json
-from typing import Dict, Any, Optional, List, TypedDict, Literal, Union
+import base64
+import logging
+from typing import Dict, Any, Optional, List
+from datetime import datetime, timedelta
+import hashlib
+import time
+from urllib.parse import urljoin, quote
+import os
 
-from app.core.config import settings
-
+# Configurar logging
 logger = logging.getLogger(__name__)
 
-# --- CONSTANTES Y TIPOS ---
+# Cache para sesiones de WordPress
+_wp_sessions = {}
+_wp_cache = {}
 
-# Definición de tipos
-class WordPressResponse(TypedDict):
-    status: str
-    data: Dict[str, Any]
-    message: Optional[str]
-    http_status: Optional[int]
-    details: Optional[Any]
+def _get_wp_credentials(params: Dict[str, Any]) -> Dict[str, str]:
+    """Obtiene credenciales de WordPress desde parámetros o variables de entorno."""
+    return {
+        'site_url': params.get('site_url') or os.getenv('WP_SITE_URL', ''),
+        'username': params.get('username') or os.getenv('WP_USERNAME', ''),
+        'password': params.get('password') or os.getenv('WP_PASSWORD', ''),
+        'app_password': params.get('app_password') or os.getenv('WP_APP_PASSWORD', ''),
+        'consumer_key': params.get('consumer_key') or os.getenv('WC_CONSUMER_KEY', ''),
+        'consumer_secret': params.get('consumer_secret') or os.getenv('WC_CONSUMER_SECRET', '')
+    }
 
-class WooCommerceProduct(TypedDict):
-    id: int
-    name: str
-    regular_price: str
-    sale_price: Optional[str]
-    status: Literal['draft', 'pending', 'private', 'publish']
+def _handle_wp_api_error(error: Exception, action_name: str, site_url: str = "") -> Dict[str, Any]:
+    """Maneja errores de WordPress API de forma centralizada."""
+    error_message = f"Error en {action_name}"
+    if site_url:
+        error_message += f" para sitio {site_url}"
+    error_message += f": {str(error)}"
+    
+    logger.error(error_message)
+    
+    return {
+        "status": "error",
+        "error": error_message,
+        "action": action_name,
+        "site_url": site_url,
+        "timestamp": datetime.now().isoformat()
+    }
 
-# Constantes
-WP_POST_STATUS = {
-    'PUBLISH': 'publish',
-    'DRAFT': 'draft',
-    'PRIVATE': 'private',
-    'PENDING': 'pending',
-    'FUTURE': 'future'
-}
+def _validate_wp_credentials(credentials: Dict[str, str]) -> bool:
+    """Valida que las credenciales de WordPress estén completas."""
+    required_fields = ['site_url']
+    
+    # Verificar campos requeridos
+    for field in required_fields:
+        if not credentials.get(field):
+            return False
+    
+    # Verificar que tenga al menos un método de autenticación
+    has_basic_auth = credentials.get('username') and credentials.get('password')
+    has_app_password = credentials.get('app_password')
+    has_woocommerce_auth = credentials.get('consumer_key') and credentials.get('consumer_secret')
+    
+    return has_basic_auth or has_app_password or has_woocommerce_auth
 
-WC_ORDER_STATUS = {
-    'PENDING': 'pending',
-    'PROCESSING': 'processing',
-    'ON_HOLD': 'on-hold',
-    'COMPLETED': 'completed',
-    'CANCELLED': 'cancelled',
-    'REFUNDED': 'refunded',
-    'FAILED': 'failed'
-}
-
-ALLOWED_MIME_TYPES = {
-    'IMAGE': ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-    'DOCUMENT': ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-}
-
-WC_ERRORS = {
-    'PRODUCT_NOT_FOUND': 'product_not_found',
-    'INVALID_PRICE': 'invalid_price',
-    'INVALID_STATUS': 'invalid_status',
-    'ORDER_NOT_FOUND': 'order_not_found'
-}
-
-# --- HELPERS DE CONEXIÓN Y ERRORES PARA REST API ---
-
-_jwt_token_cache: Optional[str] = None
-
-def _get_wp_jwt_token(params: Dict[str, Any]) -> str:
-    """Obtiene y cachea un token JWT para la sesión actual."""
-    global _jwt_token_cache
-    if _jwt_token_cache:
-        logger.debug("Usando token JWT de WordPress cacheado para la solicitud.")
-        return _jwt_token_cache
-
-    wp_url = params.get("wp_url")
-    username = params.get("wp_jwt_user")
-    password = params.get("wp_jwt_pass")
-
-    if not all([wp_url, username, password]):
-        raise ValueError("Se requieren 'wp_url', 'wp_jwt_user' y 'wp_jwt_pass' para la autenticación JWT.")
-
-    token_url = f"{wp_url.rstrip('/')}/wp-json/jwt-auth/v1/token"
-    logger.info(f"Solicitando nuevo token JWT de WordPress desde: {token_url}")
-
-    try:
-        response = requests.post(
-            token_url,
-            json={"username": username, "password": password},
-            timeout=settings.DEFAULT_API_TIMEOUT
-        )
-        response.raise_for_status()
-        token_data = response.json()
-        token = token_data.get("token")
-        if not token:
-            raise ValueError("La respuesta de autenticación JWT no contiene un token.")
-
-        _jwt_token_cache = token
-        logger.info("Nuevo token JWT de WordPress obtenido y cacheado exitosamente.")
-        return token
-    except requests.exceptions.HTTPError as http_err:
-        error_body = http_err.response.text
-        logger.error(f"Error de autenticación JWT ({http_err.response.status_code}): {error_body}")
-        raise ValueError(f"Fallo la autenticación con WordPress (JWT). Verifique las credenciales y que el plugin JWT esté activo. Detalle: {error_body}") from http_err
-    except Exception as e:
-        logger.error(f"Error inesperado al obtener token JWT: {e}", exc_info=True)
-        raise
-
-def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any], json_data: Optional[Dict[str, Any]] = None, query_params: Optional[Dict[str, Any]] = None, extra_headers: Optional[Dict[str, str]] = None, data: Optional[bytes] = None) -> Any:
-    """Realiza una solicitud autenticada a la REST API de WordPress/WooCommerce."""
-    token = _get_wp_jwt_token(params)
-    wp_url = params.get("wp_url")
-    if not wp_url:
-        raise ValueError("El parámetro 'wp_url' es requerido.")
-
-    full_url = f"{wp_url.rstrip('/')}/wp-json/{endpoint}"
+def _get_wp_auth_headers(credentials: Dict[str, str], auth_type: str = 'basic') -> Dict[str, str]:
+    """Genera headers de autenticación para WordPress."""
     headers = {
-        "Authorization": f"Bearer {token}",
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'User-Agent': 'EliteDynamics-WordPress-Client/1.0'
     }
     
-    # Solo agregar Content-Type si no hay datos binarios
-    if not data:
-        headers["Content-Type"] = "application/json"
+    if auth_type == 'basic' and credentials.get('username') and credentials.get('password'):
+        auth_string = f"{credentials['username']}:{credentials['password']}"
+        encoded_auth = base64.b64encode(auth_string.encode()).decode()
+        headers['Authorization'] = f'Basic {encoded_auth}'
     
-    if extra_headers:
-        headers.update(extra_headers)
+    elif auth_type == 'app_password' and credentials.get('app_password'):
+        username = credentials.get('username', 'admin')
+        auth_string = f"{username}:{credentials['app_password']}"
+        encoded_auth = base64.b64encode(auth_string.encode()).decode()
+        headers['Authorization'] = f'Basic {encoded_auth}'
+    
+    return headers
 
-    # Usar data para bytes, json_data para JSON
-    request_kwargs = {
-        "method": method,
-        "url": full_url,
-        "headers": headers,
-        "params": query_params,
-        "timeout": settings.DEFAULT_API_TIMEOUT
+def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any], 
+                         data: Optional[Dict[str, Any]] = None, 
+                         query_params: Optional[Dict[str, Any]] = None,
+                         auth_type: str = 'basic') -> Any:
+    """Realiza una request a la API REST de WordPress."""
+    credentials = _get_wp_credentials(params)
+    
+    if not _validate_wp_credentials(credentials):
+        raise ValueError("Credenciales de WordPress incompletas o inválidas")
+    
+    site_url = credentials['site_url'].rstrip('/')
+    full_url = f"{site_url}/wp-json/wp/v2/{endpoint.lstrip('/')}"
+    
+    headers = _get_wp_auth_headers(credentials, auth_type)
+    
+    request_params = {
+        'headers': headers,
+        'timeout': params.get('timeout', 30)
     }
     
     if data:
-        request_kwargs["data"] = data
-    elif json_data:
-        request_kwargs["json"] = json_data
-
-    response = requests.request(**request_kwargs)
+        request_params['json'] = data
+    
+    if query_params:
+        request_params['params'] = query_params
+    
+    response = requests.request(method, full_url, **request_params)
     response.raise_for_status()
+    
+    return response.json() if response.content else {}
 
-    if response.status_code == 204:
-        return {}
+def _make_wc_request(method: str, endpoint: str, params: Dict[str, Any],
+                    data: Optional[Dict[str, Any]] = None,
+                    query_params: Optional[Dict[str, Any]] = None) -> Any:
+    """Realiza una request a la API de WooCommerce."""
+    credentials = _get_wp_credentials(params)
+    
+    if not credentials.get('consumer_key') or not credentials.get('consumer_secret'):
+        raise ValueError("Consumer key y consumer secret de WooCommerce requeridos")
+    
+    site_url = credentials['site_url'].rstrip('/')
+    full_url = f"{site_url}/wp-json/wc/v3/{endpoint.lstrip('/')}"
+    
+    auth = (credentials['consumer_key'], credentials['consumer_secret'])
+    
+    headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+    }
+    
+    request_params = {
+        'auth': auth,
+        'headers': headers,
+        'timeout': params.get('timeout', 30)
+    }
+    
+    if data:
+        request_params['json'] = data
+    
+    if query_params:
+        request_params['params'] = query_params
+    
+    response = requests.request(method, full_url, **request_params)
+    response.raise_for_status()
+    
+    return response.json() if response.content else {}
 
-    return response.json()
-
-def _handle_wp_api_error(e: Exception, action_name: str) -> Dict[str, Any]:
-    """Maneja errores de la API REST de WordPress y WooCommerce."""
-    logger.error(f"Error en WordPress/WooCommerce Action '{action_name}': {type(e).__name__} - {e}", exc_info=True)
-    status_code = 500
-    details = str(e)
-
-    if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
-        status_code = e.response.status_code
-        try:
-            details = e.response.json()
-        except json.JSONDecodeError:
-            details = e.response.text
-
-    return {"status": "error", "action": action_name, "message": f"Error en API de WordPress: {str(e)}", "http_status": status_code, "details": details}
-
-def _handle_wc_specific_error(response: requests.Response, action_name: str) -> Dict[str, Any]:
-    """Maneja errores específicos de WooCommerce con mensajes más descriptivos."""
-    try:
-        error_data = response.json()
-        error_code = error_data.get('code', '')
-        if error_code in WC_ERRORS:
-            return {
-                "status": "error",
-                "message": f"Error de WooCommerce: {error_code}",
-                "http_status": response.status_code,
-                "details": error_data
-            }
-        return _handle_wp_api_error(Exception(str(error_data)), action_name)
-    except Exception:
-        return _handle_wp_api_error(Exception(response.text), action_name)
-
-# --- ACCIONES DE WORDPRESS (CORE) ---
+# === FUNCIONES PRINCIPALES ===
 
 def wordpress_create_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea un nuevo post en WordPress."""
     action_name = "wordpress_create_post"
+    
     try:
+        credentials = _get_wp_credentials(params)
+        
         post_data = {
-            "title": params.get("title"),
-            "content": params.get("content"),
-            "status": params.get("status", "publish"),
+            'title': params.get('title', 'Nuevo Post'),
+            'content': params.get('content', ''),
+            'status': params.get('status', 'draft'),
+            'excerpt': params.get('excerpt', ''),
+            'author': params.get('author_id'),
+            'categories': params.get('categories', []),
+            'tags': params.get('tags', []),
+            'featured_media': params.get('featured_media'),
+            'meta': params.get('meta', {}),
+            'slug': params.get('slug')
         }
-        if not post_data["title"] or not post_data["content"]:
-            raise ValueError("Se requieren 'title' y 'content'.")
         
-        # Agregar categorías y tags si están presentes
-        if params.get("categories"):
-            post_data["categories"] = params["categories"]
-        if params.get("tags"):
-            post_data["tags"] = params["tags"]
-            
-        response = _make_wp_rest_request("POST", "wp/v2/posts", params, json_data=post_data)
-        return {"status": "success", "data": response}
+        # Filtrar valores None
+        post_data = {k: v for k, v in post_data.items() if v is not None}
+        
+        response = _make_wp_rest_request('POST', 'posts', params, data=post_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "post_id": response.get('id'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_get_post_by_slug(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "wordpress_get_post_by_slug"
+def wordpress_update_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Actualiza un post existente en WordPress."""
+    action_name = "wordpress_update_post"
+    
     try:
-        slug = params.get("slug")
-        if not slug: 
-            raise ValueError("Se requiere 'slug'.")
-        response = _make_wp_rest_request("GET", "wp/v2/posts", params, query_params={"slug": slug})
-        if not response:
-            return {"status": "error", "message": f"No se encontró post con slug '{slug}'.", "http_status": 404}
-        return {"status": "success", "data": response[0]}
+        post_id = params.get('post_id')
+        if not post_id:
+            raise ValueError("post_id es requerido")
+        
+        update_data = {}
+        updatable_fields = ['title', 'content', 'status', 'excerpt', 'categories', 'tags', 'featured_media', 'meta', 'slug']
+        
+        for field in updatable_fields:
+            if field in params:
+                update_data[field] = params[field]
+        
+        if not update_data:
+            raise ValueError("No hay datos para actualizar")
+        
+        response = _make_wp_rest_request('POST', f'posts/{post_id}', params, data=update_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "post_id": post_id,
+            "updated_fields": list(update_data.keys()),
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_update_post_content(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "wordpress_update_post_content"
+def wordpress_delete_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Elimina un post de WordPress."""
+    action_name = "wordpress_delete_post"
+    
     try:
-        post_id = params.get("post_id")
-        new_content = params.get("new_content")
-        if not post_id or new_content is None:
-            raise ValueError("Se requieren 'post_id' y 'new_content'.")
-        response = _make_wp_rest_request("PUT", f"wp/v2/posts/{post_id}", params, json_data={"content": new_content})
-        return {"status": "success", "data": response}
+        post_id = params.get('post_id')
+        if not post_id:
+            raise ValueError("post_id es requerido")
+        
+        force = params.get('force_delete', False)
+        query_params = {'force': force} if force else {}
+        
+        response = _make_wp_rest_request('DELETE', f'posts/{post_id}', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "post_id": post_id,
+            "force_deleted": force,
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_list_posts_by_category(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "wordpress_list_posts_by_category"
+def wordpress_get_posts(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene posts de WordPress con filtros."""
+    action_name = "wordpress_get_posts"
+    
     try:
-        category_name = params.get("category_name")
-        page = params.get("page", 1)
-        per_page = params.get("per_page", 20)
+        query_params = {}
         
-        if not category_name: 
-            raise ValueError("Se requiere 'category_name'.")
+        # Parámetros de consulta estándar
+        filter_params = {
+            'per_page': params.get('per_page', 10),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'author': params.get('author_id'),
+            'categories': params.get('categories'),
+            'tags': params.get('tags'),
+            'status': params.get('status', 'publish'),
+            'orderby': params.get('orderby', 'date'),
+            'order': params.get('order', 'desc'),
+            'before': params.get('before'),
+            'after': params.get('after')
+        }
         
-        # Primero, encontrar el ID de la categoría por su nombre
-        cats_resp = _make_wp_rest_request("GET", "wp/v2/categories", params, query_params={"search": category_name})
-        if not cats_resp:
-            return {"status": "error", "message": f"Categoría '{category_name}' no encontrada.", "http_status": 404}
-        category_id = cats_resp[0]['id']
+        # Filtrar valores None
+        query_params = {k: v for k, v in filter_params.items() if v is not None}
         
-        # Luego, listar los posts de esa categoría con paginación
+        response = _make_wp_rest_request('GET', 'posts', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_posts": len(response) if isinstance(response, list) else 1,
+            "query_params": query_params,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_get_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene un post específico de WordPress."""
+    action_name = "wordpress_get_post"
+    
+    try:
+        post_id = params.get('post_id')
+        if not post_id:
+            raise ValueError("post_id es requerido")
+        
+        response = _make_wp_rest_request('GET', f'posts/{post_id}', params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "post_id": post_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_create_page(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea una nueva página en WordPress."""
+    action_name = "wordpress_create_page"
+    
+    try:
+        page_data = {
+            'title': params.get('title', 'Nueva Página'),
+            'content': params.get('content', ''),
+            'status': params.get('status', 'draft'),
+            'excerpt': params.get('excerpt', ''),
+            'author': params.get('author_id'),
+            'parent': params.get('parent_id'),
+            'menu_order': params.get('menu_order', 0),
+            'template': params.get('template'),
+            'meta': params.get('meta', {}),
+            'slug': params.get('slug')
+        }
+        
+        # Filtrar valores None
+        page_data = {k: v for k, v in page_data.items() if v is not None}
+        
+        response = _make_wp_rest_request('POST', 'pages', params, data=page_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "page_id": response.get('id'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_get_pages(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene páginas de WordPress."""
+    action_name = "wordpress_get_pages"
+    
+    try:
         query_params = {
-            "categories": category_id,
-            "page": page,
-            "per_page": per_page
-        }
-        posts_resp = _make_wp_rest_request("GET", "wp/v2/posts", params, query_params=query_params)
-        return {"status": "success", "data": posts_resp}
-    except Exception as e:
-        return _handle_wp_api_error(e, action_name)
-
-def wordpress_bulk_update_posts(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Actualiza múltiples posts en WordPress de forma masiva."""
-    action_name = "wordpress_bulk_update_posts"
-    logger.warning(f"{action_name} se ejecutará como una serie de llamadas individuales a la API REST.")
-    try:
-        posts_data = params.get("posts", [])
-        if not posts_data: 
-            raise ValueError("Se requiere una lista de 'posts' para actualizar.")
-        
-        results = []
-        for post_data in posts_data:
-            post_id = post_data.get("id")
-            if not post_id: 
-                continue
-            update_payload = {k: v for k, v in post_data.items() if k != "id"}
-            try:
-                response = _make_wp_rest_request("PUT", f"wp/v2/posts/{post_id}", params, json_data=update_payload)
-                results.append({"id": post_id, "updated": True, "data": response})
-            except Exception as e:
-                results.append({"id": post_id, "updated": False, "error": str(e)})
-        return {"status": "success", "data": results}
-    except Exception as e:
-        return _handle_wp_api_error(e, action_name)
-
-def wordpress_get_post_revisions(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Obtiene el historial de revisiones de un post."""
-    action_name = "wordpress_get_post_revisions"
-    try:
-        post_id = params.get("post_id")
-        if not post_id: 
-            raise ValueError("Se requiere 'post_id'.")
-        response = _make_wp_rest_request("GET", f"wp/v2/posts/{post_id}/revisions", params)
-        return {"status": "success", "data": response}
-    except Exception as e:
-        return _handle_wp_api_error(e, action_name)
-
-# --- ACCIONES DE WORDPRESS (MEDIA) ---
-
-def wordpress_upload_image_from_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "wordpress_upload_image_from_url"
-    try:
-        image_url = params.get("image_url")
-        title = params.get("title")
-        if not image_url or not title: 
-            raise ValueError("Se requieren 'image_url' y 'title'.")
-        
-        # Descargar imagen
-        image_response = requests.get(image_url, timeout=settings.DEFAULT_API_TIMEOUT)
-        image_response.raise_for_status()
-        
-        # Validar tipo de archivo
-        content_type = image_response.headers.get('content-type', mimetypes.guess_type(image_url)[0])
-        if content_type not in ALLOWED_MIME_TYPES['IMAGE']:
-            raise ValueError(f"Tipo de archivo no permitido: {content_type}")
-        
-        # Preparar headers para upload
-        filename = f"{title}.{content_type.split('/')[-1]}"
-        headers = {
-            "Content-Disposition": f"attachment; filename={filename}",
-            "Content-Type": content_type
+            'per_page': params.get('per_page', 10),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'parent': params.get('parent_id'),
+            'status': params.get('status', 'publish'),
+            'orderby': params.get('orderby', 'menu_order'),
+            'order': params.get('order', 'asc')
         }
         
-        response = _make_wp_rest_request("POST", "wp/v2/media", params, data=image_response.content, extra_headers=headers)
-        return {"status": "success", "data": response}
-    except Exception as e:
-        return _handle_wp_api_error(e, action_name)
-
-def wordpress_assign_featured_image_to_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "wordpress_assign_featured_image_to_post"
-    try:
-        post_id = params.get("post_id")
-        media_id = params.get("media_id")
-        if not post_id or not media_id: 
-            raise ValueError("Se requieren 'post_id' y 'media_id'.")
-        response = _make_wp_rest_request("PUT", f"wp/v2/posts/{post_id}", params, json_data={"featured_media": media_id})
-        return {"status": "success", "data": response}
-    except Exception as e:
-        return _handle_wp_api_error(e, action_name)
-
-# --- ACCIONES DE WORDPRESS (COMENTARIOS) ---
-
-def wordpress_get_comments_for_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "wordpress_get_comments_for_post"
-    try:
-        post_id = params.get("post_id")
-        if not post_id: 
-            raise ValueError("Se requiere 'post_id'.")
-        response = _make_wp_rest_request("GET", "wp/v2/comments", params, query_params={"post": post_id})
-        return {"status": "success", "data": response}
-    except Exception as e:
-        return _handle_wp_api_error(e, action_name)
-
-def wordpress_reply_to_comment(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "wordpress_reply_to_comment"
-    try:
-        post_id = params.get("post_id")
-        parent_comment_id = params.get("parent_comment_id")
-        content = params.get("content")
-        if not all([post_id, parent_comment_id, content]):
-            raise ValueError("Se requieren 'post_id', 'parent_comment_id' y 'content'.")
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
         
-        comment_data = {"post": post_id, "parent": parent_comment_id, "content": content}
-        response = _make_wp_rest_request("POST", "wp/v2/comments", params, json_data=comment_data)
-        return {"status": "success", "data": response}
+        response = _make_wp_rest_request('GET', 'pages', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_pages": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-# --- ACCIONES DE WOOCOMMERCE (PRODUCTOS) ---
-
-def woocommerce_get_product_by_sku(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "woocommerce_get_product_by_sku"
+def wordpress_create_user(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea un nuevo usuario en WordPress."""
+    action_name = "wordpress_create_user"
+    
     try:
-        sku = params.get("sku")
-        if not sku: 
-            raise ValueError("Se requiere 'sku'.")
-        response = _make_wp_rest_request("GET", "wc/v3/products", params, query_params={"sku": sku})
-        if not response:
-            return {"status": "error", "message": f"No se encontró producto con SKU '{sku}'.", "http_status": 404}
-        return {"status": "success", "data": response[0]}
+        user_data = {
+            'username': params.get('username'),
+            'email': params.get('email'),
+            'password': params.get('password'),
+            'name': params.get('name', ''),
+            'first_name': params.get('first_name', ''),
+            'last_name': params.get('last_name', ''),
+            'nickname': params.get('nickname', ''),
+            'description': params.get('description', ''),
+            'roles': params.get('roles', ['subscriber']),
+            'meta': params.get('meta', {})
+        }
+        
+        # Validar campos requeridos
+        required_fields = ['username', 'email', 'password']
+        for field in required_fields:
+            if not user_data.get(field):
+                raise ValueError(f"Campo requerido: {field}")
+        
+        # Filtrar valores None
+        user_data = {k: v for k, v in user_data.items() if v is not None}
+        
+        response = _make_wp_rest_request('POST', 'users', params, data=user_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "user_id": response.get('id'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_get_users(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene usuarios de WordPress."""
+    action_name = "wordpress_get_users"
+    
+    try:
+        query_params = {
+            'per_page': params.get('per_page', 10),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'roles': params.get('roles'),
+            'orderby': params.get('orderby', 'name'),
+            'order': params.get('order', 'asc')
+        }
+        
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
+        
+        response = _make_wp_rest_request('GET', 'users', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_users": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_upload_media(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Sube un archivo de media a WordPress."""
+    action_name = "wordpress_upload_media"
+    
+    try:
+        file_path = params.get('file_path')
+        file_data = params.get('file_data')
+        filename = params.get('filename')
+        
+        if not file_path and not file_data:
+            raise ValueError("Se requiere file_path o file_data")
+        
+        credentials = _get_wp_credentials(params)
+        site_url = credentials['site_url'].rstrip('/')
+        upload_url = f"{site_url}/wp-json/wp/v2/media"
+        
+        headers = _get_wp_auth_headers(credentials)
+        
+        if file_path:
+            with open(file_path, 'rb') as f:
+                files = {'file': (filename or os.path.basename(file_path), f)}
+                response = requests.post(upload_url, headers=headers, files=files, timeout=60)
+        else:
+            files = {'file': (filename or 'upload', file_data)}
+            response = requests.post(upload_url, headers=headers, files=files, timeout=60)
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        return {
+            "status": "success",
+            "data": result,
+            "action": action_name,
+            "media_id": result.get('id'),
+            "media_url": result.get('source_url'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_get_categories(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene categorías de WordPress."""
+    action_name = "wordpress_get_categories"
+    
+    try:
+        query_params = {
+            'per_page': params.get('per_page', 100),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'parent': params.get('parent_id'),
+            'orderby': params.get('orderby', 'name'),
+            'order': params.get('order', 'asc'),
+            'hide_empty': params.get('hide_empty', False)
+        }
+        
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
+        
+        response = _make_wp_rest_request('GET', 'categories', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_categories": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_create_category(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea una nueva categoría en WordPress."""
+    action_name = "wordpress_create_category"
+    
+    try:
+        category_data = {
+            'name': params.get('name'),
+            'description': params.get('description', ''),
+            'parent': params.get('parent_id'),
+            'slug': params.get('slug')
+        }
+        
+        if not category_data.get('name'):
+            raise ValueError("Nombre de categoría es requerido")
+        
+        # Filtrar valores None
+        category_data = {k: v for k, v in category_data.items() if v is not None}
+        
+        response = _make_wp_rest_request('POST', 'categories', params, data=category_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "category_id": response.get('id'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_get_tags(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene tags de WordPress."""
+    action_name = "wordpress_get_tags"
+    
+    try:
+        query_params = {
+            'per_page': params.get('per_page', 100),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'orderby': params.get('orderby', 'name'),
+            'order': params.get('order', 'asc'),
+            'hide_empty': params.get('hide_empty', False)
+        }
+        
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
+        
+        response = _make_wp_rest_request('GET', 'tags', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_tags": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+# === FUNCIONES DE WOOCOMMERCE ===
 
 def woocommerce_create_product(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un nuevo producto en WooCommerce."""
     action_name = "woocommerce_create_product"
+    
     try:
-        # Validar si se pasa product_data o campos individuales
-        if "product_data" in params:
-            product_data = params["product_data"]
-            if not product_data.get("name"):
-                raise ValueError("Se requiere 'name' en product_data.")
-        else:
-            # Validación de campos requeridos
-            if not params.get("name") or not params.get("regular_price"):
-                raise ValueError("Se requieren 'name' y 'regular_price'.")
-            
-            # Validación de precio
-            if not isinstance(params.get("regular_price"), (str, float, int)):
-                raise ValueError("regular_price debe ser un número válido")
-            
-            # Validación de status
-            if params.get("status") and params.get("status") not in WP_POST_STATUS.values():
-                raise ValueError(f"status debe ser uno de: {', '.join(WP_POST_STATUS.values())}")
-            
-            product_data = {
-                "name": params["name"],
-                "regular_price": str(params["regular_price"]),
-                "description": params.get("description", ""),
-                "short_description": params.get("short_description", ""),
-                "categories": params.get("categories", []),
-                "images": params.get("images", []),
-                "status": params.get("status", "publish")
-            }
+        product_data = {
+            'name': params.get('name'),
+            'type': params.get('type', 'simple'),
+            'status': params.get('status', 'publish'),
+            'description': params.get('description', ''),
+            'short_description': params.get('short_description', ''),
+            'sku': params.get('sku'),
+            'regular_price': params.get('regular_price'),
+            'sale_price': params.get('sale_price'),
+            'manage_stock': params.get('manage_stock', False),
+            'stock_quantity': params.get('stock_quantity'),
+            'categories': params.get('categories', []),
+            'tags': params.get('tags', []),
+            'images': params.get('images', []),
+            'attributes': params.get('attributes', []),
+            'weight': params.get('weight'),
+            'dimensions': params.get('dimensions', {}),
+            'meta_data': params.get('meta_data', [])
+        }
         
-        response = _make_wp_rest_request("POST", "wc/v3/products", params, json_data=product_data)
-        return {"status": "success", "data": response}
+        if not product_data.get('name'):
+            raise ValueError("Nombre del producto es requerido")
+        
+        # Filtrar valores None
+        product_data = {k: v for k, v in product_data.items() if v is not None}
+        
+        response = _make_wc_request('POST', 'products', params, data=product_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "product_id": response.get('id'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_bulk_update_prices(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Actualiza precios de múltiples productos en WooCommerce."""
-    action_name = "woocommerce_bulk_update_prices"
+def woocommerce_get_products(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene productos de WooCommerce."""
+    action_name = "woocommerce_get_products"
+    
     try:
-        products_data = params.get("products", [])
-        if not products_data: 
-            raise ValueError("Se requiere una lista de 'products' para actualizar.")
+        query_params = {
+            'per_page': params.get('per_page', 10),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'category': params.get('category_id'),
+            'tag': params.get('tag_id'),
+            'type': params.get('type'),
+            'status': params.get('status', 'publish'),
+            'featured': params.get('featured'),
+            'on_sale': params.get('on_sale'),
+            'min_price': params.get('min_price'),
+            'max_price': params.get('max_price'),
+            'orderby': params.get('orderby', 'date'),
+            'order': params.get('order', 'desc')
+        }
         
-        # Preparar datos para batch update
-        update_payload = {"update": []}
-        for p in products_data:
-            if "id" in p and ("regular_price" in p or "sale_price" in p):
-                product_update = {"id": p["id"]}
-                if "regular_price" in p:
-                    product_update["regular_price"] = str(p["regular_price"])
-                if "sale_price" in p:
-                    product_update["sale_price"] = str(p["sale_price"])
-                update_payload["update"].append(product_update)
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
         
-        response = _make_wp_rest_request("POST", "wc/v3/products/batch", params, json_data=update_payload)
-        return {"status": "success", "data": response}
+        response = _make_wc_request('GET', 'products', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_products": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_batch_update_products(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Actualiza múltiples productos en una sola llamada a la API."""
-    action_name = "woocommerce_batch_update_products"
+def woocommerce_update_product(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Actualiza un producto en WooCommerce."""
+    action_name = "woocommerce_update_product"
+    
     try:
-        # Permitir tanto batch_data como products
-        if "batch_data" in params:
-            batch_data = params["batch_data"]
-        elif "products" in params:
-            products = params["products"]
-            if not products:
-                raise ValueError("Se requiere lista de productos para actualizar")
-            
-            batch_data = {
-                "update": [
-                    {
-                        "id": product["id"],
-                        **{k:v for k,v in product.items() if k != "id"}
-                    }
-                    for product in products
-                ]
-            }
-        else:
-            raise ValueError("Se requiere 'batch_data' o 'products'.")
+        product_id = params.get('product_id')
+        if not product_id:
+            raise ValueError("product_id es requerido")
         
-        response = _make_wp_rest_request("POST", "wc/v3/products/batch", params, json_data=batch_data)
-        return {"status": "success", "data": response}
+        update_data = {}
+        updatable_fields = [
+            'name', 'description', 'short_description', 'sku', 'regular_price', 
+            'sale_price', 'stock_quantity', 'manage_stock', 'status', 'categories',
+            'tags', 'images', 'attributes', 'weight', 'dimensions', 'meta_data'
+        ]
+        
+        for field in updatable_fields:
+            if field in params:
+                update_data[field] = params[field]
+        
+        if not update_data:
+            raise ValueError("No hay datos para actualizar")
+        
+        response = _make_wc_request('PUT', f'products/{product_id}', params, data=update_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "product_id": product_id,
+            "updated_fields": list(update_data.keys()),
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_search_products(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Búsqueda avanzada de productos con múltiples filtros."""
-    action_name = "woocommerce_search_products"
+def woocommerce_get_orders(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene órdenes de WooCommerce."""
+    action_name = "woocommerce_get_orders"
+    
     try:
-        # Permitir tanto search_params como parámetros individuales
-        if "search_params" in params:
-            search_params = params["search_params"]
-        else:
-            search_params = {
-                "search": params.get("search", ""),
-                "category": params.get("category", ""),
-                "tag": params.get("tag", ""),
-                "status": params.get("status", "publish"),
-                "sku": params.get("sku", ""),
-                "min_price": params.get("min_price", ""),
-                "max_price": params.get("max_price", ""),
-                "page": params.get("page", 1),
-                "per_page": params.get("per_page", 20)
-            }
+        query_params = {
+            'per_page': params.get('per_page', 10),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'customer': params.get('customer_id'),
+            'status': params.get('status'),
+            'after': params.get('after'),
+            'before': params.get('before'),
+            'orderby': params.get('orderby', 'date'),
+            'order': params.get('order', 'desc')
+        }
         
-        # Filtrar parámetros vacíos
-        clean_params = {k: v for k, v in search_params.items() if v}
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
         
-        response = _make_wp_rest_request("GET", "wc/v3/products", params, query_params=clean_params)
-        return {"status": "success", "data": response}
+        response = _make_wc_request('GET', 'orders', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_orders": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-# --- ACCIONES DE WOOCOMMERCE (ÓRDENES) ---
+def woocommerce_create_order(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea una nueva orden en WooCommerce."""
+    action_name = "woocommerce_create_order"
+    
+    try:
+        order_data = {
+            'status': params.get('status', 'pending'),
+            'customer_id': params.get('customer_id', 0),
+            'billing': params.get('billing', {}),
+            'shipping': params.get('shipping', {}),
+            'line_items': params.get('line_items', []),
+            'shipping_lines': params.get('shipping_lines', []),
+            'fee_lines': params.get('fee_lines', []),
+            'coupon_lines': params.get('coupon_lines', []),
+            'payment_method': params.get('payment_method', ''),
+            'payment_method_title': params.get('payment_method_title', ''),
+            'set_paid': params.get('set_paid', False),
+            'meta_data': params.get('meta_data', [])
+        }
+        
+        if not order_data.get('line_items'):
+            raise ValueError("line_items es requerido para crear una orden")
+        
+        # Filtrar valores None y vacíos
+        order_data = {k: v for k, v in order_data.items() if v is not None and v != {}}
+        
+        response = _make_wc_request('POST', 'orders', params, data=order_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "order_id": response.get('id'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
 def woocommerce_update_order_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Actualiza el estado de una orden en WooCommerce."""
     action_name = "woocommerce_update_order_status"
+    
     try:
-        order_id = params.get("order_id")
-        new_status = params.get("new_status")
-        if not order_id or not new_status:
-            raise ValueError("Se requieren 'order_id' y 'new_status'.")
+        order_id = params.get('order_id')
+        status = params.get('status')
         
-        # Validar status
-        if new_status not in WC_ORDER_STATUS.values():
-            raise ValueError(f"new_status debe ser uno de: {', '.join(WC_ORDER_STATUS.values())}")
-            
-        response = _make_wp_rest_request("PUT", f"wc/v3/orders/{order_id}", params, json_data={"status": new_status})
-        return {"status": "success", "data": response}
+        if not order_id:
+            raise ValueError("order_id es requerido")
+        
+        if not status:
+            raise ValueError("status es requerido")
+        
+        update_data = {
+            'status': status
+        }
+        
+        # Agregar nota si se proporciona
+        if params.get('note'):
+            update_data['customer_note'] = params['note']
+        
+        response = _make_wc_request('PUT', f'orders/{order_id}', params, data=update_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "order_id": order_id,
+            "new_status": status,
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_get_customer_orders(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    action_name = "woocommerce_get_customer_orders"
+def woocommerce_get_customers(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene clientes de WooCommerce."""
+    action_name = "woocommerce_get_customers"
+    
     try:
-        customer_email = params.get("customer_email")
-        if not customer_email: 
-            raise ValueError("Se requiere 'customer_email'.")
+        query_params = {
+            'per_page': params.get('per_page', 10),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'email': params.get('email'),
+            'role': params.get('role'),
+            'orderby': params.get('orderby', 'registered_date'),
+            'order': params.get('order', 'desc')
+        }
         
-        # Primero, buscar el ID del cliente por email
-        customers_resp = _make_wp_rest_request("GET", "wc/v3/customers", params, query_params={"email": customer_email})
-        if not customers_resp:
-            return {"status": "error", "message": f"Cliente con email '{customer_email}' no encontrado.", "http_status": 404}
-        customer_id = customers_resp[0]['id']
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
         
-        # Luego, buscar órdenes por ID de cliente
-        orders_resp = _make_wp_rest_request("GET", "wc/v3/orders", params, query_params={"customer": customer_id})
-        return {"status": "success", "data": orders_resp}
+        response = _make_wc_request('GET', 'customers', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_customers": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
     except Exception as e:
-        return _handle_wp_api_error(e, action_name)
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def woocommerce_create_customer(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea un nuevo cliente en WooCommerce."""
+    action_name = "woocommerce_create_customer"
+    
+    try:
+        customer_data = {
+            'email': params.get('email'),
+            'username': params.get('username'),
+            'password': params.get('password'),
+            'first_name': params.get('first_name', ''),
+            'last_name': params.get('last_name', ''),
+            'billing': params.get('billing', {}),
+            'shipping': params.get('shipping', {}),
+            'meta_data': params.get('meta_data', [])
+        }
+        
+        if not customer_data.get('email'):
+            raise ValueError("Email del cliente es requerido")
+        
+        # Filtrar valores None y vacíos
+        customer_data = {k: v for k, v in customer_data.items() if v is not None and v != {}}
+        
+        response = _make_wc_request('POST', 'customers', params, data=customer_data)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "customer_id": response.get('id'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def woocommerce_get_orders_by_customer(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene pedidos de un cliente específico."""
+    action_name = "woocommerce_get_orders_by_customer"
+    
+    try:
+        customer_id = params.get("customer_id")
+        if not customer_id:
+            raise ValueError("Se requiere 'customer_id'")
+        
+        query_params = {
+            'customer': customer_id,
+            'per_page': params.get('per_page', 10),
+            'page': params.get('page', 1),
+            'status': params.get('status'),
+            'orderby': params.get('orderby', 'date'),
+            'order': params.get('order', 'desc')
+        }
+        
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
+        
+        response = _make_wc_request('GET', 'orders', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "customer_id": customer_id,
+            "total_orders": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def woocommerce_get_product_categories(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene categorías de productos de WooCommerce."""
+    action_name = "woocommerce_get_product_categories"
+    
+    try:
+        query_params = {
+            'per_page': params.get('per_page', 100),
+            'page': params.get('page', 1),
+            'search': params.get('search'),
+            'parent': params.get('parent_id'),
+            'orderby': params.get('orderby', 'name'),
+            'order': params.get('order', 'asc'),
+            'hide_empty': params.get('hide_empty', False)
+        }
+        
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
+        
+        response = _make_wc_request('GET', 'products/categories', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "total_categories": len(response) if isinstance(response, list) else 1,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def woocommerce_get_reports(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene reportes de WooCommerce."""
+    action_name = "woocommerce_get_reports"
+    
+    try:
+        report_type = params.get('report_type', 'sales')
+        
+        valid_reports = ['sales', 'top_sellers', 'customers', 'orders']
+        if report_type not in valid_reports:
+            raise ValueError(f"Tipo de reporte inválido. Debe ser uno de: {valid_reports}")
+        
+        query_params = {
+            'period': params.get('period', 'week'),
+            'date_min': params.get('date_min'),
+            'date_max': params.get('date_max')
+        }
+        
+        # Filtrar valores None
+        query_params = {k: v for k, v in query_params.items() if v is not None}
+        
+        response = _make_wc_request('GET', f'reports/{report_type}', params, query_params=query_params)
+        
+        return {
+            "status": "success",
+            "data": response,
+            "action": action_name,
+            "report_type": report_type,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+def wordpress_backup_content(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Realiza un backup de contenido de WordPress."""
+    action_name = "wordpress_backup_content"
+    
+    try:
+        backup_types = params.get('backup_types', ['posts', 'pages', 'users'])
+        backup_data = {}
+        
+        for backup_type in backup_types:
+            if backup_type == 'posts':
+                posts_result = wordpress_get_posts(client, {**params, 'per_page': 100})
+                if posts_result['status'] == 'success':
+                    backup_data['posts'] = posts_result['data']
+            
+            elif backup_type == 'pages':
+                pages_result = wordpress_get_pages(client, {**params, 'per_page': 100})
+                if pages_result['status'] == 'success':
+                    backup_data['pages'] = pages_result['data']
+            
+            elif backup_type == 'users':
+                users_result = wordpress_get_users(client, {**params, 'per_page': 100})
+                if users_result['status'] == 'success':
+                    backup_data['users'] = users_result['data']
+            
+            elif backup_type == 'categories':
+                categories_result = wordpress_get_categories(client, {**params, 'per_page': 100})
+                if categories_result['status'] == 'success':
+                    backup_data['categories'] = categories_result['data']
+        
+        # Guardar backup en archivo si se especifica
+        if params.get('save_to_file'):
+            backup_filename = f"wp_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            backup_path = params.get('backup_path', '/tmp/') + backup_filename
+            
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, indent=2, ensure_ascii=False)
+            
+            backup_data['backup_file'] = backup_path
+        
+        return {
+            "status": "success",
+            "data": backup_data,
+            "action": action_name,
+            "backup_types": backup_types,
+            "total_items": sum(len(v) if isinstance(v, list) else 1 for k, v in backup_data.items() if k != 'backup_file'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))

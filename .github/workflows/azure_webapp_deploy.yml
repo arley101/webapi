@@ -1,4 +1,4 @@
-name: Deploy Python App to Azure App Service - EliteDynamicsAPI
+name: Deploy Python App to Azure App Service - EliteDynamicsAPI (v3-Robust-Cache-Buster)
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Set up Python ${{ env.PYTHON_VERSION }}
@@ -34,63 +34,156 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    - name: Clear Oryx cache and manifest
+    # --- NUCLEAR CACHE CLEANING APPROACH ---
+    - name: Nuclear Cache Clearing - Phase 1
       run: |
-        echo "🔥 Clearing Oryx cache and manifest..."
+        echo "🔥 PHASE 1: Clearing ALL Oryx artifacts..."
         
-        # Delete old oryx-manifest.toml from server
-        az webapp deployment source delete \
+        # Obtener credenciales de publishing
+        PUBLISH_CREDS=$(az webapp deployment list-publishing-credentials \
           --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }})
         
-        # Force Oryx to rebuild from scratch
+        PUBLISH_USER=$(echo $PUBLISH_CREDS | jq -r '.publishingUserName')
+        PUBLISH_PASS=$(echo $PUBLISH_CREDS | jq -r '.publishingPassword')
+        
+        # Eliminar oryx-manifest.toml forzadamente
+        curl -X DELETE "https://${{ env.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net/api/vfs/site/wwwroot/oryx-manifest.toml" \
+          -u "$PUBLISH_USER:$PUBLISH_PASS" || echo "Manifest file not found (OK)"
+        
+        # Eliminar directorios de caché de Oryx
+        curl -X DELETE "https://${{ env.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net/api/vfs/tmp/oryx/" \
+          -u "$PUBLISH_USER:$PUBLISH_PASS" || echo "Oryx cache not found (OK)"
+        
+        echo "✅ Phase 1 completed"
+
+    - name: Nuclear Cache Clearing - Phase 2  
+      run: |
+        echo "🔥 PHASE 2: App Service restart and settings..."
+        
+        # Configurar variables que fuerzan rebuild completo
         az webapp config appsettings set \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --settings "SCM_BUILD_ARGS=--no-cache" "BUILD_FLAGS=--disable-oryx-cache"
+          --settings \
+            "DEPLOYMENT_TIMESTAMP=$(date +%s)" \
+            "SCM_BUILD_ARGS=--no-cache" \
+            "BUILD_FLAGS=--disable-oryx-cache" \
+            "ORYX_DISABLE_CACHE=true" \
+            "WEBSITES_ENABLE_APP_SERVICE_STORAGE=false" \
+            "WEBSITE_RUN_FROM_PACKAGE=0"
         
-        echo "✅ Cache clearing completed"
+        # Reinicio completo
+        az webapp restart \
+          --name ${{ env.AZURE_WEBAPP_NAME }} \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }}
+        
+        echo "⏳ Waiting for restart..."
+        sleep 30
+        
+        echo "✅ Phase 2 completed"
 
-    - name: Validate critical files
+    - name: Validate critical files before deployment
       run: |
-        echo "📋 Validating critical files..."
-        ls -la app/actions/gemini_actions.py
-        ls -la app/core/action_mapper.py
+        echo "📋 Validating critical files in repository..."
         
+        # Verificar archivos críticos
+        if [[ ! -f "app/actions/gemini_actions.py" ]]; then
+          echo "❌ Missing: app/actions/gemini_actions.py"
+          exit 1
+        fi
+        
+        if [[ ! -f "app/core/action_mapper.py" ]]; then
+          echo "❌ Missing: app/core/action_mapper.py"
+          exit 1
+        fi
+        
+        # Verificar que gemini_suggest_action esté en action_mapper
         if grep -q "gemini_suggest_action" app/core/action_mapper.py; then
           echo "✅ gemini_suggest_action found in action_mapper!"
         else
-          echo "❌ gemini_suggest_action NOT in action_mapper!"
+          echo "❌ gemini_suggest_action NOT found in action_mapper!"
+          cat app/core/action_mapper.py
           exit 1
         fi
+        
+        # Mostrar estructura del proyecto
+        echo "📂 Project structure:"
+        find app -name "*.py" | head -20
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Deploy to Azure Web App (Fresh Build)
+    - name: Deploy to Azure Web App (Force Fresh Build)
       uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         package: '.'
-        clean: true
+        clean: true # Esto limpia archivos antiguos
 
-    - name: Validate deployment
+    - name: Post-deployment validation
       run: |
-        echo "⏳ Waiting for fresh deployment..."
-        sleep 120  # Extra time for full rebuild
+        echo "⏳ Waiting for complete deployment and startup..."
+        sleep 180  # 3 minutos para deployment completo
         
-        echo "🔍 Testing gemini_suggest_action..."
-        response=$(curl -s -X POST https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics \
+        # Health check básico
+        echo "🔍 Testing health endpoint..."
+        for i in {1..5}; do
+          if curl -f -s "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health"; then
+            echo "✅ Health check passed"
+            break
+          else
+            echo "⏳ Health check attempt $i failed, retrying..."
+            sleep 30
+          fi
+        done
+        
+        # Test específico de gemini_suggest_action
+        echo "🧪 Testing gemini_suggest_action endpoint..."
+        
+        response=$(curl -s -w "%{http_code}" -X POST \
+          "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics" \
           -H "Content-Type: application/json" \
           -d '{"action": "gemini_suggest_action", "params": {"query": "test"}}')
         
-        echo "Response: $response"
+        http_code="${response: -3}"
+        body="${response%???}"
         
-        if echo "$response" | grep -q "no encontrada"; then
-          echo "❌ ORYX CACHE ISSUE PERSISTS"
+        echo "HTTP Code: $http_code"
+        echo "Response Body: $body"
+        
+        if [[ "$http_code" == "400" ]] && echo "$body" | grep -q "no encontrada"; then
+          echo "❌ CRITICAL: Oryx cache issue persists!"
+          echo "🔍 Checking deployed files..."
+          
+          # Verificar archivos desplegados
+          PUBLISH_CREDS=$(az webapp deployment list-publishing-credentials \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }})
+          
+          PUBLISH_USER=$(echo $PUBLISH_CREDS | jq -r '.publishingUserName')
+          PUBLISH_PASS=$(echo $PUBLISH_CREDS | jq -r '.publishingPassword')
+          
+          echo "Files in wwwroot:"
+          curl -s "https://${{ env.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net/api/vfs/site/wwwroot/" \
+            -u "$PUBLISH_USER:$PUBLISH_PASS"
+          
           exit 1
         else
-          echo "✅ SUCCESS - gemini_suggest_action is working!"
+          echo "✅ SUCCESS: gemini_suggest_action is working correctly!"
         fi
+
+    - name: Cleanup temporary settings
+      if: always()
+      run: |
+        echo "🧹 Cleaning up temporary build settings..."
+        
+        # Remover configuraciones temporales pero mantener DEPLOYMENT_TIMESTAMP
+        az webapp config appsettings delete \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --name ${{ env.AZURE_WEBAPP_NAME }} \
+          --setting-names "SCM_BUILD_ARGS" "BUILD_FLAGS" "ORYX_DISABLE_CACHE" || true
+        
+        echo "✅ Cleanup completed"
