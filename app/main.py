@@ -1,8 +1,7 @@
 # app/main.py
-import logging
-import os
 from fastapi import FastAPI, Request
-import uvicorn
+from contextlib import asynccontextmanager
+import logging
 
 # Importar el router de acciones
 from app.api.routes.dynamics_actions import router as dynamics_router
@@ -18,65 +17,48 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Crear la instancia de la aplicación FastAPI
+# Lifespan manager (reemplaza @app.on_event)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    logger.info("Iniciando EliteDynamicsAPI-Local v1.1-localdev...")
+    logger.info(f"Nivel de Logging configurado: {settings.LOG_LEVEL.upper()}")
+    yield
+    # Shutdown
+    logger.info("Apagando EliteDynamicsAPI-Local...")
+
+# Crear la instancia de la aplicación FastAPI con lifespan
 app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.APP_VERSION,
-    description=f"API para Elite Dynamics, potenciando la automatización y la integración de servicios. Entorno: {os.getenv('AZURE_ENV', 'Desconocido')}",
-    openapi_url=f"{settings.API_PREFIX}/openapi.json",
-    docs_url=f"{settings.API_PREFIX}/docs",
-    redoc_url=f"{settings.API_PREFIX}/redoc"
+    title="EliteDynamicsAPI-Local",
+    description="API Local de Elite Dynamics para acciones empresariales",
+    version="1.1-localdev",
+    docs_url="/api/v1/docs",
+    redoc_url="/api/v1/redoc",
+    openapi_url="/api/v1/openapi.json",
+    lifespan=lifespan  # Usar lifespan en lugar de on_event
 )
 
-# --- Eventos de la Aplicación ---
-@app.on_event("startup")
-async def startup_event():
-    logger.info(f"Iniciando {settings.APP_NAME} v{settings.APP_VERSION}...")
-    logger.info(f"Nivel de Logging configurado: {settings.LOG_LEVEL}")
+# Incluir el router con prefijo
+app.include_router(dynamics_router, prefix="/api/v1")
 
-@app.on_event("shutdown")
-async def shutdown_event():
-    logger.info(f"Apagando {settings.APP_NAME}...")
+# Log de confirmación después de incluir routers
+logger.info("Router de acciones dinámicas incluido bajo el prefijo: /api/v1")
+logger.info("Documentación OpenAPI (Swagger UI) disponible en: /api/v1/docs")
+logger.info("Documentación ReDoc disponible en: /api/v1/redoc")
 
-# --- Endpoint de Health Check ---
-@app.get(
-    "/health",
-    tags=["General"],
-    summary="Verifica el estado de salud de la API.",
-    response_description="Devuelve el estado actual de la aplicación."
-)
-async def health_check(request: Request):
-    client_host = request.client.host if request.client else "N/A"
-    logger.info(f"Health check solicitado por: {client_host}")
+# Endpoint de health check
+@app.get("/")
+async def root():
     return {
-        "status": "ok",
-        "appName": settings.APP_NAME,
-        "appVersion": settings.APP_VERSION,
-        "message": "Servicio EliteDynamicsAPI operativo."
+        "message": "EliteDynamicsAPI-Local está funcionando",
+        "version": "1.1-localdev",
+        "docs": "/api/v1/docs"
     }
 
-# --- Inclusión de Routers de la API ---
-app.include_router(
-    dynamics_router,
-    prefix=settings.API_PREFIX,
-    tags=["Acciones Dinámicas"]
-)
-
-logger.info(f"Router de acciones dinámicas incluido bajo el prefijo: {settings.API_PREFIX}")
-logger.info(f"Documentación OpenAPI (Swagger UI) disponible en: {settings.API_PREFIX}/docs")
-logger.info(f"Documentación ReDoc disponible en: {settings.API_PREFIX}/redoc")
-
-# --- Configuración para Ejecución Local ---
-if __name__ == "__main__":
-    host_dev = os.getenv("HOST", "127.0.0.1")
-    port_dev = int(os.getenv("PORT", "8000"))
-    log_level_dev = settings.LOG_LEVEL.lower()
-
-    logger.info(f"Iniciando servidor de desarrollo Uvicorn en http://{host_dev}:{port_dev}")
-    uvicorn.run(
-        "app.main:app",
-        host=host_dev,
-        port=port_dev,
-        log_level=log_level_dev,
-        reload=True
-    )# Deploy forced at miércoles, 23 de julio de 2025, 20:28:59 -05
+@app.get("/health")
+async def health_check():
+    return {
+        "status": "healthy",
+        "version": "1.1-localdev",
+        "environment": settings.ENVIRONMENT
+    }
