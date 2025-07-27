@@ -1,16 +1,24 @@
 import google.generativeai as genai
 import json
 import logging
-from typing import Dict, Any, Optional, List  # CORRECCIÓN: Asegurar que Any está importado
+from typing import Dict, Any, Optional, List
 from datetime import datetime
 
 # Configurar logging
 logger = logging.getLogger(__name__)
 
+def _get_gemini_model(model_name: str = 'gemini-1.5-pro-latest') -> genai.GenerativeModel:
+    """Inicializa y devuelve el modelo generativo de Gemini."""
+    from app.core.config import settings
+    if not settings.GEMINI_API_KEY:
+        raise ValueError("GEMINI_API_KEY no está configurada")
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    return genai.GenerativeModel(model_name)
+
 def _handle_gemini_api_error(error: Exception, action_name: str) -> Dict[str, Any]:
     """Maneja errores de la API de Gemini de forma centralizada."""
     error_message = f"Error en {action_name}: {str(error)}"
-    logger.error(error_message)
+    logger.error(error_message, exc_info=True)
     
     return {
         "success": False,
@@ -47,11 +55,7 @@ def analyze_conversation_context(client: Any, params: Dict[str, Any]) -> Dict[st
                 "timestamp": datetime.now().isoformat()
             }
         
-        # Configurar Gemini con la API key desde settings
-        from app.core.config import settings
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        model = genai.GenerativeModel('gemini-pro')
+        model = _get_gemini_model()
         
         prompt = f"""
         Analiza el siguiente contexto de conversación y proporciona insights:
@@ -109,10 +113,7 @@ def generate_response_suggestions(client: Any, params: Dict[str, Any]) -> Dict[s
                 "timestamp": datetime.now().isoformat()
             }
         
-        from app.core.config import settings
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        model = genai.GenerativeModel('gemini-pro')
+        model = _get_gemini_model()
         
         prompt = f"""
         Basándote en el siguiente contexto y mensaje del usuario, genera 3 sugerencias de respuesta profesionales:
@@ -176,10 +177,7 @@ def extract_key_information(client: Any, params: Dict[str, Any]) -> Dict[str, An
                 "timestamp": datetime.now().isoformat()
             }
         
-        from app.core.config import settings
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        model = genai.GenerativeModel('gemini-pro')
+        model = _get_gemini_model()
         
         extraction_prompts = {
             "general": "Extrae información clave general",
@@ -239,10 +237,7 @@ def summarize_conversation(client: Any, params: Dict[str, Any]) -> Dict[str, Any
                 "timestamp": datetime.now().isoformat()
             }
         
-        from app.core.config import settings
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        model = genai.GenerativeModel('gemini-pro')
+        model = _get_gemini_model()
         
         conversation_text = "\n".join([
             f"{msg.get('sender', 'Unknown')}: {msg.get('content', '')}"
@@ -310,10 +305,7 @@ def classify_message_intent(client: Any, params: Dict[str, Any]) -> Dict[str, An
                 "timestamp": datetime.now().isoformat()
             }
         
-        from app.core.config import settings
-        genai.configure(api_key=settings.GEMINI_API_KEY)
-        
-        model = genai.GenerativeModel('gemini-pro')
+        model = _get_gemini_model()
         
         prompt = f"""
         Clasifica la intención del siguiente mensaje:
