@@ -2,6 +2,7 @@
 import logging
 import base64
 from typing import Dict, List, Optional, Any
+from datetime import datetime
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
 from google.protobuf import json_format
@@ -18,8 +19,7 @@ def get_google_ads_client() -> GoogleAdsClient:
     if (_google_ads_client_instance):
         return _google_ads_client_instance
     
-    # Cargar credenciales desde la configuración centralizada
-    # CORRECCIÓN: Usar las propiedades correctas de settings
+    # CORRECCIÓN CRÍTICA: Configurar la versión de API más reciente
     config = {
         "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
         "client_id": settings.GOOGLE_ADS_CLIENT_ID,
@@ -27,18 +27,36 @@ def get_google_ads_client() -> GoogleAdsClient:
         "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
         "login_customer_id": str(settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID else None,
         "use_proto_plus": True,
+        # SOLUCIÓN: Forzar uso de la versión más reciente de la API
+        "api_version": "v18"
     }
+    
     if not all(config.get(k) for k in ["developer_token", "client_id", "client_secret", "refresh_token"]):
         raise ValueError("Faltan credenciales de Google Ads en la configuración.")
     
-    logger.info("Inicializando cliente de Google Ads...")
+    logger.info(f"Inicializando cliente de Google Ads con API versión {config['api_version']}...")
     _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
     return _google_ads_client_instance
 
 def _handle_google_ads_api_error(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
     error_details = [{"message": error.message, "error_code": str(error.error_code)} for error in ex.failure.errors]
     logger.error(f"Google Ads API Exception en '{action_name}': {error_details}")
-    return {"status": "error", "action": action_name, "message": "Error en la API de Google Ads.", "details": {"errors": error_details, "request_id": ex.request_id}, "http_status": 400}
+    
+    # Verificar si es un error de versión deprecated
+    for error in error_details:
+        if "deprecated" in error.get("message", "").lower() or "UNSUPPORTED_VERSION" in error.get("error_code", ""):
+            logger.critical("⚠️ VERSIÓN DE API DEPRECADA - Actualizar configuración del cliente")
+    
+    return {
+        "success": False,
+        "error": "Error en la API de Google Ads",
+        "action": action_name,
+        "details": {
+            "errors": error_details, 
+            "request_id": ex.request_id
+        },
+        "timestamp": datetime.now().isoformat()
+    }
 
 def _execute_search_query(customer_id: str, query: str, action_name: str) -> Dict[str, Any]:
     try:
@@ -46,22 +64,24 @@ def _execute_search_query(customer_id: str, query: str, action_name: str) -> Dic
         ga_service = gads_client.get_service("GoogleAdsService")
         stream = ga_service.search_stream(customer_id=customer_id, query=query)
         results = [json_format.MessageToDict(row._pb) for batch in stream for row in batch.results]
-        return {"status": "success", "data": results}
+        return {"success": True, "data": results}
     except GoogleAdsException as ex:
         return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
-        return {"status": "error", "message": str(e), "http_status": 500}
+        logger.error(f"Error en {action_name}: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 def _execute_mutate_operations(customer_id: str, operations: list, service_name: str, action_name: str) -> Dict[str, Any]:
     try:
         gads_client = get_google_ads_client()
         service = gads_client.get_service(service_name)
         response = service.mutate(customer_id=customer_id, operations=operations)
-        return {"status": "success", "data": json_format.MessageToDict(response._pb)}
+        return {"success": True, "data": json_format.MessageToDict(response._pb)}
     except GoogleAdsException as ex:
         return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
-        return {"status": "error", "message": str(e), "http_status": 500}
+        logger.error(f"Error en {action_name}: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 def _get_customer_id(params: Dict[str, Any]) -> str:
     # CORRECCIÓN: Usar la propiedad correcta de settings
