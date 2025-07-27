@@ -751,9 +751,4 @@ for i, (category, count) in enumerate(top_categories, 1):
     logger.info(f"   {i}. {category}: {count} acciones")
 
 logger.info("🎉 ACTION_MAP CARGADO EXITOSAMENTE Y LISTO PARA USAR!")
-logger.info("=" * 80)logger.info("🏆 TOP 5 CATEGORÍAS CON MÁS ACCIONES:")
-for i, (category, count) in enumerate(top_categories, 1):
-    logger.info(f"   {i}. {category}: {count} acciones")
-
-logger.info("🎉 ACTION_MAP CARGADO EXITOSAMENTE Y LISTO PARA USAR!")
 logger.info("=" * 80)
