@@ -385,7 +385,7 @@ POWERBI_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - RESOLVER INTELIGENTE (5 acciones)
+# MAPEO DE ACCIONES - RESOLVER INTELIGENTE (10 acciones)
 # ============================================================================
 
 RESOLVER_ACTIONS: Dict[str, Callable] = {
@@ -394,15 +394,25 @@ RESOLVER_ACTIONS: Dict[str, Callable] = {
     "get_resolution_analytics": resolver_actions.get_resolution_analytics,
     "clear_resolution_cache": resolver_actions.clear_resolution_cache,
     "resolve_smart_workflow": resolver_actions.resolve_smart_workflow,
+    # Agregar las funciones adicionales del archivo
+    "resolve_resource": resolver_actions.resolve_resource,
+    "list_available_resources": resolver_actions.list_available_resources,
+    "validate_resource_id": resolver_actions.validate_resource_id,
+    "get_resource_config": resolver_actions.get_resource_config,
+    "search_resources": resolver_actions.search_resources,
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - SHAREPOINT (29 acciones)
+# MAPEO DE ACCIONES - SHAREPOINT (29 acciones + 6 de memoria = 35 acciones totales)
 # ============================================================================
 
 SHAREPOINT_ACTIONS: Dict[str, Callable] = {
+    # Gestión de Sitios (3 acciones)
     "sp_get_site_info": sharepoint_actions.get_site_info,
     "sp_search_sites": sharepoint_actions.search_sites,
+    "sp_list_document_libraries": sharepoint_actions.list_document_libraries,
+    
+    # Gestión de Listas (8 acciones)
     "sp_create_list": sharepoint_actions.create_list,
     "sp_list_lists": sharepoint_actions.list_lists,
     "sp_get_list": sharepoint_actions.get_list,
@@ -411,10 +421,14 @@ SHAREPOINT_ACTIONS: Dict[str, Callable] = {
     "sp_add_list_item": sharepoint_actions.add_list_item,
     "sp_list_list_items": sharepoint_actions.list_list_items,
     "sp_get_list_item": sharepoint_actions.get_list_item,
+    
+    # Gestión de Items de Lista (4 acciones)
     "sp_update_list_item": sharepoint_actions.update_list_item,
     "sp_delete_list_item": sharepoint_actions.delete_list_item,
     "sp_search_list_items": sharepoint_actions.search_list_items,
-    "sp_list_document_libraries": sharepoint_actions.list_document_libraries,
+    "sp_export_list_to_format": sharepoint_actions.sp_export_list_to_format,
+    
+    # Gestión de Documentos (7 acciones)
     "sp_list_folder_contents": sharepoint_actions.list_folder_contents,
     "sp_get_file_metadata": sharepoint_actions.get_file_metadata,
     "sp_upload_document": sharepoint_actions.upload_document,
@@ -422,20 +436,25 @@ SHAREPOINT_ACTIONS: Dict[str, Callable] = {
     "sp_delete_document": sharepoint_actions.delete_document,
     "sp_delete_item": sharepoint_actions.delete_item,
     "sp_create_folder": sharepoint_actions.create_folder,
+    
+    # Gestión de Archivos y Carpetas (3 acciones)
     "sp_move_item": sharepoint_actions.move_item,
     "sp_copy_item": sharepoint_actions.copy_item,
     "sp_update_file_metadata": sharepoint_actions.update_file_metadata,
+    
+    # Gestión de Permisos (4 acciones)
     "sp_get_sharing_link": sharepoint_actions.get_sharing_link,
     "sp_list_item_permissions": sharepoint_actions.list_item_permissions,
     "sp_add_item_permissions": sharepoint_actions.add_item_permissions,
     "sp_remove_item_permissions": sharepoint_actions.remove_item_permissions,
+    
+    # Sistema de Memoria (6 acciones)
     "sp_memory_ensure_list": sharepoint_actions.memory_ensure_list,
     "sp_memory_save": sharepoint_actions.memory_save,
     "sp_memory_get": sharepoint_actions.memory_get,
     "sp_memory_delete": sharepoint_actions.memory_delete,
     "sp_memory_list_keys": sharepoint_actions.memory_list_keys,
     "sp_memory_export_session": sharepoint_actions.memory_export_session,
-    "sp_export_list_to_format": sharepoint_actions.sp_export_list_to_format,
 }
 
 # ============================================================================
@@ -572,7 +591,7 @@ X_ADS_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - WEB RESEARCH (7 acciones)
+# MAPEO DE ACCIONES - WEB RESEARCH (10 acciones)
 # ============================================================================
 
 WEBRESEARCH_ACTIONS: Dict[str, Callable] = {
@@ -583,6 +602,10 @@ WEBRESEARCH_ACTIONS: Dict[str, Callable] = {
     "scrape_website_data": webresearch_actions.scrape_website_data,
     "batch_url_analysis": webresearch_actions.batch_url_analysis,
     "monitor_website_changes": webresearch_actions.monitor_website_changes,
+    # Agregar las funciones adicionales del archivo
+    "webresearch_search_web": webresearch_actions.webresearch_search_web,
+    "webresearch_scrape_url": webresearch_actions.webresearch_scrape_url,
+    "webresearch_extract_emails": webresearch_actions.webresearch_extract_emails,
 }
 
 # ============================================================================
@@ -631,7 +654,7 @@ ACTION_MAP: Dict[str, Callable] = {
     **CALENDAR_ACTIONS,          # 7 acciones
     **EMAIL_ACTIONS,             # 10 acciones
     **FORMS_ACTIONS,             # 3 acciones
-    **GEMINI_ACTIONS,            # 5 acciones
+    **GEMINI_ACTIONS,            # 6 acciones
     **GITHUB_ACTIONS,            # 3 acciones
     **GOOGLEADS_ACTIONS,         # 19 acciones
     **GRAPH_ACTIONS,             # 2 acciones
@@ -645,7 +668,7 @@ ACTION_MAP: Dict[str, Callable] = {
     **PLANNER_ACTIONS,           # 10 acciones
     **POWER_AUTOMATE_ACTIONS,    # 7 acciones
     **POWERBI_ACTIONS,           # 5 acciones
-    **RESOLVER_ACTIONS,          # 5 acciones
+    **RESOLVER_ACTIONS,          # 10 acciones
     **SHAREPOINT_ACTIONS,        # 35 acciones
     **STREAM_ACTIONS,            # 4 acciones
     **TEAMS_ACTIONS,             # 16 acciones
@@ -656,7 +679,7 @@ ACTION_MAP: Dict[str, Callable] = {
     **VIVA_INSIGHTS_ACTIONS,     # 2 acciones
     **YOUTUBE_CHANNEL_ACTIONS,   # 13 acciones
     **X_ADS_ACTIONS,             # 5 acciones
-    **WEBRESEARCH_ACTIONS,       # 7 acciones
+    **WEBRESEARCH_ACTIONS,       # 10 acciones
     **WORDPRESS_ACTIONS,         # 25 acciones
 }
 
@@ -724,6 +747,11 @@ logger.info("=" * 80)
 # Categorías con más acciones
 top_categories = sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:5]
 logger.info("🏆 TOP 5 CATEGORÍAS CON MÁS ACCIONES:")
+for i, (category, count) in enumerate(top_categories, 1):
+    logger.info(f"   {i}. {category}: {count} acciones")
+
+logger.info("🎉 ACTION_MAP CARGADO EXITOSAMENTE Y LISTO PARA USAR!")
+logger.info("=" * 80)logger.info("🏆 TOP 5 CATEGORÍAS CON MÁS ACCIONES:")
 for i, (category, count) in enumerate(top_categories, 1):
     logger.info(f"   {i}. {category}: {count} acciones")
 

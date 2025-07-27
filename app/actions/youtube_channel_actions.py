@@ -38,9 +38,10 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
     En un entorno de producción, esto asume que se ha proporcionado un refresh_token válido.
     """
     # Prioriza las credenciales pasadas en los parámetros, si no, usa las de la configuración global.
-    client_id = params.get("client_id", settings.YOUTUBE_CLIENT_ID)
-    client_secret = params.get("client_secret", settings.YOUTUBE_CLIENT_SECRET)
-    refresh_token = params.get("refresh_token", settings.YOUTUBE_REFRESH_TOKEN) # Asumiendo que YOUTUBE_REFRESH_TOKEN existe en config
+    # CORRECCIÓN: Cambiar de YOUTUBE_* a GOOGLE_ADS_* para usar las variables existentes
+    client_id = params.get("client_id", settings.GOOGLE_ADS_CLIENT_ID)
+    client_secret = params.get("client_secret", settings.GOOGLE_ADS_CLIENT_SECRET)
+    refresh_token = params.get("refresh_token", settings.GOOGLE_ADS_REFRESH_TOKEN)
 
     if not all([client_id, client_secret, refresh_token]):
         raise ValueError("Credenciales de YouTube (client_id, client_secret, refresh_token) no están configuradas.")

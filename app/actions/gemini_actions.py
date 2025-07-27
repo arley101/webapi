@@ -1,7 +1,7 @@
 import google.generativeai as genai
 import json
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List  # CORRECCIÓN: Asegurar que Any está importado
 from datetime import datetime
 
 # Configurar logging
@@ -34,9 +34,10 @@ def _validate_gemini_response(response: Any, action_name: str) -> bool:
         logger.error(f"Error validando respuesta en {action_name}: {str(e)}")
         return False
 
-def analyze_conversation_context(conversation_data: Dict[str, Any]) -> Dict[str, Any]:
+def analyze_conversation_context(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Analiza el contexto de una conversación usando Gemini."""
     action_name = "analyze_conversation_context"
+    conversation_data = params.get("conversation_data", {})
     
     try:
         if not conversation_data:
@@ -45,6 +46,10 @@ def analyze_conversation_context(conversation_data: Dict[str, Any]) -> Dict[str,
                 "error": "Datos de conversación requeridos",
                 "timestamp": datetime.now().isoformat()
             }
+        
+        # Configurar Gemini con la API key desde settings
+        from app.core.config import settings
+        genai.configure(api_key=settings.GEMINI_API_KEY)
         
         model = genai.GenerativeModel('gemini-pro')
         
@@ -90,9 +95,11 @@ def analyze_conversation_context(conversation_data: Dict[str, Any]) -> Dict[str,
     except Exception as e:
         return _handle_gemini_api_error(e, action_name)
 
-def generate_response_suggestions(context: str, user_message: str) -> Dict[str, Any]:
+def generate_response_suggestions(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Genera sugerencias de respuesta basadas en el contexto."""
     action_name = "generate_response_suggestions"
+    context = params.get("context", "")
+    user_message = params.get("user_message", "")
     
     try:
         if not context or not user_message:
@@ -101,6 +108,9 @@ def generate_response_suggestions(context: str, user_message: str) -> Dict[str, 
                 "error": "Contexto y mensaje de usuario requeridos",
                 "timestamp": datetime.now().isoformat()
             }
+        
+        from app.core.config import settings
+        genai.configure(api_key=settings.GEMINI_API_KEY)
         
         model = genai.GenerativeModel('gemini-pro')
         
@@ -152,9 +162,11 @@ def generate_response_suggestions(context: str, user_message: str) -> Dict[str, 
     except Exception as e:
         return _handle_gemini_api_error(e, action_name)
 
-def extract_key_information(text: str, extraction_type: str = "general") -> Dict[str, Any]:
+def extract_key_information(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Extrae información clave de un texto usando Gemini."""
     action_name = "extract_key_information"
+    text = params.get("text", "")
+    extraction_type = params.get("extraction_type", "general")
     
     try:
         if not text:
@@ -163,6 +175,9 @@ def extract_key_information(text: str, extraction_type: str = "general") -> Dict
                 "error": "Texto requerido para extracción",
                 "timestamp": datetime.now().isoformat()
             }
+        
+        from app.core.config import settings
+        genai.configure(api_key=settings.GEMINI_API_KEY)
         
         model = genai.GenerativeModel('gemini-pro')
         
@@ -210,9 +225,11 @@ def extract_key_information(text: str, extraction_type: str = "general") -> Dict
     except Exception as e:
         return _handle_gemini_api_error(e, action_name)
 
-def summarize_conversation(messages: List[Dict[str, Any]], max_length: int = 500) -> Dict[str, Any]:
+def summarize_conversation(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un resumen de una conversación."""
     action_name = "summarize_conversation"
+    messages = params.get("messages", [])
+    max_length = params.get("max_length", 500)
     
     try:
         if not messages:
@@ -221,6 +238,9 @@ def summarize_conversation(messages: List[Dict[str, Any]], max_length: int = 500
                 "error": "Lista de mensajes requerida",
                 "timestamp": datetime.now().isoformat()
             }
+        
+        from app.core.config import settings
+        genai.configure(api_key=settings.GEMINI_API_KEY)
         
         model = genai.GenerativeModel('gemini-pro')
         
@@ -277,9 +297,10 @@ def summarize_conversation(messages: List[Dict[str, Any]], max_length: int = 500
     except Exception as e:
         return _handle_gemini_api_error(e, action_name)
 
-def classify_message_intent(message: str) -> Dict[str, Any]:
+def classify_message_intent(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Clasifica la intención de un mensaje."""
     action_name = "classify_message_intent"
+    message = params.get("message", "")
     
     try:
         if not message:
@@ -288,6 +309,9 @@ def classify_message_intent(message: str) -> Dict[str, Any]:
                 "error": "Mensaje requerido para clasificación",
                 "timestamp": datetime.now().isoformat()
             }
+        
+        from app.core.config import settings
+        genai.configure(api_key=settings.GEMINI_API_KEY)
         
         model = genai.GenerativeModel('gemini-pro')
         

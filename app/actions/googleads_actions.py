@@ -19,12 +19,13 @@ def get_google_ads_client() -> GoogleAdsClient:
         return _google_ads_client_instance
     
     # Cargar credenciales desde la configuración centralizada
+    # CORRECCIÓN: Usar las propiedades correctas de settings
     config = {
-        "developer_token": settings.GOOGLE_ADS.DEVELOPER_TOKEN,
-        "client_id": settings.GOOGLE_ADS.CLIENT_ID,
-        "client_secret": settings.GOOGLE_ADS.CLIENT_SECRET,
-        "refresh_token": settings.GOOGLE_ADS.REFRESH_TOKEN,
-        "login_customer_id": str(settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID else None,
+        "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
+        "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+        "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
+        "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
+        "login_customer_id": str(settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID else None,
         "use_proto_plus": True,
     }
     if not all(config.get(k) for k in ["developer_token", "client_id", "client_secret", "refresh_token"]):
@@ -63,7 +64,8 @@ def _execute_mutate_operations(customer_id: str, operations: list, service_name:
         return {"status": "error", "message": str(e), "http_status": 500}
 
 def _get_customer_id(params: Dict[str, Any]) -> str:
-    customer_id = params.get("customer_id", settings.GOOGLE_ADS.LOGIN_CUSTOMER_ID)
+    # CORRECCIÓN: Usar la propiedad correcta de settings
+    customer_id = params.get("customer_id", settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID)
     if not customer_id: raise ValueError("Se requiere 'customer_id'.")
     return str(customer_id).replace("-", "")
 

@@ -1,0 +1,19 @@
+# ============================================================================
+# DEPENDENCIAS DE DESARROLLO - No incluir en producción
+# ============================================================================
+
+# Testing
+pytest==8.3.2
+pytest-asyncio==0.23.8
+pytest-cov==5.0.0
+pytest-mock==3.14.0
+
+# Linting & Formatting
+black==24.4.2
+isort==5.13.2
+flake8==7.1.0
+mypy==1.11.1
+
+# Development tools
+ipython==8.26.0
+pre-commit==3.8.0

@@ -103,6 +103,26 @@ class Settings(BaseSettings):
     
     GEMINI_API_KEY: Optional[str] = None
 
+    # Google Ads Configuration
+    GOOGLE_ADS_CLIENT_ID: Optional[str] = Field(None, env="GOOGLE_ADS_CLIENT_ID")
+    GOOGLE_ADS_CLIENT_SECRET: Optional[str] = Field(None, env="GOOGLE_ADS_CLIENT_SECRET")
+    GOOGLE_ADS_REFRESH_TOKEN: Optional[str] = Field(None, env="GOOGLE_ADS_REFRESH_TOKEN")
+    GOOGLE_ADS_LOGIN_CUSTOMER_ID: Optional[str] = Field(None, env="GOOGLE_ADS_LOGIN_CUSTOMER_ID")
+    GOOGLE_ADS_DEVELOPER_TOKEN: Optional[str] = Field(None, env="GOOGLE_ADS_DEVELOPER_TOKEN")
+    
+    # YouTube Configuration (usando las mismas credenciales de Google)
+    @property
+    def YOUTUBE_CLIENT_ID(self) -> Optional[str]:
+        return self.GOOGLE_ADS_CLIENT_ID
+    
+    @property
+    def YOUTUBE_CLIENT_SECRET(self) -> Optional[str]:
+        return self.GOOGLE_ADS_CLIENT_SECRET
+    
+    @property
+    def YOUTUBE_REFRESH_TOKEN(self) -> Optional[str]:
+        return self.GOOGLE_ADS_REFRESH_TOKEN
+
     @field_validator("OPENAI_API_DEFAULT_SCOPE", mode='before')
     @classmethod
     def assemble_openai_scope(cls, v: Optional[List[str]], values) -> Optional[List[str]]: 

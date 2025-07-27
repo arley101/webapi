@@ -1,6 +1,6 @@
 # app/actions/sharepoint_actions.py
 import logging
-import requests # Necesario para tipos de excepción y para PUT a uploadUrl de sesión
+import requests
 import json
 import csv
 from io import StringIO
@@ -256,7 +256,6 @@ def _get_item_id_from_path_if_needed_sp(
     # Añadir el "site_identifier" original si estaba en params_for_metadata, por si _obtener_site_id_sp lo necesita dentro de get_file_metadata
     if params_for_metadata and params_for_metadata.get("site_identifier"):
         metadata_call_params["site_identifier"] = params_for_metadata.get("site_identifier")
-
 
     try:
         item_metadata_response = get_file_metadata(client, metadata_call_params)
@@ -654,30 +653,37 @@ def search_list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
         return _handle_graph_api_error(e, action_name, params)
 
 def list_document_libraries(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    logger.info("Ejecutando list_document_libraries con params: %s", params)
-    action_name = "list_document_libraries"
-
-    select_fields: str = params.get("select", "id,name,displayName,description,webUrl,driveType,createdDateTime,lastModifiedDateTime,quota,owner")
-    top_per_page: int = min(int(params.get('top_per_page', 50)), getattr(settings, 'DEFAULT_PAGING_SIZE', 50))
-    max_items_total: Optional[int] = params.get('max_items_total')
-    filter_query: Optional[str] = params.get("filter_query") # Permite al usuario pasar un filtro custom
-
+    """Lista todas las bibliotecas de documentos del sitio."""
+    action_name = "sp_list_document_libraries"
     try:
-        target_site_id = _obtener_site_id_sp(client, params)
-        url_base = f"{settings.GRAPH_API_BASE_URL}/sites/{target_site_id}/drives"
+        site_id = _obtener_site_id_sp(client, params)
+        logger.info(f"Iniciando lista de bibliotecas de documentos para site_id: {site_id}")
         
-        query_api_params_init: Dict[str, Any] = {'$top': top_per_page, '$select': select_fields}
-        # Por defecto, filtrar para obtener solo Document Libraries, a menos que el usuario provea un filtro explícito.
-        if filter_query:
-            query_api_params_init['$filter'] = filter_query
-        else:
-            query_api_params_init['$filter'] = "driveType eq 'documentLibrary'"
+        url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives"
+        scope = ["https://graph.microsoft.com/.default"]
         
-        logger.info(f"Listando bibliotecas de documentos (drives tipo documentLibrary) en sitio SP '{target_site_id}'. (Filter: {query_api_params_init['$filter']})")
-        files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        return _sp_paged_request(client, url_base, files_read_scope, params, query_api_params_init, max_items_total, action_name)
-    except Exception as e: 
+        # Corregir el campo displayName por name
+        select_fields = "id,name,description,driveType,createdDateTime,lastModifiedDateTime,webUrl,owner"
+        
+        query_params = {
+            "$select": select_fields,
+            "$orderby": "name",
+            "$top": params.get("top", 50)
+        }
+        
+        response = client.get(url, scope=scope, params=query_params)
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "data": response.get("value", []),
+            "@odata.count": response.get("@odata.count"),
+            "@odata.nextLink": response.get("@odata.nextLink"),
+            "site_id": site_id,
+            "timestamp": _get_current_timestamp_iso_z()
+        }
+        
+    except Exception as e:
         return _handle_graph_api_error(e, action_name, params)
 
 def list_folder_contents(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -1041,7 +1047,6 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
                  # Si es el mismo sitio, no es estrictamente necesario, pero Graph lo maneja.
                  payload_move["parentReference"]["siteId"] = target_site_id_param
 
-
         if new_name_after_move: 
             payload_move["name"] = new_name_after_move
         
@@ -1098,7 +1103,6 @@ def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
             # Por seguridad, si target_drive_id_param está y target_site_id_param no, asumir mismo sitio de origen.
             elif not target_site_id_param :
                  parent_reference_payload["siteId"] = source_site_id_resolved
-
 
         body_payload: Dict[str, Any] = {"parentReference": parent_reference_payload}
         if new_name_for_copy: 
@@ -1365,7 +1369,7 @@ def _ensure_memory_list_exists(client: AuthenticatedHttpClient, site_id: str) ->
             logger.info(f"Lista memoria '{MEMORIA_LIST_NAME_FROM_SETTINGS}' ya existe en sitio '{site_id}'.")
             return True
         except requests.exceptions.HTTPError as http_err:
-            if http_err.response is not None and http_err.response.status_code == 404:
+            if (http_err.response is not None and http_err.response.status_code == 404):
                 logger.info(f"Lista memoria '{MEMORIA_LIST_NAME_FROM_SETTINGS}' no encontrada. Intentando crearla en sitio '{site_id}'.")
                 columnas_default = [
                     {"name": "SessionID", "text": {}}, 

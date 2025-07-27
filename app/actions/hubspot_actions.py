@@ -90,7 +90,8 @@ def hubspot_create_contact(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         properties = params.get("properties_payload")
         if not properties: raise ValueError("El parámetro 'properties_payload' es requerido.")
         contact_input = SimplePublicObjectInput(properties=properties)
-        created_contact = hs_client.crm.contacts.basic_api.create(simple_public_object_input=contact_input)
+        # CORRECCIÓN: Cambiar de simple_public_object_input a simple_public_object_input_for_create
+        created_contact = hs_client.crm.contacts.basic_api.create(simple_public_object_input_for_create=contact_input)
         return {"status": "success", "data": _serialize_datetimes(created_contact.to_dict())}
     except Exception as e:
         return _handle_hubspot_api_error(e, action_name)
@@ -140,7 +141,8 @@ def hubspot_create_deal(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         properties = params.get("properties_payload")
         if not properties: raise ValueError("El parámetro 'properties_payload' es requerido.")
         deal_input = DealSimplePublicObjectInput(properties=properties)
-        created_deal = hs_client.crm.deals.basic_api.create(simple_public_object_input=deal_input)
+        # CORRECCIÓN: Cambiar de simple_public_object_input a simple_public_object_input_for_create
+        created_deal = hs_client.crm.deals.basic_api.create(simple_public_object_input_for_create=deal_input)
         return {"status": "success", "data": _serialize_datetimes(created_deal.to_dict())}
     except Exception as e:
         return _handle_hubspot_api_error(e, action_name)
@@ -231,7 +233,8 @@ def hubspot_create_company_and_associate_contact(client: Any, params: Dict[str, 
         contact_id = params.get("contact_id")
         if not company_properties or not contact_id: raise ValueError("Los parámetros 'company_properties' y 'contact_id' son requeridos.")
         company_input = CompanySimplePublicObjectInput(properties=company_properties)
-        created_company = hs_client.crm.companies.basic_api.create(simple_public_object_input=company_input)
+        # CORRECCIÓN: Cambiar de simple_public_object_input a simple_public_object_input_for_create
+        created_company = hs_client.crm.companies.basic_api.create(simple_public_object_input_for_create=company_input)
         company_id = created_company.id
         
         association_spec = [AssociationSpec(association_category="HUBSPOT_DEFINED", association_type_id=1)] # 1 = Contact to Company
@@ -263,7 +266,8 @@ def hubspot_create_company(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         properties = params.get("properties_payload")
         if not properties: raise ValueError("El parámetro 'properties_payload' es requerido.")
         company_input = CompanySimplePublicObjectInput(properties=properties)
-        created_company = hs_client.crm.companies.basic_api.create(simple_public_object_input=company_input)
+        # CORRECCIÓN: Cambiar de simple_public_object_input a simple_public_object_input_for_create
+        created_company = hs_client.crm.companies.basic_api.create(simple_public_object_input_for_create=company_input)
         return {"status": "success", "data": _serialize_datetimes(created_company.to_dict())}
     except Exception as e:
         return _handle_hubspot_api_error(e, action_name)
@@ -321,7 +325,8 @@ def hubspot_add_note_to_contact(client: Any, params: Dict[str, Any]) -> Dict[str
         timestamp = params.get("timestamp", datetime.utcnow().isoformat() + "Z")
         note_properties = {"hs_note_body": note_body, "hs_timestamp": timestamp}
         note_input = NoteSimplePublicObjectInput(properties=note_properties)
-        created_note = hs_client.crm.objects.notes.basic_api.create(simple_public_object_input=note_input)
+        # CORRECCIÓN: Cambiar de simple_public_object_input a simple_public_object_input_for_create
+        created_note = hs_client.crm.objects.notes.basic_api.create(simple_public_object_input_for_create=note_input)
         note_id = created_note.id
         
         association_spec = [AssociationSpec(association_category="HUBSPOT_DEFINED", association_type_id=202)] # 202 = Note to Contact

@@ -552,3 +552,305 @@ def monitor_website_changes(client: Any, params: Dict[str, Any]) -> Dict[str, An
         
     except Exception as e:
         return _handle_web_error(e, action_name, params.get('url', ''))
+
+import logging
+import requests
+from typing import Dict, Any, Optional, List
+from datetime import datetime
+import json
+from urllib.parse import quote_plus, urlparse
+import time
+from bs4 import BeautifulSoup
+import re
+
+# Configurar logging
+logger = logging.getLogger(__name__)
+
+# Configuración de headers por defecto
+DEFAULT_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'DNT': '1',
+    'Connection': 'keep-alive',
+    'Upgrade-Insecure-Requests': '1'
+}
+
+# Cache simple para evitar requests repetidas
+_cache = {}
+_cache_ttl = 3600  # 1 hora
+
+def _get_cached_result(url: str) -> Optional[Dict[str, Any]]:
+    """Obtiene resultado del cache si existe y no ha expirado."""
+    if url in _cache:
+        cached_item = _cache[url]
+        if time.time() - cached_item['timestamp'] < _cache_ttl:
+            return cached_item['data']
+    return None
+
+def _set_cache(url: str, data: Dict[str, Any]) -> None:
+    """Guarda resultado en cache."""
+    _cache[url] = {
+        'data': data,
+        'timestamp': time.time()
+    }
+
+def _handle_webresearch_error(error: Exception, action_name: str, url: str = "") -> Dict[str, Any]:
+    """Maneja errores de web research de forma centralizada."""
+    error_message = f"Error en {action_name}"
+    if url:
+        error_message += f" para URL {url}"
+    error_message += f": {str(error)}"
+    
+    logger.error(error_message)
+    
+    return {
+        "status": "error",
+        "error": error_message,
+        "action": action_name,
+        "url": url,
+        "timestamp": datetime.now().isoformat()
+    }
+
+def _extract_text_from_html(html: str) -> str:
+    """Extrae texto limpio de HTML."""
+    try:
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Eliminar scripts y estilos
+        for script in soup(["script", "style"]):
+            script.decompose()
+        
+        # Obtener texto
+        text = soup.get_text()
+        
+        # Limpiar espacios en blanco
+        lines = (line.strip() for line in text.splitlines())
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        text = ' '.join(chunk for chunk in chunks if chunk)
+        
+        return text
+    except Exception as e:
+        logger.error(f"Error extrayendo texto de HTML: {str(e)}")
+        return ""
+
+def _extract_metadata(soup: BeautifulSoup) -> Dict[str, Any]:
+    """Extrae metadatos de una página HTML."""
+    metadata = {
+        'title': '',
+        'description': '',
+        'keywords': '',
+        'author': '',
+        'og_data': {}
+    }
+    
+    try:
+        # Título
+        title_tag = soup.find('title')
+        if title_tag:
+            metadata['title'] = title_tag.get_text().strip()
+        
+        # Meta tags
+        for meta in soup.find_all('meta'):
+            if meta.get('name') == 'description':
+                metadata['description'] = meta.get('content', '')
+            elif meta.get('name') == 'keywords':
+                metadata['keywords'] = meta.get('content', '')
+            elif meta.get('name') == 'author':
+                metadata['author'] = meta.get('content', '')
+            
+            # Open Graph
+            if meta.get('property', '').startswith('og:'):
+                og_key = meta.get('property').replace('og:', '')
+                metadata['og_data'][og_key] = meta.get('content', '')
+    
+    except Exception as e:
+        logger.error(f"Error extrayendo metadatos: {str(e)}")
+    
+    return metadata
+
+def webresearch_search_web(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Realiza una búsqueda web y extrae información relevante.
+    
+    Args:
+        client: Cliente (no usado, mantenido por consistencia)
+        params: Dict con:
+            - query: Término de búsqueda
+            - num_results: Número de resultados a obtener (default 5)
+            - search_engine: Motor de búsqueda a usar (google, bing, duckduckgo)
+    
+    Returns:
+        Dict con los resultados de la búsqueda
+    """
+    action_name = "webresearch_search_web"
+    
+    try:
+        query = params.get('query', '')
+        num_results = params.get('num_results', 5)
+        search_engine = params.get('search_engine', 'duckduckgo')
+        
+        if not query:
+            raise ValueError("El parámetro 'query' es requerido")
+        
+        # Por ahora implementamos solo DuckDuckGo (no requiere API key)
+        if search_engine == 'duckduckgo':
+            url = f"https://duckduckgo.com/html/?q={quote_plus(query)}"
+            
+            response = requests.get(url, headers=DEFAULT_HEADERS, timeout=10)
+            response.raise_for_status()
+            
+            soup = BeautifulSoup(response.text, 'html.parser')
+            results = []
+            
+            # Extraer resultados
+            for i, result in enumerate(soup.find_all('div', class_='result'), 1):
+                if i > num_results:
+                    break
+                
+                title_elem = result.find('a', class_='result__a')
+                snippet_elem = result.find('a', class_='result__snippet')
+                
+                if title_elem:
+                    result_data = {
+                        'position': i,
+                        'title': title_elem.get_text().strip(),
+                        'url': title_elem.get('href', ''),
+                        'snippet': snippet_elem.get_text().strip() if snippet_elem else ''
+                    }
+                    results.append(result_data)
+            
+            return {
+                "status": "success",
+                "data": {
+                    "query": query,
+                    "search_engine": search_engine,
+                    "results": results,
+                    "total_results": len(results)
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "status": "error",
+                "message": f"Motor de búsqueda '{search_engine}' no soportado",
+                "supported_engines": ["duckduckgo"],
+                "timestamp": datetime.now().isoformat()
+            }
+            
+    except Exception as e:
+        return _handle_webresearch_error(e, action_name)
+
+def webresearch_scrape_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extrae contenido e información de una URL específica.
+    
+    Args:
+        client: Cliente (no usado, mantenido por consistencia)
+        params: Dict con:
+            - url: URL a scrapear
+            - extract_images: Si extraer URLs de imágenes (default False)
+            - extract_links: Si extraer enlaces (default False)
+    
+    Returns:
+        Dict con el contenido extraído
+    """
+    action_name = "webresearch_scrape_url"
+    
+    try:
+        url = params.get('url', '')
+        extract_images = params.get('extract_images', False)
+        extract_links = params.get('extract_links', False)
+        
+        if not url:
+            raise ValueError("El parámetro 'url' es requerido")
+        
+        # Verificar cache
+        cached_result = _get_cached_result(url)
+        if cached_result:
+            return cached_result
+        
+        # Realizar request
+        response = requests.get(url, headers=DEFAULT_HEADERS, timeout=15)
+        response.raise_for_status()
+        
+        # Parsear HTML
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Extraer información básica
+        text_content = _extract_text_from_html(response.text)
+        metadata = _extract_metadata(soup)
+        
+        result = {
+            "status": "success",
+            "data": {
+                "url": url,
+                "status_code": response.status_code,
+                "content_type": response.headers.get('content-type', ''),
+                "metadata": metadata,
+                "text_content": text_content[:5000],  # Limitar a 5000 caracteres
+                "content_length": len(text_content)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Extraer imágenes si se solicita
+        if extract_images:
+            images = []
+            for img in soup.find_all('img'):
+                img_url = img.get('src', '')
+                if img_url:
+                    images.append({
+                        'src': img_url,
+                        'alt': img.get('alt', ''),
+                        'title': img.get('title', '')
+                    })
+            result['data']['images'] = images[:50]  # Limitar a 50 imágenes
+        
+        # Extraer enlaces si se solicita
+        if extract_links:
+            links = []
+            for link in soup.find_all('a'):
+                href = link.get('href', '')
+                if href and not href.startswith('#'):
+                    links.append({
+                        'href': href,
+                        'text': link.get_text().strip(),
+                        'title': link.get('title', '')
+                    })
+            result['data']['links'] = links[:100]  # Limitar a 100 enlaces
+        
+        # Guardar en cache
+        _set_cache(url, result)
+        
+        return result
+        
+    except Exception as e:
+        return _handle_webresearch_error(e, action_name, url)
+
+def webresearch_extract_emails(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extrae direcciones de email de una URL o texto.
+    
+    Args:
+        client: Cliente (no usado, mantenido por consistencia)
+        params: Dict con:
+            - url: URL de donde extraer emails (opcional)
+            - text: Texto del cual extraer emails (opcional)
+    
+    Returns:
+        Dict con las direcciones de email encontradas
+    """
+    action_name = "webresearch_extract_emails"
+    
+    try:
+        url = params.get('url')
+        text = params.get('text', '')
+        
+        if not url and not text:
+            raise ValueError("Se requiere 'url' o 'text'")
+        
+        # Si se proporciona URL, obtener el contenido
+        if url:
+            scrape_result = webresearch_scrape_url(client
