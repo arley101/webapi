@@ -1,49 +1,65 @@
-import requests
+import os
+import re
 import json
 import time
 import hashlib
-import logging
-from typing import Dict, Any, Optional, List
-from urllib.parse import urljoin, urlparse, quote_plus
-from datetime import datetime, timedelta
-import re
+from datetime import datetime
+from typing import Dict, Any, List, Optional
+from urllib.parse import urlparse, quote_plus
+import requests
 from bs4 import BeautifulSoup
-import asyncio
-import aiohttp
-from concurrent.futures import ThreadPoolExecutor
-import os
-
-# Configurar logging
-logger = logging.getLogger(__name__)
 
 # Cache simple en memoria
 _url_cache = {}
-_rate_limit_tracker = {}
+_last_request_time = 0
+REQUEST_DELAY = 1  # Delay entre requests en segundos
 
 def _get_headers() -> Dict[str, str]:
-    """Obtiene headers estándar para las requests web."""
+    """Retorna headers comunes para requests web."""
     return {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.9,es;q=0.8',
-        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept-Language': 'en-US,en;q=0.5',
+        'Accept-Encoding': 'gzip, deflate',
         'Connection': 'keep-alive',
-        'Upgrade-Insecure-Requests': '1',
+        'Upgrade-Insecure-Requests': '1'
     }
 
-def _handle_web_error(error: Exception, action_name: str, url: str = "") -> Dict[str, Any]:
-    """Maneja errores web de forma centralizada."""
-    error_message = f"Error en {action_name}"
-    if url:
-        error_message += f" para URL {url}"
-    error_message += f": {str(error)}"
+def _rate_limit():
+    """Implementa rate limiting básico."""
+    global _last_request_time
+    current_time = time.time()
+    time_since_last = current_time - _last_request_time
     
-    logger.error(error_message)
+    if time_since_last < REQUEST_DELAY:
+        time.sleep(REQUEST_DELAY - time_since_last)
     
+    _last_request_time = time.time()
+
+def _get_cached_result(cache_key: str) -> Optional[Dict[str, Any]]:
+    """Obtiene resultado del cache si existe y no ha expirado."""
+    if cache_key in _url_cache:
+        cached = _url_cache[cache_key]
+        # Cache válido por 1 hora
+        if time.time() - cached['timestamp'] < 3600:
+            return cached['data']
+        else:
+            del _url_cache[cache_key]
+    return None
+
+def _cache_result(cache_key: str, data: Dict[str, Any]):
+    """Guarda resultado en cache."""
+    _url_cache[cache_key] = {
+        'data': data,
+        'timestamp': time.time()
+    }
+
+def _handle_web_error(error: Exception, action_name: str) -> Dict[str, Any]:
+    """Maneja errores de forma consistente."""
     return {
         "success": False,
-        "error": error_message,
-        "url": url,
+        "error": str(error),
+        "action": action_name,
         "timestamp": datetime.now().isoformat()
     }
 
@@ -60,27 +76,7 @@ def _get_cache_key(url: str, params: Dict[str, Any]) -> str:
     cache_data = f"{url}_{json.dumps(params, sort_keys=True)}"
     return hashlib.md5(cache_data.encode()).hexdigest()
 
-def _check_rate_limit(domain: str, max_requests: int = 10, window_seconds: int = 60) -> bool:
-    """Verifica si se puede hacer una request considerando rate limiting."""
-    now = time.time()
-    
-    if domain not in _rate_limit_tracker:
-        _rate_limit_tracker[domain] = []
-    
-    # Limpiar requests antiguas
-    _rate_limit_tracker[domain] = [
-        req_time for req_time in _rate_limit_tracker[domain]
-        if now - req_time < window_seconds
-    ]
-    
-    # Verificar límite
-    if len(_rate_limit_tracker[domain]) >= max_requests:
-        return False
-    
-    _rate_limit_tracker[domain].append(now)
-    return True
-
-def fetch_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def fetch_url(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Obtiene el contenido de una URL con validación, caché y rate limiting
     """
@@ -98,65 +94,50 @@ def fetch_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         if not _validate_url(url):
             return {
                 "success": False,
-                "error": "URL inválida",
-                "url": url,
+                "error": "URL no válida",
                 "timestamp": datetime.now().isoformat()
             }
         
-        timeout = params.get('timeout', 30)
         use_cache = params.get('use_cache', True)
-        cache_ttl = params.get('cache_ttl', 3600)
-        
-        # Verificar caché
         cache_key = _get_cache_key(url, params)
-        if use_cache and cache_key in _url_cache:
-            cached_data = _url_cache[cache_key]
-            if datetime.now() - cached_data['timestamp'] < timedelta(seconds=cache_ttl):
-                cached_data['data']['from_cache'] = True
-                return cached_data['data']
+        
+        # Verificar cache
+        if use_cache:
+            cached_result = _get_cached_result(cache_key)
+            if cached_result:
+                return cached_result
         
         # Rate limiting
-        domain = urlparse(url).netloc
-        if not _check_rate_limit(domain):
-            return {
-                "success": False,
-                "error": "Rate limit excedido para este dominio",
-                "url": url,
-                "timestamp": datetime.now().isoformat()
-            }
+        _rate_limit()
         
         headers = _get_headers()
+        timeout = params.get('timeout', 30)
         
         response = requests.get(url, headers=headers, timeout=timeout)
         response.raise_for_status()
         
         result = {
             "success": True,
-            "data": {
-                "url": url,
-                "status_code": response.status_code,
-                "content": response.text,
-                "headers": dict(response.headers),
-                "encoding": response.encoding,
-                "content_length": len(response.content),
-                "from_cache": False
-            },
+            "url": url,
+            "status_code": response.status_code,
+            "content": response.text,
+            "headers": dict(response.headers),
+            "encoding": response.encoding,
             "timestamp": datetime.now().isoformat()
         }
         
-        # Guardar en caché
+        # Guardar en cache
         if use_cache:
-            _url_cache[cache_key] = {
-                'data': result,
-                'timestamp': datetime.now()
-            }
+            _cache_result(cache_key, result)
         
         return result
         
+    except requests.exceptions.RequestException as e:
+        return _handle_web_error(e, action_name)
     except Exception as e:
-        return _handle_web_error(e, action_name, params.get('url', ''))
+        return _handle_web_error(e, action_name)
 
-def search_web(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def search_web(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Realiza búsquedas web usando múltiples motores de búsqueda
     """
@@ -184,7 +165,7 @@ def search_web(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
                 "error": f"Motor de búsqueda no soportado: {search_engine}",
                 "timestamp": datetime.now().isoformat()
             }
-        
+            
     except Exception as e:
         return _handle_web_error(e, action_name)
 
@@ -206,19 +187,17 @@ def _search_duckduckgo(query: str, max_results: int) -> Dict[str, Any]:
             
             if title_elem:
                 results.append({
-                    'title': title_elem.get_text(strip=True),
+                    'title': title_elem.get_text().strip(),
                     'url': title_elem.get('href', ''),
-                    'snippet': snippet_elem.get_text(strip=True) if snippet_elem else ''
+                    'snippet': snippet_elem.get_text().strip() if snippet_elem else ''
                 })
         
         return {
             "success": True,
-            "data": {
-                "query": query,
-                "results": results,
-                "total_results": len(results),
-                "search_engine": "duckduckgo"
-            },
+            "query": query,
+            "results": results,
+            "count": len(results),
+            "search_engine": "duckduckgo",
             "timestamp": datetime.now().isoformat()
         }
         
@@ -238,15 +217,15 @@ def _search_google_custom(query: str, max_results: int) -> Dict[str, Any]:
                 "timestamp": datetime.now().isoformat()
             }
         
-        search_url = f"https://www.googleapis.com/customsearch/v1"
+        url = "https://www.googleapis.com/customsearch/v1"
         params = {
             'key': api_key,
             'cx': search_engine_id,
             'q': query,
-            'num': min(max_results, 10)
+            'num': min(max_results, 10)  # Google permite máximo 10 por request
         }
         
-        response = requests.get(search_url, params=params, timeout=30)
+        response = requests.get(url, params=params, timeout=30)
         response.raise_for_status()
         
         data = response.json()
@@ -261,19 +240,17 @@ def _search_google_custom(query: str, max_results: int) -> Dict[str, Any]:
         
         return {
             "success": True,
-            "data": {
-                "query": query,
-                "results": results,
-                "total_results": len(results),
-                "search_engine": "google"
-            },
+            "query": query,
+            "results": results,
+            "count": len(results),
+            "search_engine": "google",
             "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
         return _handle_web_error(e, "search_google_custom")
 
-def extract_text_from_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def extract_text_from_url(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extrae texto limpio de una URL
     """
@@ -290,39 +267,27 @@ def extract_text_from_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
         
         # Obtener contenido de la URL
         fetch_result = fetch_url(client, params)
-        if not fetch_result['success']:
+        if not fetch_result.get('success'):
             return fetch_result
         
-        content = fetch_result['data']['content']
-        soup = BeautifulSoup(content, 'html.parser')
-        
-        # Remover scripts y estilos
-        for script in soup(["script", "style"]):
-            script.decompose()
-        
-        # Extraer texto
-        text = soup.get_text()
-        
-        # Limpiar texto
-        lines = (line.strip() for line in text.splitlines())
-        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        text = ' '.join(chunk for chunk in chunks if chunk)
+        content = fetch_result.get('content', '')
+        text = _extract_text_from_html(content)
+        metadata = _extract_metadata(content)
         
         return {
             "success": True,
-            "data": {
-                "url": url,
-                "text": text,
-                "text_length": len(text),
-                "word_count": len(text.split())
-            },
+            "url": url,
+            "text": text,
+            "metadata": metadata,
+            "word_count": len(text.split()),
+            "char_count": len(text),
             "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
-        return _handle_web_error(e, action_name, params.get('url', ''))
+        return _handle_web_error(e, action_name)
 
-def check_url_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def check_url_status(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Verifica el estado de una URL
     """
@@ -340,37 +305,29 @@ def check_url_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         if not _validate_url(url):
             return {
                 "success": False,
-                "error": "URL inválida",
-                "url": url,
+                "error": "URL no válida",
                 "timestamp": datetime.now().isoformat()
             }
         
-        timeout = params.get('timeout', 30)
         headers = _get_headers()
+        timeout = params.get('timeout', 10)
         
-        start_time = time.time()
         response = requests.head(url, headers=headers, timeout=timeout, allow_redirects=True)
-        response_time = time.time() - start_time
         
         return {
             "success": True,
-            "data": {
-                "url": url,
-                "status_code": response.status_code,
-                "status_text": response.reason,
-                "response_time": round(response_time, 3),
-                "headers": dict(response.headers),
-                "redirected": len(response.history) > 0,
-                "final_url": response.url,
-                "is_accessible": 200 <= response.status_code < 400
-            },
+            "url": url,
+            "status_code": response.status_code,
+            "headers": dict(response.headers),
+            "final_url": response.url,
+            "is_accessible": 200 <= response.status_code < 400,
             "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
-        return _handle_web_error(e, action_name, params.get('url', ''))
+        return _handle_web_error(e, action_name)
 
-def scrape_website_data(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def scrape_website_data(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extrae datos específicos de un sitio web usando selectores CSS
     """
@@ -387,19 +344,12 @@ def scrape_website_data(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
                 "timestamp": datetime.now().isoformat()
             }
         
-        if not selectors:
-            return {
-                "success": False,
-                "error": "Selectores CSS son requeridos",
-                "timestamp": datetime.now().isoformat()
-            }
-        
         # Obtener contenido
         fetch_result = fetch_url(client, params)
-        if not fetch_result['success']:
+        if not fetch_result.get('success'):
             return fetch_result
         
-        content = fetch_result['data']['content']
+        content = fetch_result.get('content', '')
         soup = BeautifulSoup(content, 'html.parser')
         
         extracted_data = {}
@@ -418,18 +368,15 @@ def scrape_website_data(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         
         return {
             "success": True,
-            "data": {
-                "url": url,
-                "extracted_data": extracted_data,
-                "selectors_used": selectors
-            },
+            "url": url,
+            "data": extracted_data,
             "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
-        return _handle_web_error(e, action_name, params.get('url', ''))
+        return _handle_web_error(e, action_name)
 
-def batch_url_analysis(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def batch_url_analysis(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Analiza múltiples URLs en lote
     """
@@ -464,30 +411,29 @@ def batch_url_analysis(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
                         "url": url
                     }
             except Exception as e:
-                return _handle_web_error(e, f"analyze_{analysis_type}", url)
+                return _handle_web_error(e, f"batch_analysis_{url}")
         
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            results = list(executor.map(analyze_single_url, urls))
+        # Procesar URLs secuencialmente para evitar rate limiting
+        for url in urls:
+            result = analyze_single_url(url)
+            results.append(result)
         
-        successful_results = [r for r in results if r.get('success', False)]
-        failed_results = [r for r in results if not r.get('success', False)]
+        successful_results = [r for r in results if r.get('success')]
         
         return {
             "success": True,
-            "data": {
-                "total_urls": len(urls),
-                "successful": len(successful_results),
-                "failed": len(failed_results),
-                "results": results,
-                "analysis_type": analysis_type
-            },
+            "analysis_type": analysis_type,
+            "total_urls": len(urls),
+            "successful": len(successful_results),
+            "failed": len(urls) - len(successful_results),
+            "results": results,
             "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
         return _handle_web_error(e, action_name)
 
-def monitor_website_changes(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def monitor_website_changes(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Monitorea cambios en un sitio web
     """
@@ -504,114 +450,63 @@ def monitor_website_changes(client: Any, params: Dict[str, Any]) -> Dict[str, An
         
         # Obtener contenido actual
         current_result = fetch_url(client, {'url': url, 'use_cache': False})
-        if not current_result['success']:
+        if not current_result.get('success'):
             return current_result
         
-        current_content = current_result['data']['content']
+        current_content = current_result.get('content', '')
         current_hash = hashlib.md5(current_content.encode()).hexdigest()
         
-        # Comparar con versión anterior si existe
-        cache_key = f"monitor_{hashlib.md5(url.encode()).hexdigest()}"
-        previous_data = _url_cache.get(cache_key)
+        # Obtener hash anterior del cache (si existe)
+        cache_key = f"monitor_{url}"
+        previous_data = _get_cached_result(cache_key)
         
         if previous_data:
-            previous_hash = previous_data.get('hash')
+            previous_hash = previous_data.get('content_hash')
             has_changed = current_hash != previous_hash
             
+            # Análisis básico de cambios
             if has_changed:
-                # Calcular diferencias básicas
-                current_text = BeautifulSoup(current_content, 'html.parser').get_text()
+                current_text = _extract_text_from_html(current_content)
                 previous_text = previous_data.get('text', '')
                 
-                word_diff = len(current_text.split()) - len(previous_text.split())
-                char_diff = len(current_text) - len(previous_text)
+                # Calcular diferencias simples
+                current_words = set(current_text.split())
+                previous_words = set(previous_text.split())
+                
+                added_words = current_words - previous_words
+                removed_words = previous_words - current_words
+                
+                change_analysis = {
+                    'words_added': len(added_words),
+                    'words_removed': len(removed_words),
+                    'total_change_percentage': (len(added_words) + len(removed_words)) / max(len(previous_words), 1) * 100
+                }
+            else:
+                change_analysis = {}
         else:
-            has_changed = True  # Primera vez
-            word_diff = 0
-            char_diff = 0
+            has_changed = True  # Primera vez monitoreando
+            change_analysis = {"note": "Primera vez monitoreando esta URL"}
         
-        # Guardar datos actuales
-        _url_cache[cache_key] = {
-            'hash': current_hash,
-            'text': BeautifulSoup(current_content, 'html.parser').get_text(),
-            'timestamp': datetime.now()
+        # Guardar estado actual
+        current_text = _extract_text_from_html(current_content)
+        monitor_data = {
+            'content_hash': current_hash,
+            'text': current_text,
+            'last_check': datetime.now().isoformat()
         }
+        _cache_result(cache_key, monitor_data)
         
         return {
             "success": True,
-            "data": {
-                "url": url,
-                "has_changed": has_changed,
-                "current_hash": current_hash,
-                "word_count_difference": word_diff,
-                "character_count_difference": char_diff,
-                "last_checked": datetime.now().isoformat()
-            },
+            "url": url,
+            "has_changed": has_changed,
+            "current_hash": current_hash,
+            "change_analysis": change_analysis,
             "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
-        return _handle_web_error(e, action_name, params.get('url', ''))
-
-import logging
-import requests
-from typing import Dict, Any, Optional, List
-from datetime import datetime
-import json
-from urllib.parse import quote_plus, urlparse
-import time
-from bs4 import BeautifulSoup
-import re
-
-# Configurar logging
-logger = logging.getLogger(__name__)
-
-# Configuración de headers por defecto
-DEFAULT_HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-    'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-    'Accept-Encoding': 'gzip, deflate, br',
-    'DNT': '1',
-    'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1'
-}
-
-# Cache simple para evitar requests repetidas
-_cache = {}
-_cache_ttl = 3600  # 1 hora
-
-def _get_cached_result(url: str) -> Optional[Dict[str, Any]]:
-    """Obtiene resultado del cache si existe y no ha expirado."""
-    if url in _cache:
-        cached_item = _cache[url]
-        if time.time() - cached_item['timestamp'] < _cache_ttl:
-            return cached_item['data']
-    return None
-
-def _set_cache(url: str, data: Dict[str, Any]) -> None:
-    """Guarda resultado en cache."""
-    _cache[url] = {
-        'data': data,
-        'timestamp': time.time()
-    }
-
-def _handle_webresearch_error(error: Exception, action_name: str, url: str = "") -> Dict[str, Any]:
-    """Maneja errores de web research de forma centralizada."""
-    error_message = f"Error en {action_name}"
-    if url:
-        error_message += f" para URL {url}"
-    error_message += f": {str(error)}"
-    
-    logger.error(error_message)
-    
-    return {
-        "status": "error",
-        "error": error_message,
-        "action": action_name,
-        "url": url,
-        "timestamp": datetime.now().isoformat()
-    }
+        return _handle_web_error(e, action_name)
 
 def _extract_text_from_html(html: str) -> str:
     """Extrae texto limpio de HTML."""
@@ -628,15 +523,16 @@ def _extract_text_from_html(html: str) -> str:
         # Limpiar espacios en blanco
         lines = (line.strip() for line in text.splitlines())
         chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-        text = ' '.join(chunk for chunk in chunks if chunk)
+        text = '\n'.join(chunk for chunk in chunks if chunk)
         
         return text
-    except Exception as e:
-        logger.error(f"Error extrayendo texto de HTML: {str(e)}")
+    except Exception:
         return ""
 
-def _extract_metadata(soup: BeautifulSoup) -> Dict[str, Any]:
-    """Extrae metadatos de una página HTML."""
+def _extract_metadata(html: str) -> Dict[str, Any]:
+    """Extrae metadata de HTML."""
+    soup = BeautifulSoup(html, 'html.parser')
+    
     metadata = {
         'title': '',
         'description': '',
@@ -659,27 +555,24 @@ def _extract_metadata(soup: BeautifulSoup) -> Dict[str, Any]:
                 metadata['keywords'] = meta.get('content', '')
             elif meta.get('name') == 'author':
                 metadata['author'] = meta.get('content', '')
-            
-            # Open Graph
-            if meta.get('property', '').startswith('og:'):
-                og_key = meta.get('property').replace('og:', '')
-                metadata['og_data'][og_key] = meta.get('content', '')
-    
-    except Exception as e:
-        logger.error(f"Error extrayendo metadatos: {str(e)}")
+            elif meta.get('property', '').startswith('og:'):
+                og_property = meta.get('property')[3:]  # Remove 'og:' prefix
+                metadata['og_data'][og_property] = meta.get('content', '')
+    except Exception:
+        pass
     
     return metadata
 
-def webresearch_search_web(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def webresearch_search_web(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Realiza una búsqueda web y extrae información relevante.
+    Realiza búsquedas web específicas para investigación
     
     Args:
-        client: Cliente (no usado, mantenido por consistencia)
-        params: Dict con:
-            - query: Término de búsqueda
-            - num_results: Número de resultados a obtener (default 5)
-            - search_engine: Motor de búsqueda a usar (google, bing, duckduckgo)
+        client: Cliente HTTP
+        params: Diccionario con parámetros:
+            - query: Términos de búsqueda
+            - num_results: Número de resultados (default: 5)
+            - search_engine: Motor de búsqueda a usar (default: duckduckgo)
     
     Returns:
         Dict con los resultados de la búsqueda
@@ -697,61 +590,52 @@ def webresearch_search_web(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         # Por ahora implementamos solo DuckDuckGo (no requiere API key)
         if search_engine == 'duckduckgo':
             url = f"https://duckduckgo.com/html/?q={quote_plus(query)}"
+            headers = _get_headers()
             
-            response = requests.get(url, headers=DEFAULT_HEADERS, timeout=10)
+            _rate_limit()
+            response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
             
             soup = BeautifulSoup(response.text, 'html.parser')
             results = []
             
-            # Extraer resultados
-            for i, result in enumerate(soup.find_all('div', class_='result'), 1):
-                if i > num_results:
-                    break
+            # Extraer resultados de DuckDuckGo
+            for result_div in soup.find_all('div', class_='web-result')[:num_results]:
+                title_elem = result_div.find('h2')
+                link_elem = result_div.find('a')
+                snippet_elem = result_div.find('div', class_='result__snippet')
                 
-                title_elem = result.find('a', class_='result__a')
-                snippet_elem = result.find('a', class_='result__snippet')
-                
-                if title_elem:
-                    result_data = {
-                        'position': i,
+                if title_elem and link_elem:
+                    results.append({
                         'title': title_elem.get_text().strip(),
-                        'url': title_elem.get('href', ''),
+                        'url': link_elem.get('href', ''),
                         'snippet': snippet_elem.get_text().strip() if snippet_elem else ''
-                    }
-                    results.append(result_data)
+                    })
             
             return {
-                "status": "success",
-                "data": {
-                    "query": query,
-                    "search_engine": search_engine,
-                    "results": results,
-                    "total_results": len(results)
-                },
+                "success": True,
+                "action": action_name,
+                "query": query,
+                "results": results,
+                "count": len(results),
                 "timestamp": datetime.now().isoformat()
             }
         else:
-            return {
-                "status": "error",
-                "message": f"Motor de búsqueda '{search_engine}' no soportado",
-                "supported_engines": ["duckduckgo"],
-                "timestamp": datetime.now().isoformat()
-            }
+            raise ValueError(f"Motor de búsqueda no soportado: {search_engine}")
             
     except Exception as e:
-        return _handle_webresearch_error(e, action_name)
+        return _handle_web_error(e, action_name)
 
-def webresearch_scrape_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def webresearch_scrape_url(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Extrae contenido e información de una URL específica.
+    Extrae contenido completo de una URL para investigación
     
     Args:
-        client: Cliente (no usado, mantenido por consistencia)
-        params: Dict con:
-            - url: URL a scrapear
-            - extract_images: Si extraer URLs de imágenes (default False)
-            - extract_links: Si extraer enlaces (default False)
+        client: Cliente HTTP
+        params: Diccionario con parámetros:
+            - url: URL a extraer
+            - extract_images: Si extraer URLs de imágenes (default: False)
+            - extract_links: Si extraer enlaces (default: False)
     
     Returns:
         Dict con el contenido extraído
@@ -771,27 +655,27 @@ def webresearch_scrape_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         if cached_result:
             return cached_result
         
-        # Realizar request
-        response = requests.get(url, headers=DEFAULT_HEADERS, timeout=15)
-        response.raise_for_status()
+        # Obtener contenido
+        fetch_result = fetch_url(client, {'url': url})
+        if not fetch_result.get('success'):
+            return fetch_result
         
-        # Parsear HTML
-        soup = BeautifulSoup(response.text, 'html.parser')
+        content = fetch_result.get('content', '')
+        soup = BeautifulSoup(content, 'html.parser')
         
-        # Extraer información básica
-        text_content = _extract_text_from_html(response.text)
-        metadata = _extract_metadata(soup)
+        # Extraer texto limpio
+        text = _extract_text_from_html(content)
+        
+        # Extraer metadata
+        metadata = _extract_metadata(content)
         
         result = {
-            "status": "success",
-            "data": {
-                "url": url,
-                "status_code": response.status_code,
-                "content_type": response.headers.get('content-type', ''),
-                "metadata": metadata,
-                "text_content": text_content[:5000],  # Limitar a 5000 caracteres
-                "content_length": len(text_content)
-            },
+            "success": True,
+            "action": action_name,
+            "url": url,
+            "text": text,
+            "metadata": metadata,
+            "word_count": len(text.split()),
             "timestamp": datetime.now().isoformat()
         }
         
@@ -799,44 +683,55 @@ def webresearch_scrape_url(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         if extract_images:
             images = []
             for img in soup.find_all('img'):
-                img_url = img.get('src', '')
-                if img_url:
+                src = img.get('src', '')
+                if src:
+                    if src.startswith('//'):
+                        src = 'https:' + src
+                    elif src.startswith('/'):
+                        from urllib.parse import urljoin
+                        src = urljoin(url, src)
+                    
                     images.append({
-                        'src': img_url,
+                        'src': src,
                         'alt': img.get('alt', ''),
                         'title': img.get('title', '')
                     })
-            result['data']['images'] = images[:50]  # Limitar a 50 imágenes
+            result['images'] = images
         
         # Extraer enlaces si se solicita
         if extract_links:
             links = []
-            for link in soup.find_all('a'):
-                href = link.get('href', '')
-                if href and not href.startswith('#'):
-                    links.append({
-                        'href': href,
-                        'text': link.get_text().strip(),
-                        'title': link.get('title', '')
-                    })
-            result['data']['links'] = links[:100]  # Limitar a 100 enlaces
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                if href.startswith('//'):
+                    href = 'https:' + href
+                elif href.startswith('/'):
+                    from urllib.parse import urljoin
+                    href = urljoin(url, href)
+                
+                links.append({
+                    'url': href,
+                    'text': link.get_text().strip(),
+                    'title': link.get('title', '')
+                })
+            result['links'] = links
         
         # Guardar en cache
-        _set_cache(url, result)
+        _cache_result(url, result)
         
         return result
         
     except Exception as e:
-        return _handle_webresearch_error(e, action_name, url)
+        return _handle_web_error(e, action_name)
 
-def webresearch_extract_emails(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def webresearch_extract_emails(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Extrae direcciones de email de una URL o texto.
+    Extrae direcciones de email de una URL o texto
     
     Args:
-        client: Cliente (no usado, mantenido por consistencia)
-        params: Dict con:
-            - url: URL de donde extraer emails (opcional)
+        client: Cliente HTTP
+        params: Diccionario con parámetros:
+            - url: URL de la cual extraer emails (opcional)
             - text: Texto del cual extraer emails (opcional)
     
     Returns:
@@ -853,4 +748,84 @@ def webresearch_extract_emails(client: Any, params: Dict[str, Any]) -> Dict[str,
         
         # Si se proporciona URL, obtener el contenido
         if url:
-            scrape_result = webresearch_scrape_url(client
+            scrape_result = webresearch_scrape_url(client, {'url': url})
+            if not scrape_result.get('success'):
+                return scrape_result
+            text = scrape_result.get('text', '')
+        
+        # Patrón regex para emails
+        email_pattern = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = re.findall(email_pattern, text)
+        
+        # Eliminar duplicados manteniendo el orden
+        unique_emails = list(dict.fromkeys(emails))
+        
+        return {
+            "success": True,
+            "action": action_name,
+            "emails": unique_emails,
+            "count": len(unique_emails),
+            "source_url": url if url else "text_input",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_web_error(e, action_name)
+
+def webresearch_extract_phone_numbers(client, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Extrae números de teléfono de una URL o texto
+    
+    Args:
+        client: Cliente HTTP
+        params: Diccionario con parámetros:
+            - url: URL de la cual extraer teléfonos (opcional)
+            - text: Texto del cual extraer teléfonos (opcional)
+    
+    Returns:
+        Dict con los números de teléfono encontrados
+    """
+    action_name = "webresearch_extract_phone_numbers"
+    
+    try:
+        url = params.get('url')
+        text = params.get('text', '')
+        
+        if not url and not text:
+            raise ValueError("Se requiere 'url' o 'text'")
+        
+        # Si se proporciona URL, obtener el contenido
+        if url:
+            scrape_result = webresearch_scrape_url(client, {'url': url})
+            if not scrape_result.get('success'):
+                return scrape_result
+            text = scrape_result.get('text', '')
+        
+        # Patrones regex para diferentes formatos de teléfono
+        phone_patterns = [
+            r'\b\d{3}-\d{3}-\d{4}\b',  # 123-456-7890
+            r'\b\(\d{3}\)\s*\d{3}-\d{4}\b',  # (123) 456-7890
+            r'\b\d{3}\.\d{3}\.\d{4}\b',  # 123.456.7890
+            r'\b\d{10}\b',  # 1234567890
+            r'\+\d{1,3}\s*\d{3,4}\s*\d{3,4}\s*\d{3,4}',  # +1 123 456 7890
+        ]
+        
+        phone_numbers = []
+        for pattern in phone_patterns:
+            matches = re.findall(pattern, text)
+            phone_numbers.extend(matches)
+        
+        # Eliminar duplicados manteniendo el orden
+        unique_phones = list(dict.fromkeys(phone_numbers))
+        
+        return {
+            "success": True,
+            "action": action_name,
+            "phone_numbers": unique_phones,
+            "count": len(unique_phones),
+            "source_url": url if url else "text_input",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_web_error(e, action_name)

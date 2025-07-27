@@ -7,11 +7,11 @@ uvicorn[standard]==0.30.3
 gunicorn==22.0.0
 
 # Pydantic y configuración
-pydantic==2.8.2  # FastAPI 0.111.1 funciona mejor con 2.8.x
-pydantic-settings==2.3.4
-python-dotenv==1.0.1
-# typing-extensions y annotated-types vienen como dependencias transitivas
-
+pydantic==2.11.4
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+typing-extensions>=4.13,<5.0
+annotated-types>=0.7,<1.0
 # ============================================================================
 # HTTP & NETWORKING
 # ============================================================================
@@ -23,10 +23,10 @@ python-multipart==0.0.9  # Para uploads de archivos
 # ============================================================================
 # AUTENTICACIÓN & OAUTH
 # ============================================================================
-# authlib se puede eliminar si solo usas msal para OAuth
-msal==1.28.1  # Para autenticación con Microsoft
+oauthlib>=3.3,<4.0
+msal>=1.25,<2.0
 python-jose[cryptography]==3.3.0  # Para JWT
-# passlib y bcrypt no necesarios si no manejas passwords localmente
+passlib[bcrypt]>=1.7,<2.0
 
 # ============================================================================
 # GOOGLE APIS & SERVICES
@@ -50,11 +50,10 @@ msgraph-core==0.2.2
 # ============================================================================
 # SOCIAL MEDIA & ADS APIS
 # ============================================================================
-# NOTA: Estas son las librerías más pesadas
-facebook-business==20.0.3  # ~50MB
-# twitter-ads==11.0.0  # Eliminar si no usas X Ads activamente
-# tiktok-business-api==1.0.1  # No existe versión 1.9, usar requests en su lugar
-# linkedin-api==2.2.0  # Esta es unofficial, mejor usar requests
+facebook-business>=23.0,<24.0
+twitter-ads>=11.0,<12.0
+tiktok-business-api>=1.9,<2.0
+linkedin-api>=2.2,<3.0
 
 # ============================================================================
 # CRM & BUSINESS TOOLS
@@ -70,38 +69,36 @@ openai==1.40.8
 # ============================================================================
 # WEB RESEARCH & SCRAPING
 # ============================================================================
-beautifulsoup4==4.12.3
-# lxml==5.2.2  # Solo si necesitas parsear XML, sino eliminar
-# html5lib se puede eliminar, beautifulsoup4 puede usar el parser built-in
-# readability-lxml==0.8.1  # Solo si extraes artículos
+beautifulsoup4>=4.13,<5.0
+lxml>=6.0,<7.0
+readability-lxml>=0.8,<1.0
 
 # ============================================================================
 # DATA PROCESSING & ANALYSIS
 # ============================================================================
-# NOTA: numpy y pandas son muy pesados (~50MB c/u)
-# numpy==2.0.1  # Solo si procesas arrays numéricos
-# pandas==2.2.2  # Solo si necesitas análisis de datos complejos
-openpyxl==3.1.5  # Para leer/escribir Excel
-# xlsxwriter==3.2.0  # Redundante con openpyxl
-# PyPDF2==3.0.1  # Solo si procesas PDFs
-python-docx==1.1.2  # Para procesar documentos Word
+numpy>=2.3,<3.0
+pandas>=2.3,<3.0
+openpyxl>=3.1,<4.0
+xlsxwriter>=3.2,<4.0
+PyPDF2>=3.0,<4.0
+python-docx>=1.2,<2.0
 
 # ============================================================================
 # UTILITIES & HELPERS
 # ============================================================================
-python-dateutil==2.9.0
-# pytz viene como dependencia de otras librerías
-# click==8.1.7  # Solo si tienes CLI commands
-# jinja2 viene con FastAPI
-# loguru==0.7.2  # Python logging estándar es suficiente
-# python-slugify==8.0.4  # Solo si necesitas slugificar URLs
-# validators==0.33.0  # Solo si validas URLs/emails complejos
-# PyYAML==6.0.2  # Solo si procesas YAML
+python-dateutil>=2.8,<3.0
+pytz>=2023.3,<2024.0
+click>=8.1,<9.0
+jinja2>=3.1,<4.0
+loguru>=0.7.2,<1.0 
+python-slugify>=8.0,<9.0
+validators>=0.35,<1.0
+PyYAML>=6.0,<7.0
 
 # ============================================================================
 # TESTING & DEVELOPMENT (Mover a requirements-dev.txt)
 # ============================================================================
-# pytest==8.3.2
-# pytest-asyncio==0.23.8
-# black==24.4.2
-# isort==5.13.2
+pytest>=7.4,<8.0
+pytest-asyncio>=0.21,<1.0
+black>=25.1,<26.0
+isort>=6.0
