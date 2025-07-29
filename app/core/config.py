@@ -1,5 +1,6 @@
 # app/core/config.py
 import os
+import logging  # ← AGREGAR ESTE IMPORT QUE FALTA
 from typing import List, Optional, Union 
 from pydantic import HttpUrl, field_validator, Field 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -114,6 +115,22 @@ class Settings(BaseSettings):
     YOUTUBE_CLIENT_ID: Optional[str] = Field(None, env="YOUTUBE_CLIENT_ID")
     YOUTUBE_CLIENT_SECRET: Optional[str] = Field(None, env="YOUTUBE_CLIENT_SECRET")
     YOUTUBE_REFRESH_TOKEN: Optional[str] = Field(None, env="YOUTUBE_REFRESH_TOKEN")
+
+    # NUEVO: Validator para mostrar el estado de configuración
+    def model_post_init(self, __context) -> None:
+        """Post-initialization para logging de configuración."""
+        logger = logging.getLogger(__name__)
+        
+        # Log estado de YouTube vs Google Ads credentials
+        youtube_configured = bool(self.YOUTUBE_CLIENT_ID and self.YOUTUBE_CLIENT_SECRET and self.YOUTUBE_REFRESH_TOKEN)
+        google_ads_configured = bool(self.GOOGLE_ADS_CLIENT_ID and self.GOOGLE_ADS_CLIENT_SECRET and self.GOOGLE_ADS_REFRESH_TOKEN)
+        
+        if youtube_configured:
+            logger.info("🎥 YouTube: Credenciales específicas configuradas")
+        elif google_ads_configured:
+            logger.info("🎥 YouTube: Usando credenciales de Google Ads como fallback")
+        else:
+            logger.warning("⚠️ YouTube: Sin credenciales configuradas")
 
     @field_validator("OPENAI_API_DEFAULT_SCOPE", mode='before')
     @classmethod

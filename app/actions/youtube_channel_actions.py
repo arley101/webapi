@@ -37,30 +37,65 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
     Construye las credenciales de OAuth 2.0 para la API de YouTube a partir de la configuración.
     En un entorno de producción, esto asume que se ha proporcionado un refresh_token válido.
     """
-    # CORRECCIÓN: Usar variables específicas de YouTube con fallback a Google Ads
-    client_id = params.get("client_id") or settings.YOUTUBE_CLIENT_ID or settings.GOOGLE_ADS_CLIENT_ID
-    client_secret = params.get("client_secret") or settings.YOUTUBE_CLIENT_SECRET or settings.GOOGLE_ADS_CLIENT_SECRET
-    refresh_token = params.get("refresh_token") or settings.YOUTUBE_REFRESH_TOKEN or settings.GOOGLE_ADS_REFRESH_TOKEN
+    # CORRECCIÓN: Priorizar variables específicas de YouTube sobre Google Ads
+    client_id = (
+        params.get("client_id") or 
+        settings.YOUTUBE_CLIENT_ID or 
+        settings.GOOGLE_ADS_CLIENT_ID
+    )
+    client_secret = (
+        params.get("client_secret") or 
+        settings.YOUTUBE_CLIENT_SECRET or 
+        settings.GOOGLE_ADS_CLIENT_SECRET
+    )
+    refresh_token = (
+        params.get("refresh_token") or 
+        settings.YOUTUBE_REFRESH_TOKEN or 
+        settings.GOOGLE_ADS_REFRESH_TOKEN
+    )
 
+    # VALIDACIÓN ESPECÍFICA PARA YOUTUBE
     if not all([client_id, client_secret, refresh_token]):
-        raise ValueError("""
-Credenciales de YouTube no están configuradas.
+        missing_vars = []
+        if not client_id:
+            missing_vars.append("YOUTUBE_CLIENT_ID (o GOOGLE_ADS_CLIENT_ID como fallback)")
+        if not client_secret:
+            missing_vars.append("YOUTUBE_CLIENT_SECRET (o GOOGLE_ADS_CLIENT_SECRET como fallback)")
+        if not refresh_token:
+            missing_vars.append("YOUTUBE_REFRESH_TOKEN (o GOOGLE_ADS_REFRESH_TOKEN como fallback)")
+            
+        raise ValueError(f"""
+❌ CREDENCIALES DE YOUTUBE NO CONFIGURADAS
 
-REQUERIDO: Configurar estas variables de entorno:
-- YOUTUBE_CLIENT_ID (o usar GOOGLE_ADS_CLIENT_ID como fallback)
-- YOUTUBE_CLIENT_SECRET (o usar GOOGLE_ADS_CLIENT_SECRET como fallback)  
-- YOUTUBE_REFRESH_TOKEN (o usar GOOGLE_ADS_REFRESH_TOKEN como fallback)
+Variables faltantes: {', '.join(missing_vars)}
 
-Si usas el mismo proyecto OAuth de Google, puedes usar las mismas credenciales.
-Si son proyectos diferentes, configura las variables YOUTUBE_* específicas.
+CONFIGURACIÓN RECOMENDADA (credenciales separadas):
+1. Configurar variables específicas de YouTube:
+   - YOUTUBE_CLIENT_ID=tu_youtube_client_id
+   - YOUTUBE_CLIENT_SECRET=tu_youtube_client_secret  
+   - YOUTUBE_REFRESH_TOKEN=tu_youtube_refresh_token
+
+2. O usar las mismas de Google Ads (si es el mismo proyecto OAuth):
+   - GOOGLE_ADS_CLIENT_ID (ya configurado: {'✅' if settings.GOOGLE_ADS_CLIENT_ID else '❌'})
+   - GOOGLE_ADS_CLIENT_SECRET (ya configurado: {'✅' if settings.GOOGLE_ADS_CLIENT_SECRET else '❌'})
+   - GOOGLE_ADS_REFRESH_TOKEN (ya configurado: {'✅' if settings.GOOGLE_ADS_REFRESH_TOKEN else '❌'})
+
+ESTADO ACTUAL:
+- YOUTUBE_CLIENT_ID: {'✅ Configurado' if settings.YOUTUBE_CLIENT_ID else '❌ No configurado'}
+- YOUTUBE_CLIENT_SECRET: {'✅ Configurado' if settings.YOUTUBE_CLIENT_SECRET else '❌ No configurado'}
+- YOUTUBE_REFRESH_TOKEN: {'✅ Configurado' if settings.YOUTUBE_REFRESH_TOKEN else '❌ No configurado'}
 """)
 
-    # FUNCIONALIDAD COMPLETA: Usar TODOS los scopes necesarios
-    full_scopes = [
-        "https://www.googleapis.com/auth/youtube",
-        "https://www.googleapis.com/auth/youtube.upload",
-        "https://www.googleapis.com/auth/youtube.force-ssl",
-        "https://www.googleapis.com/auth/yt-analytics.readonly"  # Para Analytics completo
+    # Log de qué credenciales se están usando
+    using_youtube_creds = bool(settings.YOUTUBE_CLIENT_ID and settings.YOUTUBE_CLIENT_SECRET)
+    logger.info(f"🔑 Usando credenciales: {'YouTube específicas' if using_youtube_creds else 'Google Ads (fallback)'}")
+
+    # SCOPES OPTIMIZADOS - Solo los 4 esenciales
+    youtube_only_scopes = [
+        "https://www.googleapis.com/auth/youtube",           # Gestión básica del canal
+        "https://www.googleapis.com/auth/youtube.upload",    # Subir videos
+        "https://www.googleapis.com/auth/youtube.force-ssl",  # Operaciones seguras
+        "https://www.googleapis.com/auth/yt-analytics.readonly"  # Analytics (opcional)
     ]
 
     try:
@@ -71,7 +106,7 @@ Si son proyectos diferentes, configura las variables YOUTUBE_* específicas.
                 "refresh_token": refresh_token,
                 "type": "authorized_user"
             },
-            scopes=full_scopes
+            scopes=youtube_only_scopes  # ← Solo YouTube, sin Google Ads
         )
         
         # Verificar que las credenciales son válidas
