@@ -16,27 +16,38 @@ _google_ads_client_instance: Optional[GoogleAdsClient] = None
 
 def get_google_ads_client() -> GoogleAdsClient:
     global _google_ads_client_instance
-    if (_google_ads_client_instance):
+    if _google_ads_client_instance:
         return _google_ads_client_instance
     
-    # CORRECCIÓN CRÍTICA: Configurar la versión de API más reciente
-    config = {
-        "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
-        "client_id": settings.GOOGLE_ADS_CLIENT_ID,
-        "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
-        "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
-        "login_customer_id": str(settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID else None,
-        "use_proto_plus": True,
-        # SOLUCIÓN: Forzar uso de la versión más reciente de la API
-        "api_version": "v18"
-    }
-    
-    if not all(config.get(k) for k in ["developer_token", "client_id", "client_secret", "refresh_token"]):
-        raise ValueError("Faltan credenciales de Google Ads en la configuración.")
-    
-    logger.info(f"Inicializando cliente de Google Ads con API versión {config['api_version']}...")
-    _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
-    return _google_ads_client_instance
+    try:
+        # CORRECCIÓN: Import condicional para evitar error de arranque
+        try:
+            from app.core.auth_manager import token_manager
+            # AUTOMÁTICO: Generar access token desde refresh token
+            access_token = token_manager.get_google_access_token("google_ads")
+        except ImportError:
+            # Fallback si auth_manager no está disponible
+            logger.warning("auth_manager no disponible, usando configuración tradicional")
+            access_token = None
+        
+        # Configuración con token automático o tradicional
+        config = {
+            "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
+            "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+            "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
+            "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
+            "login_customer_id": str(settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID else None,
+            "use_proto_plus": True,
+            "api_version": "v18"
+        }
+        
+        logger.info("📊 Google Ads: Cliente inicializado")
+        _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
+        return _google_ads_client_instance
+        
+    except Exception as e:
+        logger.error(f"Error inicializando cliente Google Ads: {e}")
+        raise ValueError(f"Google Ads client initialization failed: {str(e)}")
 
 def _handle_google_ads_api_error(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
     error_details = [{"message": error.message, "error_code": str(error.error_code)} for error in ex.failure.errors]
@@ -111,6 +122,17 @@ def _validate_budget_for_currency(amount_micros: int, currency_code: str = "COP"
     
     logger.info(f"Presupuesto ajustado para {currency_code}: {amount_micros} micros")
     return amount_micros
+
+# NUEVA: Función helper para obtener configuración de moneda
+def _get_currency_config(currency_code: str = "COP") -> Dict[str, int]:
+    """Obtiene la configuración de moneda específica."""
+    currency_configs = {
+        "COP": {"min_micros": 10000, "multiple_of": 10000},  # Peso colombiano
+        "USD": {"min_micros": 1000000, "multiple_of": 10000},  # Dólar
+        "EUR": {"min_micros": 1000000, "multiple_of": 10000},  # Euro
+        "MXN": {"min_micros": 10000, "multiple_of": 10000},   # Peso mexicano
+    }
+    return currency_configs.get(currency_code, currency_configs["USD"])
 
 # --- ACCIONES COMPLETAS Y FUNCIONALES ---
 
@@ -208,9 +230,11 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
         for error in ex.failure.errors:
             if "NON_MULTIPLE_OF_MINIMUM_CURRENCY_UNIT" in str(error.error_code):
                 logger.error(f"Error de múltiplo de moneda: {error.message}")
+                # CORRECCIÓN: Usar la función helper
+                currency_config = _get_currency_config(currency_code)
                 return {
                     "success": False,
-                    "error": f"Presupuesto inválido para {currency_code}. Debe ser múltiplo de {currency_configs.get(currency_code, {}).get('multiple_of', 10000)} micros.",
+                    "error": f"Presupuesto inválido para {currency_code}. Debe ser múltiplo de {currency_config.get('multiple_of', 10000)} micros.",
                     "details": {
                         "suggested_budget": validated_budget,
                         "currency_code": currency_code,
