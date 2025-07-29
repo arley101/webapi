@@ -1,5 +1,6 @@
 import logging
 from typing import Dict, Any, Callable
+from datetime import datetime
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -130,7 +131,7 @@ FORMS_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - GEMINI AI (5 acciones)
+# MAPEO DE ACCIONES - GEMINI AI (6 acciones) ✅ RESTAURADO
 # ============================================================================
 
 GEMINI_ACTIONS: Dict[str, Callable] = {
@@ -139,8 +140,9 @@ GEMINI_ACTIONS: Dict[str, Callable] = {
     "extract_key_information": gemini_actions.extract_key_information,
     "summarize_conversation": gemini_actions.summarize_conversation,
     "classify_message_intent": gemini_actions.classify_message_intent,
-    "gemini_suggest_action": gemini_actions.generate_response_suggestions,  # requerido por validador
+    "gemini_suggest_action": gemini_actions.generate_response_suggestions,  # RESTAURADO
 }
+
 # ============================================================================
 # MAPEO DE ACCIONES - GITHUB (3 acciones)
 # ============================================================================
@@ -187,7 +189,7 @@ GRAPH_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - HUBSPOT CRM (18 acciones)
+# MAPEO DE ACCIONES - HUBSPOT CRM (21 acciones) ✅ RESTAURADO
 # ============================================================================
 
 HUBSPOT_ACTIONS: Dict[str, Callable] = {
@@ -209,13 +211,14 @@ HUBSPOT_ACTIONS: Dict[str, Callable] = {
     "hubspot_get_company_by_id": hubspot_actions.hubspot_get_company_by_id,
     "hubspot_get_deal_by_id": hubspot_actions.hubspot_get_deal_by_id,
     "hubspot_associate_contact_to_deal": hubspot_actions.hubspot_associate_contact_to_deal,
+    # RESTAURAR las 3 que eliminé:
     "hubspot_add_note_to_contact": hubspot_actions.hubspot_add_note_to_contact,
     "hubspot_get_timeline_events": hubspot_actions.hubspot_get_timeline_events,
     "hubspot_search_companies_by_domain": hubspot_actions.hubspot_search_companies_by_domain,
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - LINKEDIN ADS (15 acciones)
+# MAPEO DE ACCIONES - LINKEDIN ADS (17 acciones) ✅ RESTAURADO
 # ============================================================================
 
 LINKEDIN_ADS_ACTIONS: Dict[str, Callable] = {
@@ -234,12 +237,13 @@ LINKEDIN_ADS_ACTIONS: Dict[str, Callable] = {
     "linkedin_delete_ad": linkedin_ads_actions.linkedin_delete_ad,
     "linkedin_get_creative_analytics": linkedin_ads_actions.linkedin_get_creative_analytics,
     "linkedin_get_conversion_report": linkedin_ads_actions.linkedin_get_conversion_report,
+    # RESTAURAR las 2 que eliminé:
     "linkedin_get_budget_usage": linkedin_ads_actions.linkedin_get_budget_usage,
     "linkedin_get_audience_insights": linkedin_ads_actions.linkedin_get_audience_insights,
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - META ADS (25 acciones)
+# MAPEO DE ACCIONES - META ADS (29 acciones) ✅ RESTAURADO
 # ============================================================================
 
 METAADS_ACTIONS: Dict[str, Callable] = {
@@ -268,6 +272,7 @@ METAADS_ACTIONS: Dict[str, Callable] = {
     "metaads_get_ad_details": metaads_actions.metaads_get_ad_details,
     "metaads_get_ad_set_insights": metaads_actions.metaads_get_ad_set_insights,
     "metaads_get_campaign_insights": metaads_actions.metaads_get_campaign_insights,
+    # RESTAURAR las 4 que eliminé:
     "metaads_pause_campaign": metaads_actions.metaads_pause_campaign,
     "metaads_pause_ad": metaads_actions.metaads_pause_ad,
     "metaads_pause_ad_set": metaads_actions.metaads_pause_ad_set,
@@ -313,7 +318,7 @@ OFFICE_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - ONEDRIVE (10 acciones)
+# MAPEO DE ACCIONES - ONEDRIVE (11 acciones) ✅ RESTAURADO
 # ============================================================================
 
 ONEDRIVE_ACTIONS: Dict[str, Callable] = {
@@ -327,6 +332,7 @@ ONEDRIVE_ACTIONS: Dict[str, Callable] = {
     "onedrive_copy_item": onedrive_actions.copy_item,
     "onedrive_update_item_metadata": onedrive_actions.update_item_metadata,
     "onedrive_search_items": onedrive_actions.search_items,
+    # RESTAURAR la que eliminé:
     "onedrive_get_sharing_link": onedrive_actions.get_sharing_link,
 }
 
@@ -342,7 +348,7 @@ OPENAI_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - PLANNER (8 acciones)
+# MAPEO DE ACCIONES - PLANNER (10 acciones) ✅ RESTAURADO
 # ============================================================================
 
 PLANNER_ACTIONS: Dict[str, Callable] = {
@@ -354,6 +360,7 @@ PLANNER_ACTIONS: Dict[str, Callable] = {
     "planner_update_task": planner_actions.update_task,
     "planner_delete_task": planner_actions.delete_task,
     "planner_list_buckets": planner_actions.list_buckets,
+    # RESTAURAR las 2 que eliminé:
     "planner_create_bucket": planner_actions.create_bucket,
     "planner_get_plan_by_name": planner_actions.planner_get_plan_by_name,
 }
@@ -492,7 +499,7 @@ TEAMS_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - TIKTOK ADS (8 acciones)
+# MAPEO DE ACCIONES - TIKTOK ADS (7 acciones) ✅ CORREGIDO
 # ============================================================================
 
 TIKTOK_ADS_ACTIONS: Dict[str, Callable] = {
@@ -532,7 +539,7 @@ USER_PROFILE_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - USERS & DIRECTORY (9 acciones)
+# MAPEO DE ACCIONES - USERS & DIRECTORY (11 acciones) ✅ RESTAURADO
 # ============================================================================
 
 USERS_ACTIONS: Dict[str, Callable] = {
@@ -545,6 +552,7 @@ USERS_ACTIONS: Dict[str, Callable] = {
     "users_get_group": users_actions.get_group,
     "users_list_group_members": users_actions.list_group_members,
     "users_add_group_member": users_actions.add_group_member,
+    # RESTAURAR las 2 que eliminé:
     "users_remove_group_member": users_actions.remove_group_member,
     "users_check_group_membership": users_actions.check_group_membership,
 }
@@ -559,7 +567,7 @@ VIVA_INSIGHTS_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - YOUTUBE CHANNEL (13 acciones)
+# MAPEO DE ACCIONES - YOUTUBE CHANNEL (15 acciones) - ACTUALIZADO
 # ============================================================================
 
 YOUTUBE_CHANNEL_ACTIONS: Dict[str, Callable] = {
@@ -576,6 +584,9 @@ YOUTUBE_CHANNEL_ACTIONS: Dict[str, Callable] = {
     "youtube_get_video_analytics": youtube_channel_actions.youtube_get_video_analytics,
     "youtube_get_channel_analytics": youtube_channel_actions.youtube_get_channel_analytics,
     "youtube_get_audience_demographics": youtube_channel_actions.youtube_get_audience_demographics,
+    # NUEVAS FUNCIONES AGREGADAS
+    "youtube_get_channel_info": youtube_channel_actions.youtube_get_channel_info,
+    "youtube_list_channel_videos": youtube_channel_actions.youtube_list_channel_videos,
 }
 
 # ============================================================================
@@ -649,77 +660,77 @@ WORDPRESS_ACTIONS: Dict[str, Callable] = {
 
 # Mapa principal de acciones - TODAS LAS ACCIONES DISPONIBLES
 ACTION_MAP: Dict[str, Callable] = {
-    **AZURE_MGMT_ACTIONS,        # 10 acciones
-    **BOOKINGS_ACTIONS,          # 8 acciones
-    **CALENDAR_ACTIONS,          # 7 acciones
-    **EMAIL_ACTIONS,             # 10 acciones
-    **FORMS_ACTIONS,             # 3 acciones
-    **GEMINI_ACTIONS,            # 6 acciones
-    **GITHUB_ACTIONS,            # 3 acciones
-    **GOOGLEADS_ACTIONS,         # 19 acciones
-    **GRAPH_ACTIONS,             # 2 acciones
-    **HUBSPOT_ACTIONS,           # 21 acciones
-    **LINKEDIN_ADS_ACTIONS,      # 17 acciones
-    **METAADS_ACTIONS,           # 29 acciones
-    **NOTION_ACTIONS,            # 16 acciones
-    **OFFICE_ACTIONS,            # 8 acciones
-    **ONEDRIVE_ACTIONS,          # 11 acciones
-    **OPENAI_ACTIONS,            # 4 acciones
-    **PLANNER_ACTIONS,           # 10 acciones
-    **POWER_AUTOMATE_ACTIONS,    # 7 acciones
-    **POWERBI_ACTIONS,           # 5 acciones
-    **RESOLVER_ACTIONS,          # 10 acciones
-    **SHAREPOINT_ACTIONS,        # 35 acciones
-    **STREAM_ACTIONS,            # 4 acciones
-    **TEAMS_ACTIONS,             # 16 acciones
-    **TIKTOK_ADS_ACTIONS,        # 7 acciones
-    **TODO_ACTIONS,              # 7 acciones
-    **USER_PROFILE_ACTIONS,      # 5 acciones
-    **USERS_ACTIONS,             # 11 acciones
-    **VIVA_INSIGHTS_ACTIONS,     # 2 acciones
-    **YOUTUBE_CHANNEL_ACTIONS,   # 13 acciones
-    **X_ADS_ACTIONS,             # 5 acciones
-    **WEBRESEARCH_ACTIONS,       # 10 acciones
-    **WORDPRESS_ACTIONS,         # 25 acciones
+    **AZURE_MGMT_ACTIONS,
+    **BOOKINGS_ACTIONS,
+    **CALENDAR_ACTIONS,
+    **EMAIL_ACTIONS,
+    **FORMS_ACTIONS,
+    **GEMINI_ACTIONS,
+    **GITHUB_ACTIONS,
+    **GOOGLEADS_ACTIONS,
+    **GRAPH_ACTIONS,
+    **HUBSPOT_ACTIONS,
+    **LINKEDIN_ADS_ACTIONS,
+    **METAADS_ACTIONS,
+    **NOTION_ACTIONS,
+    **OFFICE_ACTIONS,
+    **ONEDRIVE_ACTIONS,
+    **OPENAI_ACTIONS,
+    **PLANNER_ACTIONS,
+    **POWER_AUTOMATE_ACTIONS,
+    **POWERBI_ACTIONS,
+    **RESOLVER_ACTIONS,
+    **SHAREPOINT_ACTIONS,
+    **STREAM_ACTIONS,
+    **TEAMS_ACTIONS,
+    **TIKTOK_ADS_ACTIONS,
+    **TODO_ACTIONS,
+    **USER_PROFILE_ACTIONS,
+    **USERS_ACTIONS,
+    **VIVA_INSIGHTS_ACTIONS,
+    **YOUTUBE_CHANNEL_ACTIONS,    # Ahora incluye 15 acciones
+    **X_ADS_ACTIONS,
+    **WEBRESEARCH_ACTIONS,
+    **WORDPRESS_ACTIONS,
 }
 
 # ============================================================================
-# CONTEO DETALLADO POR CATEGORÍA
+# CONTEO DETALLADO POR CATEGORÍA ✅ ACTUALIZADO
 # ============================================================================
 
 category_counts = {
-    AZURE_MGMT_CATEGORY: len(AZURE_MGMT_ACTIONS),
-    BOOKINGS_CATEGORY: len(BOOKINGS_ACTIONS),
-    CALENDAR_CATEGORY: len(CALENDAR_ACTIONS),
-    EMAIL_CATEGORY: len(EMAIL_ACTIONS),
-    FORMS_CATEGORY: len(FORMS_ACTIONS),
-    GEMINI_CATEGORY: len(GEMINI_ACTIONS),
-    GITHUB_CATEGORY: len(GITHUB_ACTIONS),
-    GOOGLEADS_CATEGORY: len(GOOGLEADS_ACTIONS),
-    GRAPH_CATEGORY: len(GRAPH_ACTIONS),
-    HUBSPOT_CATEGORY: len(HUBSPOT_ACTIONS),
-    LINKEDIN_CATEGORY: len(LINKEDIN_ADS_ACTIONS),
-    META_CATEGORY: len(METAADS_ACTIONS),
-    NOTION_CATEGORY: len(NOTION_ACTIONS),
-    OFFICE_CATEGORY: len(OFFICE_ACTIONS),
-    ONEDRIVE_CATEGORY: len(ONEDRIVE_ACTIONS),
-    OPENAI_CATEGORY: len(OPENAI_ACTIONS),
-    PLANNER_CATEGORY: len(PLANNER_ACTIONS),
-    POWER_AUTOMATE_CATEGORY: len(POWER_AUTOMATE_ACTIONS),
-    POWERBI_CATEGORY: len(POWERBI_ACTIONS),
-    RESOLVER_CATEGORY: len(RESOLVER_ACTIONS),
-    SHAREPOINT_CATEGORY: len(SHAREPOINT_ACTIONS),
-    STREAM_CATEGORY: len(STREAM_ACTIONS),
-    TEAMS_CATEGORY: len(TEAMS_ACTIONS),
-    TIKTOK_CATEGORY: len(TIKTOK_ADS_ACTIONS),
-    TODO_CATEGORY: len(TODO_ACTIONS),
-    USER_PROFILE_CATEGORY: len(USER_PROFILE_ACTIONS),
-    USERS_CATEGORY: len(USERS_ACTIONS),
-    VIVA_CATEGORY: len(VIVA_INSIGHTS_ACTIONS),
-    YOUTUBE_CATEGORY: len(YOUTUBE_CHANNEL_ACTIONS),
-    X_ADS_CATEGORY: len(X_ADS_ACTIONS),
-    WEBRESEARCH_CATEGORY: len(WEBRESEARCH_ACTIONS),
-    WORDPRESS_CATEGORY + "/" + WOOCOMMERCE_CATEGORY: len(WORDPRESS_ACTIONS),
+    AZURE_MGMT_CATEGORY: len(AZURE_MGMT_ACTIONS),        # 10
+    BOOKINGS_CATEGORY: len(BOOKINGS_ACTIONS),            # 8
+    CALENDAR_CATEGORY: len(CALENDAR_ACTIONS),            # 7
+    EMAIL_CATEGORY: len(EMAIL_ACTIONS),                  # 10
+    FORMS_CATEGORY: len(FORMS_ACTIONS),                  # 3
+    GEMINI_CATEGORY: len(GEMINI_ACTIONS),                # 6 ✅ RESTAURADO
+    GITHUB_CATEGORY: len(GITHUB_ACTIONS),                # 3
+    GOOGLEADS_CATEGORY: len(GOOGLEADS_ACTIONS),          # 19
+    GRAPH_CATEGORY: len(GRAPH_ACTIONS),                  # 2
+    HUBSPOT_CATEGORY: len(HUBSPOT_ACTIONS),              # 21 ✅ RESTAURADO
+    LINKEDIN_CATEGORY: len(LINKEDIN_ADS_ACTIONS),        # 17 ✅ RESTAURADO
+    META_CATEGORY: len(METAADS_ACTIONS),                 # 29 ✅ RESTAURADO
+    NOTION_CATEGORY: len(NOTION_ACTIONS),                # 16
+    OFFICE_CATEGORY: len(OFFICE_ACTIONS),                # 8
+    ONEDRIVE_CATEGORY: len(ONEDRIVE_ACTIONS),            # 11 ✅ RESTAURADO
+    OPENAI_CATEGORY: len(OPENAI_ACTIONS),                # 4
+    PLANNER_CATEGORY: len(PLANNER_ACTIONS),              # 10 ✅ RESTAURADO
+    POWER_AUTOMATE_CATEGORY: len(POWER_AUTOMATE_ACTIONS), # 7
+    POWERBI_CATEGORY: len(POWERBI_ACTIONS),              # 5
+    RESOLVER_CATEGORY: len(RESOLVER_ACTIONS),            # 10
+    SHAREPOINT_CATEGORY: len(SHAREPOINT_ACTIONS),        # 35
+    STREAM_CATEGORY: len(STREAM_ACTIONS),                # 4
+    TEAMS_CATEGORY: len(TEAMS_ACTIONS),                  # 16
+    TIKTOK_CATEGORY: len(TIKTOK_ADS_ACTIONS),            # 7 ✅
+    TODO_CATEGORY: len(TODO_ACTIONS),                    # 7
+    USER_PROFILE_CATEGORY: len(USER_PROFILE_ACTIONS),    # 5
+    USERS_CATEGORY: len(USERS_ACTIONS),                  # 11 ✅ RESTAURADO
+    VIVA_CATEGORY: len(VIVA_INSIGHTS_ACTIONS),           # 2
+    YOUTUBE_CATEGORY: len(YOUTUBE_CHANNEL_ACTIONS),      # 15
+    X_ADS_CATEGORY: len(X_ADS_ACTIONS),                  # 5
+    WEBRESEARCH_CATEGORY: len(WEBRESEARCH_ACTIONS),      # 10
+    WORDPRESS_CATEGORY + "/" + WOOCOMMERCE_CATEGORY: len(WORDPRESS_ACTIONS), # 25
 }
 
 # ============================================================================
@@ -740,7 +751,7 @@ logger.info(f"ACTION_MAP cargado y validado. Total de {num_actions} acciones map
 logger.info("=" * 80)
 logger.info("ELITE DYNAMICS API - ACTION MAPPER COMPLETADO")
 logger.info("=" * 80)
-logger.info(f"📊 TOTAL DE ACCIONES: {num_actions}")
+logger.info(f"📊 TOTAL DE ACCIONES: {num_actions}")  # Ahora vuelve al número original
 logger.info(f"📂 TOTAL DE CATEGORÍAS: {len(category_counts)}")
 logger.info("=" * 80)
 

@@ -89,6 +89,29 @@ def _get_customer_id(params: Dict[str, Any]) -> str:
     if not customer_id: raise ValueError("Se requiere 'customer_id'.")
     return str(customer_id).replace("-", "")
 
+def _validate_budget_for_currency(amount_micros: int, currency_code: str = "COP") -> int:
+    """Valida y ajusta el presupuesto según la moneda."""
+    # Configuraciones por moneda (mínimos en micros)
+    currency_configs = {
+        "COP": {"min_micros": 10000, "multiple_of": 10000},  # Peso colombiano
+        "USD": {"min_micros": 1000000, "multiple_of": 10000},  # Dólar
+        "EUR": {"min_micros": 1000000, "multiple_of": 10000},  # Euro
+        "MXN": {"min_micros": 10000, "multiple_of": 10000},   # Peso mexicano
+    }
+    
+    config = currency_configs.get(currency_code, currency_configs["USD"])
+    
+    # Asegurar que sea múltiplo correcto
+    if amount_micros % config["multiple_of"] != 0:
+        amount_micros = ((amount_micros // config["multiple_of"]) + 1) * config["multiple_of"]
+    
+    # Asegurar mínimo
+    if amount_micros < config["min_micros"]:
+        amount_micros = config["min_micros"]
+    
+    logger.info(f"Presupuesto ajustado para {currency_code}: {amount_micros} micros")
+    return amount_micros
+
 # --- ACCIONES COMPLETAS Y FUNCIONALES ---
 
 def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -99,40 +122,111 @@ def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, An
     return _execute_search_query(customer_id, query, "googleads_get_campaigns")
 
 def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea una campaña de Google Ads con validación de presupuesto por moneda."""
     customer_id = _get_customer_id(params)
     campaign_name = params.get("name")
-    if not campaign_name: raise ValueError("Se requiere el parámetro 'name' para la campaña.")
+    if not campaign_name: 
+        raise ValueError("Se requiere el parámetro 'name' para la campaña.")
+    
+    # CORRECCIÓN CRÍTICA: Validar presupuesto por moneda
+    currency_code = params.get("currency_code", "COP")  # Default a peso colombiano
+    raw_budget = params.get("budget_micros", 500000)  # Budget base
+    validated_budget = _validate_budget_for_currency(raw_budget, currency_code)
     
     gads_client = get_google_ads_client()
     
-    # Crear presupuesto primero
-    budget_operation = gads_client.get_type("CampaignBudgetOperation")
-    budget = budget_operation.create
-    budget.name = f"Budget for {campaign_name} - {id(campaign_name)}"
-    budget.amount_micros = params.get("budget_micros", 500000)
-    budget.delivery_method = gads_client.enums.BudgetDeliveryMethodEnum.STANDARD
-    budget_service = gads_client.get_service("CampaignBudgetService")
-    budget_response = budget_service.mutate_campaign_budgets(customer_id=customer_id, operations=[budget_operation])
-    budget_resource_name = budget_response.results[0].resource_name
+    try:
+        # Crear presupuesto con validación de moneda
+        budget_operation = gads_client.get_type("CampaignBudgetOperation")
+        budget = budget_operation.create
+        budget.name = f"Budget for {campaign_name} - {datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        budget.amount_micros = validated_budget
+        budget.delivery_method = gads_client.enums.BudgetDeliveryMethodEnum.STANDARD
+        
+        budget_service = gads_client.get_service("CampaignBudgetService")
+        budget_response = budget_service.mutate_campaign_budgets(
+            customer_id=customer_id, 
+            operations=[budget_operation]
+        )
+        budget_resource_name = budget_response.results[0].resource_name
 
-    # Crear campaña y asignarle el presupuesto
-    operation = gads_client.get_type("CampaignOperation")
-    campaign = operation.create
-    campaign.name = campaign_name
-    campaign.campaign_budget = budget_resource_name
-    campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
+        # Crear campaña con configuración mejorada
+        operation = gads_client.get_type("CampaignOperation")
+        campaign = operation.create
+        campaign.name = campaign_name
+        campaign.campaign_budget = budget_resource_name
+        campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
+        
+        # CORRECCIÓN: Alinear nombres de parámetros con la API
+        campaign_type = params.get("advertising_channel_type", "SEARCH").upper()
+        
+        if campaign_type == "PERFORMANCE_MAX":
+            campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
+            campaign.bidding_strategy_type = gads_client.enums.BiddingStrategyTypeEnum.MAXIMIZE_CONVERSION_VALUE
+            
+            # Configurar target ROAS si se proporciona
+            target_roas = params.get("target_roas", 0.0)
+            if target_roas > 0:
+                campaign.maximize_conversion_value.target_roas = target_roas
+        else:
+            # Default a Search con configuración robusta
+            campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
+            campaign.bidding_strategy_type = gads_client.enums.BiddingStrategyTypeEnum.MANUAL_CPC
+            campaign.network_settings.target_google_search = True
+            campaign.network_settings.target_search_network = params.get("target_search_network", False)
+            
+            # Configurar CPC manual si se proporciona
+            manual_cpc_bid = params.get("manual_cpc_enhanced_cpc_enabled", True)
+            campaign.manual_cpc.enhanced_cpc_enabled = manual_cpc_bid
+        
+        # Configuraciones adicionales
+        if params.get("start_date"):
+            campaign.start_date = params["start_date"]
+        if params.get("end_date"):
+            campaign.end_date = params["end_date"]
+            
+        response = _execute_mutate_operations(
+            customer_id, 
+            [operation], 
+            "CampaignService", 
+            "googleads_create_campaign"
+        )
+        
+        # Agregar información del presupuesto a la respuesta
+        if response["success"]:
+            response["budget_info"] = {
+                "original_budget_micros": raw_budget,
+                "validated_budget_micros": validated_budget,
+                "currency_code": currency_code,
+                "budget_resource_name": budget_resource_name
+            }
+        
+        return response
+        
+    except GoogleAdsException as ex:
+        # Manejo específico de errores de presupuesto
+        for error in ex.failure.errors:
+            if "NON_MULTIPLE_OF_MINIMUM_CURRENCY_UNIT" in str(error.error_code):
+                logger.error(f"Error de múltiplo de moneda: {error.message}")
+                return {
+                    "success": False,
+                    "error": f"Presupuesto inválido para {currency_code}. Debe ser múltiplo de {currency_configs.get(currency_code, {}).get('multiple_of', 10000)} micros.",
+                    "details": {
+                        "suggested_budget": validated_budget,
+                        "currency_code": currency_code,
+                        "original_error": error.message
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+        return _handle_google_ads_api_error(ex, "googleads_create_campaign")
     
-    campaign_type = params.get("type", "SEARCH").upper()
-    if campaign_type == "PERFORMANCE_MAX":
-        campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
-        campaign.bidding_strategy_type = gads_client.enums.BiddingStrategyTypeEnum.MAXIMIZE_CONVERSION_VALUE
-        campaign.maximize_conversion_value.target_roas = params.get("target_roas", 0.0)
-    else: # Default a Search
-        campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
-        campaign.bidding_strategy_type = gads_client.enums.BiddingStrategyTypeEnum.MANUAL_CPC
-        campaign.network_settings.target_google_search = True
-    
-    return _execute_mutate_operations(customer_id, [operation], "CampaignService", "googleads_create_campaign")
+    except Exception as e:
+        logger.error(f"Error inesperado creando campaña: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 def googleads_get_ad_groups(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     customer_id = _get_customer_id(params)
@@ -190,7 +284,7 @@ def googleads_update_campaign_status(client: Any, params: Dict[str, Any]) -> Dic
         )
     except Exception as e:
         logger.error(f"Error al actualizar estado de campaña: {str(e)}")
-        return {"status": "error", "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 def googleads_create_performance_max_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea una campaña Performance Max con configuraciones optimizadas."""
@@ -226,7 +320,7 @@ def googleads_create_remarketing_list(client: Any, params: Dict[str, Any]) -> Di
         )
     except Exception as e:
         logger.error(f"Error al crear lista de remarketing: {str(e)}")
-        return {"status": "error", "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 # --- FUNCIONES DE REPORTE Y ANÁLISIS ---
 
@@ -259,27 +353,27 @@ def googleads_list_accessible_customers(client: Any, params: Dict[str, Any]) -> 
         gads_client = get_google_ads_client()
         customer_service = gads_client.get_service("CustomerService")
         accessible_customers = customer_service.list_accessible_customers()
-        return {"status": "success", "data": {"resource_names": accessible_customers.resource_names}}
+        return {"success": True, "data": {"resource_names": accessible_customers.resource_names}}
     except GoogleAdsException as ex:
         return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
-        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 def googleads_get_campaign_by_name(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name = "googleads_get_campaign_by_name"
     customer_id = _get_customer_id(params)
     campaign_name = params.get("name")
     if not campaign_name:
-        return {"status": "error", "action": action_name, "message": "El parámetro 'name' es requerido.", "http_status": 400}
+        return {"success": False, "error": "El parámetro 'name' es requerido.", "timestamp": datetime.now().isoformat()}
     
     sanitized_name = campaign_name.replace("'", "\\'")
     query = f"SELECT campaign.id, campaign.name, campaign.status, campaign.resource_name FROM campaign WHERE campaign.name = '{sanitized_name}' LIMIT 1"
     response = _execute_search_query(customer_id, query, action_name)
     
-    if response["status"] == "success":
+    if response["success"] == True:
         if not response["data"]:
-            return {"status": "error", "action": action_name, "message": f"No se encontró campaña con nombre '{campaign_name}'.", "http_status": 404}
-        return {"status": "success", "data": response["data"][0]['campaign']}
+            return {"success": False, "error": f"No se encontró campaña con nombre '{campaign_name}'.", "timestamp": datetime.now().isoformat()}
+        return {"success": True, "data": response["data"][0]['campaign']}
     return response
 
 def googleads_upload_click_conversion(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -313,13 +407,13 @@ def googleads_upload_click_conversion(client: Any, params: Dict[str, Any]) -> Di
         
         response_dict = json_format.MessageToDict(response._pb)
         if "partialFailureError" in response_dict:
-            return {"status": "partial_error", "message": "La carga de conversiones tuvo fallos parciales.", "data": response_dict}
+            return {"success": False, "error": "La carga de conversiones tuvo fallos parciales.", "data": response_dict}
 
-        return {"status": "success", "data": response_dict}
+        return {"success": True, "data": response_dict}
     except GoogleAdsException as ex:
         return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
-        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 def googleads_upload_image_asset(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name = "googleads_upload_image_asset"
@@ -340,7 +434,7 @@ def googleads_upload_image_asset(client: Any, params: Dict[str, Any]) -> Dict[st
         
         return _execute_mutate_operations(customer_id, [asset_operation], "AssetService", action_name)
     except Exception as e:
-        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 def googleads_get_keyword_performance_report(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name = "googleads_get_keyword_performance_report"
@@ -421,7 +515,7 @@ def googleads_add_keywords_to_ad_group(client: Any, params: Dict[str, Any]) -> D
             action_name
         )
     except Exception as e:
-        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 def googleads_apply_audience_to_ad_group(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Aplica una audiencia a un grupo de anuncios."""
@@ -451,7 +545,7 @@ def googleads_apply_audience_to_ad_group(client: Any, params: Dict[str, Any]) ->
             action_name
         )
     except Exception as e:
-        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 def googleads_create_responsive_search_ad(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un anuncio de búsqueda responsive."""
@@ -489,7 +583,7 @@ def googleads_create_responsive_search_ad(client: Any, params: Dict[str, Any]) -
             action_name
         )
     except Exception as e:
-        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 def googleads_get_ad_performance(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene el rendimiento de los anuncios."""
@@ -558,6 +652,6 @@ def googleads_upload_offline_conversion(client: Any, params: Dict[str, Any]) -> 
             action_name
         )
     except Exception as e:
-        return {"status": "error", "action": action_name, "message": str(e), "http_status": 500}
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 # Puedes agregar más funciones según necesites...
