@@ -45,14 +45,12 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
     if not all([client_id, client_secret, refresh_token]):
         raise ValueError("Credenciales de YouTube (client_id, client_secret, refresh_token) no están configuradas.")
 
-    # SOLUCIÓN CRÍTICA: Usar solo los scopes que están disponibles en tu refresh_token
-    available_scopes = [
-        "https://www.googleapis.com/auth/youtube.force-ssl",
-        "https://www.googleapis.com/auth/youtube.upload",
+    # FUNCIONALIDAD COMPLETA: Usar TODOS los scopes necesarios
+    full_scopes = [
         "https://www.googleapis.com/auth/youtube",
-        "https://www.googleapis.com/auth/youtube.readonly",
-        "https://www.googleapis.com/auth/youtubepartner-channel-audit",
-        "https://www.googleapis.com/auth/youtube.third-party-link.creator"
+        "https://www.googleapis.com/auth/youtube.upload",
+        "https://www.googleapis.com/auth/youtube.force-ssl",
+        "https://www.googleapis.com/auth/yt-analytics.readonly"  # Para Analytics completo
     ]
 
     try:
@@ -60,20 +58,49 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
             info={
                 "client_id": client_id,
                 "client_secret": client_secret,
-                "refresh_token": refresh_token
+                "refresh_token": refresh_token,
+                "type": "authorized_user"
             },
-            scopes=available_scopes
+            scopes=full_scopes
         )
         
-        # Forzar refresh del token para verificar validez
+        # Verificar que las credenciales son válidas
         if not creds.valid:
             from google.auth.transport.requests import Request
-            creds.refresh(Request())
+            try:
+                creds.refresh(Request())
+            except Exception as refresh_error:
+                logger.error(f"Error al refrescar token de YouTube: {refresh_error}")
+                # INSTRUCCIONES CLARAS para regenerar token
+                raise ValueError(f"""
+Token de YouTube inválido o expirado.
+
+SOLUCIÓN SIMPLE:
+1. Ve a: https://console.cloud.google.com/apis/credentials
+2. Regenera el refresh_token con estos scopes:
+   - https://www.googleapis.com/auth/youtube
+   - https://www.googleapis.com/auth/youtube.upload
+   - https://www.googleapis.com/auth/youtube.force-ssl
+   - https://www.googleapis.com/auth/yt-analytics.readonly
+3. Actualiza la variable GOOGLE_ADS_REFRESH_TOKEN
+4. Reinicia la aplicación
+
+Error técnico: {str(refresh_error)}
+""")
             
         return creds
+        
     except Exception as e:
         logger.error(f"Error creando credenciales de YouTube: {e}")
-        raise ValueError(f"Error en credenciales de YouTube: {str(e)}")
+        raise ValueError(f"""
+Error en credenciales de YouTube: {str(e)}
+
+VERIFICAR:
+1. GOOGLE_ADS_CLIENT_ID está configurado
+2. GOOGLE_ADS_CLIENT_SECRET está configurado  
+3. GOOGLE_ADS_REFRESH_TOKEN está configurado
+4. El refresh_token tiene los scopes correctos de YouTube
+""")
 
 def _build_youtube_service(credentials: Credentials) -> Resource:
     """Construye y retorna el servicio de YouTube."""
@@ -86,13 +113,15 @@ def _build_youtube_service(credentials: Credentials) -> Resource:
 def _build_youtube_analytics_service(credentials: Credentials) -> Resource:
     """Construye y retorna el servicio de YouTube Analytics."""
     try:
-        # ADVERTENCIA: YouTube Analytics requiere scope específico no disponible
-        logger.warning("YouTube Analytics requiere 'yt-analytics.readonly' scope que no está disponible en el token actual")
         return build(YOUTUBE_ANALYTICS_API_SERVICE_NAME, YOUTUBE_ANALYTICS_API_VERSION, credentials=credentials)
     except Exception as e:
         logger.error(f"Error construyendo servicio de YouTube Analytics: {e}")
-        # SOLUCIÓN: Devolver None en lugar de fallar para funciones que no requieren Analytics
-        raise ValueError("YouTube Analytics no está disponible. Regenera el refresh_token con scope 'yt-analytics.readonly'")
+        raise ValueError(f"""
+YouTube Analytics no disponible: {str(e)}
+
+SOLUCIÓN:
+Regenerar refresh_token con scope: 'https://www.googleapis.com/auth/yt-analytics.readonly'
+""")
 
 def _validate_date_params(params: Dict[str, Any]) -> None:
     """Valida los parámetros de fecha."""
@@ -272,6 +301,7 @@ def youtube_delete_video(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
 def youtube_create_playlist(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     action_name = "youtube_create_playlist"
     try:
+        # FUNCIONALIDAD COMPLETA sin restricciones
         credentials = _get_youtube_credentials(params)
         youtube = _build_youtube_service(credentials)
 
@@ -290,6 +320,20 @@ def youtube_create_playlist(client: Any, params: Dict[str, Any]) -> Dict[str, An
         request = youtube.playlists().insert(part="snippet,status", body=body)
         response = request.execute()
         return {"status": "success", "data": response}
+        
+    except ValueError as config_error:
+        # Error de configuración - devolver instrucciones claras
+        return {
+            "status": "error",
+            "action": action_name,
+            "message": "Configuración de YouTube requerida",
+            "details": {
+                "error_type": "configuration_required",
+                "solution": str(config_error),
+                "quick_fix": "Regenerar refresh_token con scopes de YouTube completos"
+            },
+            "http_status": 503
+        }
     except Exception as e:
         return _handle_youtube_api_error(e, action_name)
 
@@ -402,21 +446,11 @@ def youtube_moderate_comment(client: Any, params: Dict[str, Any]) -> Dict[str, A
 # --- ACCIONES DE ANALÍTICAS (YouTube Analytics API v2) ---
 
 def youtube_get_video_analytics(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Obtiene analíticas de video (requiere scope adicional)."""
+    """Obtiene analíticas de video - FUNCIONALIDAD COMPLETA."""
     action_name = "youtube_get_video_analytics"
     try:
-        # CORRECCIÓN: Verificar disponibilidad de Analytics
-        try:
-            credentials = _get_youtube_credentials(params)
-            youtube_analytics = _build_youtube_analytics_service(credentials)
-        except ValueError as e:
-            return {
-                "status": "error",
-                "action": action_name,
-                "message": "YouTube Analytics no disponible. Scopes insuficientes.",
-                "details": {"required_scope": "https://www.googleapis.com/auth/yt-analytics.readonly"},
-                "http_status": 403
-            }
+        credentials = _get_youtube_credentials(params)
+        youtube_analytics = _build_youtube_analytics_service(credentials)
 
         video_id = params.get('video_id')
         start_date = params.get('start_date')
@@ -434,25 +468,27 @@ def youtube_get_video_analytics(client: Any, params: Dict[str, Any]) -> Dict[str
         )
         response = request.execute()
         return {"status": "success", "data": response}
+        
+    except ValueError as config_error:
+        return {
+            "status": "error",
+            "action": action_name,
+            "message": "YouTube Analytics requiere configuración adicional",
+            "details": {
+                "error_type": "analytics_scope_required",
+                "solution": str(config_error)
+            },
+            "http_status": 503
+        }
     except Exception as e:
         return _handle_youtube_api_error(e, action_name)
 
 def youtube_get_channel_analytics(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Obtiene analíticas del canal (requiere scope adicional)."""
+    """Obtiene analíticas del canal - FUNCIONALIDAD COMPLETA."""
     action_name = "youtube_get_channel_analytics"
     try:
-        # CORRECCIÓN: Verificar disponibilidad de Analytics
-        try:
-            credentials = _get_youtube_credentials(params)
-            youtube_analytics = _build_youtube_analytics_service(credentials)
-        except ValueError as e:
-            return {
-                "status": "error",
-                "action": action_name,
-                "message": "YouTube Analytics no disponible. Scopes insuficientes.",
-                "details": {"required_scope": "https://www.googleapis.com/auth/yt-analytics.readonly"},
-                "http_status": 403
-            }
+        credentials = _get_youtube_credentials(params)
+        youtube_analytics = _build_youtube_analytics_service(credentials)
         
         start_date = params.get('start_date')
         end_date = params.get('end_date')
@@ -468,25 +504,27 @@ def youtube_get_channel_analytics(client: Any, params: Dict[str, Any]) -> Dict[s
         )
         response = request.execute()
         return {"status": "success", "data": response}
+        
+    except ValueError as config_error:
+        return {
+            "status": "error",
+            "action": action_name,
+            "message": "YouTube Analytics requiere configuración adicional",
+            "details": {
+                "error_type": "analytics_scope_required",
+                "solution": str(config_error)
+            },
+            "http_status": 503
+        }
     except Exception as e:
         return _handle_youtube_api_error(e, action_name)
 
 def youtube_get_audience_demographics(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Obtiene demografía de audiencia (requiere scope adicional)."""
+    """Obtiene demografía de audiencia - FUNCIONALIDAD COMPLETA."""
     action_name = "youtube_get_audience_demographics"
     try:
-        # CORRECCIÓN: Verificar disponibilidad de Analytics
-        try:
-            credentials = _get_youtube_credentials(params)
-            youtube_analytics = _build_youtube_analytics_service(credentials)
-        except ValueError as e:
-            return {
-                "status": "error",
-                "action": action_name,
-                "message": "YouTube Analytics no disponible. Scopes insuficientes.",
-                "details": {"required_scope": "https://www.googleapis.com/auth/yt-analytics.readonly"},
-                "http_status": 403
-            }
+        credentials = _get_youtube_credentials(params)
+        youtube_analytics = _build_youtube_analytics_service(credentials)
 
         start_date = params.get('start_date')
         end_date = params.get('end_date')
@@ -502,51 +540,112 @@ def youtube_get_audience_demographics(client: Any, params: Dict[str, Any]) -> Di
         )
         response = request.execute()
         return {"status": "success", "data": response}
+        
+    except ValueError as config_error:
+        return {
+            "status": "error",
+            "action": action_name,
+            "message": "YouTube Analytics requiere configuración adicional",
+            "details": {
+                "error_type": "analytics_scope_required",
+                "solution": str(config_error)
+            },
+            "http_status": 503
+        }
     except Exception as e:
         return _handle_youtube_api_error(e, action_name)
 
-# NUEVA FUNCIÓN: Obtener información básica del canal sin Analytics
 def youtube_get_channel_info(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Obtiene información básica del canal (no requiere Analytics)."""
+    """Obtiene información básica del canal - FUNCIONALIDAD COMPLETA."""
     action_name = "youtube_get_channel_info"
     try:
         credentials = _get_youtube_credentials(params)
         youtube = _build_youtube_service(credentials)
         
+        # Usar TODAS las partes disponibles para información completa
         request = youtube.channels().list(
-            part="snippet,statistics,brandingSettings",
+            part="snippet,statistics,brandingSettings,contentDetails,status",
             mine=True
         )
         response = request.execute()
+        
+        if not response.get("items"):
+            return {
+                "status": "error",
+                "action": action_name,
+                "message": "No se pudo acceder al canal",
+                "details": {"reason": "Canal no encontrado o sin permisos"},
+                "http_status": 404
+            }
+            
         return {"status": "success", "data": response}
+        
+    except ValueError as config_error:
+        return {
+            "status": "error",
+            "action": action_name,
+            "message": "Configuración de YouTube requerida",
+            "details": {
+                "error_type": "configuration_required",
+                "solution": str(config_error)
+            },
+            "http_status": 503
+        }
     except Exception as e:
         return _handle_youtube_api_error(e, action_name)
 
-# NUEVA FUNCIÓN: Listar videos del canal
 def youtube_list_channel_videos(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Lista los videos del canal."""
+    """Lista los videos del canal - FUNCIONALIDAD COMPLETA."""
     action_name = "youtube_list_channel_videos"
     try:
         credentials = _get_youtube_credentials(params)
         youtube = _build_youtube_service(credentials)
-        
-        # Primero obtener el canal para conseguir el uploads playlist ID
-        channel_request = youtube.channels().list(part="contentDetails", mine=True)
-        channel_response = channel_request.execute()
-        
-        if not channel_response.get("items"):
-            return {"status": "error", "message": "No se pudo acceder al canal", "http_status": 404}
-        
-        uploads_playlist_id = channel_response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
-        
-        # Obtener videos del playlist de uploads
-        videos_request = youtube.playlistItems().list(
-            part="snippet,contentDetails",
-            playlistId=uploads_playlist_id,
-            maxResults=params.get("max_results", 50)
-        )
-        videos_response = videos_request.execute()
-        
-        return {"status": "success", "data": videos_response}
+            
+        # Método ROBUSTO con múltiples opciones
+        try:
+            # Opción 1: Search directo (más completo)
+            search_request = youtube.search().list(
+                part="snippet,id",
+                forMine=True,
+                type="video",
+                maxResults=params.get("max_results", 50),
+                order=params.get("order", "date")
+            )
+            videos_response = search_request.execute()
+            
+            return {"status": "success", "data": videos_response, "method": "search"}
+            
+        except Exception as search_error:
+            logger.info(f"Search method failed, using playlist method: {search_error}")
+            
+            # Opción 2: Playlist de uploads (fallback)
+            channel_request = youtube.channels().list(part="contentDetails", mine=True)
+            channel_response = channel_request.execute()
+            
+            if not channel_response.get("items"):
+                raise ValueError("No se pudo acceder al canal")
+            
+            uploads_playlist_id = channel_response["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+            
+            videos_request = youtube.playlistItems().list(
+                part="snippet,contentDetails",
+                playlistId=uploads_playlist_id,
+                maxResults=params.get("max_results", 50)
+            )
+            videos_response = videos_request.execute()
+            
+            return {"status": "success", "data": videos_response, "method": "playlist"}
+            
+    except ValueError as config_error:
+        return {
+            "status": "error",
+            "action": action_name,
+            "message": "Configuración de YouTube requerida",
+            "details": {
+                "error_type": "configuration_required",
+                "solution": str(config_error)
+            },
+            "http_status": 503
+        }
     except Exception as e:
         return _handle_youtube_api_error(e, action_name)
