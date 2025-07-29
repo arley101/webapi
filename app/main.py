@@ -2,6 +2,7 @@
 from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 import logging
+from datetime import datetime
 
 # Importar el router de acciones
 from app.api.routes.dynamics_actions import router as dynamics_router
@@ -61,4 +62,24 @@ async def health_check():
         "status": "healthy",
         "version": "1.1-localdev",
         "environment": settings.ENVIRONMENT
+    }
+
+@app.get("/api/v1/health")
+async def health_check():
+    """Health check endpoint para verificar estado del sistema."""
+    from app.core.action_mapper import ACTION_MAP
+    from app.core.config import settings
+    
+    return {
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "version": settings.APP_VERSION,
+        "environment": settings.ENVIRONMENT,
+        "total_actions": len(ACTION_MAP),
+        "backend_features": {
+            "google_ads": bool(settings.GOOGLE_ADS_CLIENT_ID),
+            "youtube": bool(settings.YOUTUBE_CLIENT_ID or settings.GOOGLE_ADS_CLIENT_ID),
+            "gemini": bool(settings.GEMINI_API_KEY),
+            "auth_manager": True
+        }
     }

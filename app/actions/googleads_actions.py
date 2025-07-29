@@ -112,7 +112,12 @@ def _validate_budget_for_currency(amount_micros: int, currency_code: str = "COP"
     
     config = currency_configs.get(currency_code, currency_configs["USD"])
     
-    # Asegurar que sea múltiplo correcto
+    # CORRECCIÓN: Verificar si ya es válido antes de ajustar
+    if amount_micros >= config["min_micros"] and amount_micros % config["multiple_of"] == 0:
+        logger.info(f"Presupuesto COP válido: {amount_micros} micros")
+        return amount_micros
+    
+    # Solo ajustar si es necesario
     if amount_micros % config["multiple_of"] != 0:
         amount_micros = ((amount_micros // config["multiple_of"]) + 1) * config["multiple_of"]
     
