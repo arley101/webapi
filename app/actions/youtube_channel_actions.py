@@ -37,13 +37,23 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
     Construye las credenciales de OAuth 2.0 para la API de YouTube a partir de la configuración.
     En un entorno de producción, esto asume que se ha proporcionado un refresh_token válido.
     """
-    # CORRECCIÓN: Usar variables específicas de YouTube en lugar de Google Ads
-    client_id = params.get("client_id", settings.YOUTUBE_CLIENT_ID if hasattr(settings, 'YOUTUBE_CLIENT_ID') else settings.GOOGLE_ADS_CLIENT_ID)
-    client_secret = params.get("client_secret", settings.YOUTUBE_CLIENT_SECRET if hasattr(settings, 'YOUTUBE_CLIENT_SECRET') else settings.GOOGLE_ADS_CLIENT_SECRET)
-    refresh_token = params.get("refresh_token", settings.YOUTUBE_REFRESH_TOKEN if hasattr(settings, 'YOUTUBE_REFRESH_TOKEN') else settings.GOOGLE_ADS_REFRESH_TOKEN)
+    # CORRECCIÓN: Usar variables específicas de YouTube con fallback a Google Ads
+    client_id = params.get("client_id") or settings.YOUTUBE_CLIENT_ID or settings.GOOGLE_ADS_CLIENT_ID
+    client_secret = params.get("client_secret") or settings.YOUTUBE_CLIENT_SECRET or settings.GOOGLE_ADS_CLIENT_SECRET
+    refresh_token = params.get("refresh_token") or settings.YOUTUBE_REFRESH_TOKEN or settings.GOOGLE_ADS_REFRESH_TOKEN
 
     if not all([client_id, client_secret, refresh_token]):
-        raise ValueError("Credenciales de YouTube (client_id, client_secret, refresh_token) no están configuradas.")
+        raise ValueError("""
+Credenciales de YouTube no están configuradas.
+
+REQUERIDO: Configurar estas variables de entorno:
+- YOUTUBE_CLIENT_ID (o usar GOOGLE_ADS_CLIENT_ID como fallback)
+- YOUTUBE_CLIENT_SECRET (o usar GOOGLE_ADS_CLIENT_SECRET como fallback)  
+- YOUTUBE_REFRESH_TOKEN (o usar GOOGLE_ADS_REFRESH_TOKEN como fallback)
+
+Si usas el mismo proyecto OAuth de Google, puedes usar las mismas credenciales.
+Si son proyectos diferentes, configura las variables YOUTUBE_* específicas.
+""")
 
     # FUNCIONALIDAD COMPLETA: Usar TODOS los scopes necesarios
     full_scopes = [
