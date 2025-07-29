@@ -54,38 +54,55 @@ def _validate_wp_credentials(credentials: Dict[str, str]) -> bool:
             return False
     
     # Verificar que tenga al menos un método de autenticación
+    # PRIORIDAD: Application Password > Basic Auth > WooCommerce Auth
+    has_app_password = credentials.get('app_password') and credentials.get('username')
     has_basic_auth = credentials.get('username') and credentials.get('password')
-    has_app_password = credentials.get('app_password')
     has_woocommerce_auth = credentials.get('consumer_key') and credentials.get('consumer_secret')
     
-    return has_basic_auth or has_app_password or has_woocommerce_auth
+    return has_app_password or has_basic_auth or has_woocommerce_auth
 
-def _get_wp_auth_headers(credentials: Dict[str, str], auth_type: str = 'basic') -> Dict[str, str]:
-    """Genera headers de autenticación para WordPress."""
+def _get_wp_auth_headers(credentials: Dict[str, str], auth_type: str = 'auto') -> Dict[str, str]:
+    """Genera headers de autenticación para WordPress con Application Password como prioridad."""
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'User-Agent': 'EliteDynamics-WordPress-Client/1.0'
+        'User-Agent': 'EliteDynamics-WordPress-Client/1.1.0'
     }
     
-    if auth_type == 'basic' and credentials.get('username') and credentials.get('password'):
+    # AUTOMÁTICO: Detectar el mejor método de autenticación disponible
+    if auth_type == 'auto':
+        # 1. PRIORIDAD: Application Password (MODERNO Y RECOMENDADO)
+        if credentials.get('app_password') and credentials.get('username'):
+            auth_type = 'app_password'
+        # 2. FALLBACK: Basic Auth tradicional
+        elif credentials.get('username') and credentials.get('password'):
+            auth_type = 'basic'
+        else:
+            logger.warning("No se encontró método de autenticación válido")
+            return headers
+    
+    # APPLICATION PASSWORD (MÉTODO PREFERIDO)
+    if auth_type == 'app_password' and credentials.get('app_password') and credentials.get('username'):
+        # Formato: username:application_password
+        auth_string = f"{credentials['username']}:{credentials['app_password']}"
+        encoded_auth = base64.b64encode(auth_string.encode()).decode()
+        headers['Authorization'] = f'Basic {encoded_auth}'
+        logger.info(f"Usando Application Password para usuario: {credentials['username']}")
+    
+    # BASIC AUTH (FALLBACK)
+    elif auth_type == 'basic' and credentials.get('username') and credentials.get('password'):
         auth_string = f"{credentials['username']}:{credentials['password']}"
         encoded_auth = base64.b64encode(auth_string.encode()).decode()
         headers['Authorization'] = f'Basic {encoded_auth}'
-    
-    elif auth_type == 'app_password' and credentials.get('app_password'):
-        username = credentials.get('username', 'admin')
-        auth_string = f"{username}:{credentials['app_password']}"
-        encoded_auth = base64.b64encode(auth_string.encode()).decode()
-        headers['Authorization'] = f'Basic {encoded_auth}'
+        logger.info(f"Usando Basic Auth para usuario: {credentials['username']}")
     
     return headers
 
 def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any], 
                          data: Optional[Dict[str, Any]] = None, 
                          query_params: Optional[Dict[str, Any]] = None,
-                         auth_type: str = 'basic') -> Any:
-    """Realiza una request a la API REST de WordPress."""
+                         auth_type: str = 'auto') -> Any:
+    """Realiza una request a la API REST de WordPress con autenticación robusta."""
     credentials = _get_wp_credentials(params)
     
     if not _validate_wp_credentials(credentials):
@@ -94,11 +111,13 @@ def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any],
     site_url = credentials['site_url'].rstrip('/')
     full_url = f"{site_url}/wp-json/wp/v2/{endpoint.lstrip('/')}"
     
+    # Obtener headers con autenticación automática
     headers = _get_wp_auth_headers(credentials, auth_type)
     
     request_params = {
         'headers': headers,
-        'timeout': params.get('timeout', 30)
+        'timeout': params.get('timeout', 30),
+        'verify': params.get('verify_ssl', True)  # SSL verification
     }
     
     if data:
@@ -107,15 +126,38 @@ def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any],
     if query_params:
         request_params['params'] = query_params
     
-    response = requests.request(method, full_url, **request_params)
-    response.raise_for_status()
+    try:
+        logger.info(f"WordPress API Request: {method} {full_url}")
+        response = requests.request(method, full_url, **request_params)
+        response.raise_for_status()
+        
+        return response.json() if response.content else {}
+        
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 401:
+            # FALLBACK AUTOMÁTICO: Si falla Application Password, intentar Basic Auth
+            if auth_type == 'auto' and credentials.get('password'):
+                logger.warning("Application Password falló, intentando Basic Auth...")
+                return _make_wp_rest_request(method, endpoint, params, data, query_params, 'basic')
+            else:
+                raise ValueError(f"Error de autenticación WordPress (401): Verificar credenciales")
+        elif response.status_code == 403:
+            raise ValueError(f"Sin permisos para esta operación WordPress (403)")
+        elif response.status_code == 404:
+            raise ValueError(f"Endpoint no encontrado WordPress (404): {endpoint}")
+        else:
+            raise ValueError(f"Error HTTP WordPress ({response.status_code}): {str(e)}")
     
-    return response.json() if response.content else {}
+    except requests.exceptions.ConnectionError:
+        raise ValueError(f"No se puede conectar al sitio WordPress: {site_url}")
+    
+    except requests.exceptions.Timeout:
+        raise ValueError(f"Timeout en la conexión a WordPress después de {request_params['timeout']}s")
 
 def _make_wc_request(method: str, endpoint: str, params: Dict[str, Any],
                     data: Optional[Dict[str, Any]] = None,
                     query_params: Optional[Dict[str, Any]] = None) -> Any:
-    """Realiza una request a la API de WooCommerce."""
+    """Realiza una request a la API de WooCommerce con autenticación robusta."""
     credentials = _get_wp_credentials(params)
     
     if not credentials.get('consumer_key') or not credentials.get('consumer_secret'):
@@ -128,13 +170,15 @@ def _make_wc_request(method: str, endpoint: str, params: Dict[str, Any],
     
     headers = {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'User-Agent': 'EliteDynamics-WooCommerce-Client/1.1.0'
     }
     
     request_params = {
         'auth': auth,
         'headers': headers,
-        'timeout': params.get('timeout', 30)
+        'timeout': params.get('timeout', 30),
+        'verify': params.get('verify_ssl', True)
     }
     
     if data:
@@ -143,12 +187,30 @@ def _make_wc_request(method: str, endpoint: str, params: Dict[str, Any],
     if query_params:
         request_params['params'] = query_params
     
-    response = requests.request(method, full_url, **request_params)
-    response.raise_for_status()
+    try:
+        logger.info(f"WooCommerce API Request: {method} {full_url}")
+        response = requests.request(method, full_url, **request_params)
+        response.raise_for_status()
+        
+        return response.json() if response.content else {}
+        
+    except requests.exceptions.HTTPError as e:
+        if response.status_code == 401:
+            raise ValueError(f"Error de autenticación WooCommerce (401): Verificar consumer keys")
+        elif response.status_code == 403:
+            raise ValueError(f"Sin permisos para esta operación WooCommerce (403)")
+        elif response.status_code == 404:
+            raise ValueError(f"Endpoint no encontrado WooCommerce (404): {endpoint}")
+        else:
+            raise ValueError(f"Error HTTP WooCommerce ({response.status_code}): {str(e)}")
     
-    return response.json() if response.content else {}
+    except requests.exceptions.ConnectionError:
+        raise ValueError(f"No se puede conectar al sitio WooCommerce: {site_url}")
+    
+    except requests.exceptions.Timeout:
+        raise ValueError(f"Timeout en la conexión a WooCommerce después de {request_params['timeout']}s")
 
-# === FUNCIONES PRINCIPALES ===
+# === FUNCIONES PRINCIPALES (MANTIENEN ESTRUCTURA ORIGINAL) ===
 
 def wordpress_create_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un nuevo post en WordPress."""
@@ -180,6 +242,7 @@ def wordpress_create_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
             "data": response,
             "action": action_name,
             "post_id": response.get('id'),
+            "site_url": credentials.get('site_url'),
             "timestamp": datetime.now().isoformat()
         }
         
@@ -457,7 +520,10 @@ def wordpress_upload_media(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         site_url = credentials['site_url'].rstrip('/')
         upload_url = f"{site_url}/wp-json/wp/v2/media"
         
+        # Usar autenticación moderna
         headers = _get_wp_auth_headers(credentials)
+        # Remover Content-Type para multipart/form-data
+        headers.pop('Content-Type', None)
         
         if file_path:
             with open(file_path, 'rb') as f:
@@ -574,7 +640,58 @@ def wordpress_get_tags(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-# === FUNCIONES DE WOOCOMMERCE ===
+def wordpress_backup_content(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Realiza un backup de contenido de WordPress."""
+    action_name = "wordpress_backup_content"
+    
+    try:
+        backup_types = params.get('backup_types', ['posts', 'pages', 'users'])
+        backup_data = {}
+        
+        for backup_type in backup_types:
+            if backup_type == 'posts':
+                posts_result = wordpress_get_posts(client, {**params, 'per_page': 100})
+                if posts_result['status'] == 'success':
+                    backup_data['posts'] = posts_result['data']
+            
+            elif backup_type == 'pages':
+                pages_result = wordpress_get_pages(client, {**params, 'per_page': 100})
+                if pages_result['status'] == 'success':
+                    backup_data['pages'] = pages_result['data']
+            
+            elif backup_type == 'users':
+                users_result = wordpress_get_users(client, {**params, 'per_page': 100})
+                if users_result['status'] == 'success':
+                    backup_data['users'] = users_result['data']
+            
+            elif backup_type == 'categories':
+                categories_result = wordpress_get_categories(client, {**params, 'per_page': 100})
+                if categories_result['status'] == 'success':
+                    backup_data['categories'] = categories_result['data']
+        
+        # Guardar backup en archivo si se especifica
+        if params.get('save_to_file'):
+            backup_filename = f"wp_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            backup_path = params.get('backup_path', '/tmp/') + backup_filename
+            
+            with open(backup_path, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, indent=2, ensure_ascii=False)
+            
+            backup_data['backup_file'] = backup_path
+        
+        return {
+            "status": "success",
+            "data": backup_data,
+            "action": action_name,
+            "backup_types": backup_types,
+            "total_items": sum(len(v) if isinstance(v, list) else 1 for k, v in backup_data.items() if k != 'backup_file'),
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
+
+# === FUNCIONES DE WOOCOMMERCE (OPTIMIZADAS) ===
 
 def woocommerce_create_product(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un nuevo producto en WooCommerce."""
@@ -961,57 +1078,6 @@ def woocommerce_get_reports(client: Any, params: Dict[str, Any]) -> Dict[str, An
             "data": response,
             "action": action_name,
             "report_type": report_type,
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
-
-def wordpress_backup_content(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Realiza un backup de contenido de WordPress."""
-    action_name = "wordpress_backup_content"
-    
-    try:
-        backup_types = params.get('backup_types', ['posts', 'pages', 'users'])
-        backup_data = {}
-        
-        for backup_type in backup_types:
-            if backup_type == 'posts':
-                posts_result = wordpress_get_posts(client, {**params, 'per_page': 100})
-                if posts_result['status'] == 'success':
-                    backup_data['posts'] = posts_result['data']
-            
-            elif backup_type == 'pages':
-                pages_result = wordpress_get_pages(client, {**params, 'per_page': 100})
-                if pages_result['status'] == 'success':
-                    backup_data['pages'] = pages_result['data']
-            
-            elif backup_type == 'users':
-                users_result = wordpress_get_users(client, {**params, 'per_page': 100})
-                if users_result['status'] == 'success':
-                    backup_data['users'] = users_result['data']
-            
-            elif backup_type == 'categories':
-                categories_result = wordpress_get_categories(client, {**params, 'per_page': 100})
-                if categories_result['status'] == 'success':
-                    backup_data['categories'] = categories_result['data']
-        
-        # Guardar backup en archivo si se especifica
-        if params.get('save_to_file'):
-            backup_filename = f"wp_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            backup_path = params.get('backup_path', '/tmp/') + backup_filename
-            
-            with open(backup_path, 'w', encoding='utf-8') as f:
-                json.dump(backup_data, f, indent=2, ensure_ascii=False)
-            
-            backup_data['backup_file'] = backup_path
-        
-        return {
-            "status": "success",
-            "data": backup_data,
-            "action": action_name,
-            "backup_types": backup_types,
-            "total_items": sum(len(v) if isinstance(v, list) else 1 for k, v in backup_data.items() if k != 'backup_file'),
             "timestamp": datetime.now().isoformat()
         }
         
