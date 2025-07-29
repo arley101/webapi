@@ -1,6 +1,6 @@
 # app/core/config.py
 import os
-import logging  # ← AGREGAR ESTE IMPORT QUE FALTA
+import logging  # ← YA TIENES ESTE IMPORT CORRECTO
 from typing import List, Optional, Union 
 from pydantic import HttpUrl, field_validator, Field 
 from pydantic_settings import BaseSettings, SettingsConfigDict
