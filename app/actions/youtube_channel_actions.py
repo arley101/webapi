@@ -34,10 +34,9 @@ VALID_MODERATION_STATUSES = ['heldForReview', 'published', 'rejected']
 
 def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
     """
-    Construye las credenciales de OAuth 2.0 para la API de YouTube a partir de la configuración.
-    En un entorno de producción, esto asume que se ha proporcionado un refresh_token válido.
+    Construye las credenciales de OAuth 2.0 usando configuración tradicional.
     """
-    # CORRECCIÓN: Priorizar variables específicas de YouTube sobre Google Ads
+    # REVERTIDO: Sin auth_manager, usar configuración directa
     client_id = (
         params.get("client_id") or 
         settings.YOUTUBE_CLIENT_ID or 
@@ -54,49 +53,8 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
         settings.GOOGLE_ADS_REFRESH_TOKEN
     )
 
-    # VALIDACIÓN ESPECÍFICA PARA YOUTUBE
     if not all([client_id, client_secret, refresh_token]):
-        missing_vars = []
-        if not client_id:
-            missing_vars.append("YOUTUBE_CLIENT_ID (o GOOGLE_ADS_CLIENT_ID como fallback)")
-        if not client_secret:
-            missing_vars.append("YOUTUBE_CLIENT_SECRET (o GOOGLE_ADS_CLIENT_SECRET como fallback)")
-        if not refresh_token:
-            missing_vars.append("YOUTUBE_REFRESH_TOKEN (o GOOGLE_ADS_REFRESH_TOKEN como fallback)")
-            
-        raise ValueError(f"""
-❌ CREDENCIALES DE YOUTUBE NO CONFIGURADAS
-
-Variables faltantes: {', '.join(missing_vars)}
-
-CONFIGURACIÓN RECOMENDADA (credenciales separadas):
-1. Configurar variables específicas de YouTube:
-   - YOUTUBE_CLIENT_ID=tu_youtube_client_id
-   - YOUTUBE_CLIENT_SECRET=tu_youtube_client_secret  
-   - YOUTUBE_REFRESH_TOKEN=tu_youtube_refresh_token
-
-2. O usar las mismas de Google Ads (si es el mismo proyecto OAuth):
-   - GOOGLE_ADS_CLIENT_ID (ya configurado: {'✅' if settings.GOOGLE_ADS_CLIENT_ID else '❌'})
-   - GOOGLE_ADS_CLIENT_SECRET (ya configurado: {'✅' if settings.GOOGLE_ADS_CLIENT_SECRET else '❌'})
-   - GOOGLE_ADS_REFRESH_TOKEN (ya configurado: {'✅' if settings.GOOGLE_ADS_REFRESH_TOKEN else '❌'})
-
-ESTADO ACTUAL:
-- YOUTUBE_CLIENT_ID: {'✅ Configurado' if settings.YOUTUBE_CLIENT_ID else '❌ No configurado'}
-- YOUTUBE_CLIENT_SECRET: {'✅ Configurado' if settings.YOUTUBE_CLIENT_SECRET else '❌ No configurado'}
-- YOUTUBE_REFRESH_TOKEN: {'✅ Configurado' if settings.YOUTUBE_REFRESH_TOKEN else '❌ No configurado'}
-""")
-
-    # Log de qué credenciales se están usando
-    using_youtube_creds = bool(settings.YOUTUBE_CLIENT_ID and settings.YOUTUBE_CLIENT_SECRET)
-    logger.info(f"🔑 Usando credenciales: {'YouTube específicas' if using_youtube_creds else 'Google Ads (fallback)'}")
-
-    # SCOPES OPTIMIZADOS - Solo los 4 esenciales
-    youtube_only_scopes = [
-        "https://www.googleapis.com/auth/youtube",           # Gestión básica del canal
-        "https://www.googleapis.com/auth/youtube.upload",    # Subir videos
-        "https://www.googleapis.com/auth/youtube.force-ssl",  # Operaciones seguras
-        "https://www.googleapis.com/auth/yt-analytics.readonly"  # Analytics (opcional)
-    ]
+        raise ValueError("Credenciales de YouTube no configuradas")
 
     try:
         creds = Credentials.from_authorized_user_info(
@@ -106,46 +64,25 @@ ESTADO ACTUAL:
                 "refresh_token": refresh_token,
                 "type": "authorized_user"
             },
-            scopes=youtube_only_scopes  # ← Solo YouTube, sin Google Ads
+            scopes=[
+                "https://www.googleapis.com/auth/youtube",
+                "https://www.googleapis.com/auth/youtube.upload",
+                "https://www.googleapis.com/auth/youtube.force-ssl",
+                "https://www.googleapis.com/auth/yt-analytics.readonly"
+            ]
         )
         
-        # Verificar que las credenciales son válidas
+        # Refrescar token si es necesario
         if not creds.valid:
             from google.auth.transport.requests import Request
-            try:
-                creds.refresh(Request())
-            except Exception as refresh_error:
-                logger.error(f"Error al refrescar token de YouTube: {refresh_error}")
-                # INSTRUCCIONES CLARAS para regenerar token
-                raise ValueError(f"""
-Token de YouTube inválido o expirado.
-
-SOLUCIÓN SIMPLE:
-1. Ve a: https://console.cloud.google.com/apis/credentials
-2. Regenera el refresh_token con estos scopes:
-   - https://www.googleapis.com/auth/youtube
-   - https://www.googleapis.com/auth/youtube.upload
-   - https://www.googleapis.com/auth/youtube.force-ssl
-   - https://www.googleapis.com/auth/yt-analytics.readonly
-3. Actualiza la variable GOOGLE_ADS_REFRESH_TOKEN
-4. Reinicia la aplicación
-
-Error técnico: {str(refresh_error)}
-""")
+            creds.refresh(Request())
             
+        logger.info("🎥 YouTube: Credenciales tradicionales generadas")
         return creds
         
     except Exception as e:
-        logger.error(f"Error creando credenciales de YouTube: {e}")
-        raise ValueError(f"""
-Error en credenciales de YouTube: {str(e)}
-
-VERIFICAR:
-1. GOOGLE_ADS_CLIENT_ID está configurado
-2. GOOGLE_ADS_CLIENT_SECRET está configurado  
-3. GOOGLE_ADS_REFRESH_TOKEN está configurado
-4. El refresh_token tiene los scopes correctos de YouTube
-""")
+        logger.error(f"Error generando credenciales YouTube: {e}")
+        raise ValueError(f"Error en credenciales YouTube: {str(e)}")
 
 def _build_youtube_service(credentials: Credentials) -> Resource:
     """Construye y retorna el servicio de YouTube."""
@@ -167,13 +104,6 @@ YouTube Analytics no disponible: {str(e)}
 SOLUCIÓN:
 Regenerar refresh_token con scope: 'https://www.googleapis.com/auth/yt-analytics.readonly'
 """)
-
-def _validate_date_params(params: Dict[str, Any]) -> None:
-    """Valida los parámetros de fecha."""
-    for date_param in ['start_date', 'end_date']:
-        if date_param in params:
-            if not validate_date_format(params[date_param]):
-                raise ValueError(f"{date_param} debe tener formato YYYY-MM-DD")
 
 def _validate_privacy_status(privacy_status: str) -> None:
     """Valida el estado de privacidad."""
