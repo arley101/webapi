@@ -1,20 +1,17 @@
 # ============================================================================
 # FRAMEWORK PRINCIPAL - FASTAPI & UVICORN
 # ============================================================================
-fastapi>=0.104.0
-uvicorn[standard]>=0.24.0
+fastapi==0.111.1
+uvicorn[standard]==0.30.3
 # Nota: gunicorn solo necesario si usas workers multi-proceso en producción
 gunicorn==22.0.0
 
-# Core dependencies
-pydantic>=2.5.0
-pydantic-settings>=2.1.0
-python-dotenv>=1.0.0
-requests>=2.31.0
-
-# Logging and utilities
-colorama>=0.4.6
-
+# Pydantic y configuración
+pydantic==2.11.4
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+typing-extensions>=4.13,<5.0
+annotated-types>=0.7,<1.0
 # ============================================================================
 # HTTP & NETWORKING
 # ============================================================================
