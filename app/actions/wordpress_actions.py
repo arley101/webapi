@@ -3,6 +3,8 @@ from typing import Dict, Any, Optional, List  # ✅ Any disponible
 from datetime import datetime, timedelta
 import hashlib, time, os
 from urllib.parse import urljoin, quote
+from app.core.auth_manager import token_manager
+from app.core.config import settings  # ✅ IMPORT FALTANTE AGREGADO
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -14,12 +16,13 @@ _wp_cache = {}
 def _get_wp_credentials(params: Dict[str, Any]) -> Dict[str, str]:
     """Obtiene credenciales de WordPress desde parámetros o variables de entorno."""
     return {
-        'site_url': params.get('site_url') or os.getenv('WP_SITE_URL', ''),
-        'username': params.get('username') or os.getenv('WP_USERNAME', ''),  # ← AUTOMÁTICO
-        'password': params.get('password') or os.getenv('WP_PASSWORD', ''),
-        'app_password': params.get('app_password') or os.getenv('WP_APP_PASSWORD', ''),  # ← AUTOMÁTICO
-        'consumer_key': params.get('consumer_key') or os.getenv('WC_CONSUMER_KEY', ''),  # ← AUTOMÁTICO
-        'consumer_secret': params.get('consumer_secret') or os.getenv('WC_CONSUMER_SECRET', '')  # ← AUTOMÁTICO
+        'site_url': params.get('site_url') or getattr(settings, 'WP_SITE_URL', ''),
+        'username': params.get('username') or getattr(settings, 'WP_USERNAME', '') or getattr(settings, 'WP_JWT_USERNAME', ''),
+        'password': params.get('password') or getattr(settings, 'WP_PASSWORD', '') or getattr(settings, 'WP_JWT_PASSWORD', ''),
+        'app_password': params.get('app_password') or getattr(settings, 'WP_APP_PASSWORD', ''),
+        'consumer_key': params.get('consumer_key') or getattr(settings, 'WC_CONSUMER_KEY', ''),
+        'consumer_secret': params.get('consumer_secret') or getattr(settings, 'WC_CONSUMER_SECRET', ''),
+        'auth_mode': params.get('auth_mode') or getattr(settings, 'WP_AUTH_MODE', 'jwt')
     }
 
 def _handle_wp_api_error(error: Exception, action_name: str, site_url: str = "") -> Dict[str, Any]:
@@ -41,55 +44,69 @@ def _handle_wp_api_error(error: Exception, action_name: str, site_url: str = "")
 
 def _validate_wp_credentials(credentials: Dict[str, str]) -> bool:
     """Valida que las credenciales de WordPress estén completas."""
-    required_fields = ['site_url']
+    # Para JWT, solo necesitamos site_url ya que las credenciales vienen de settings
+    site_url = credentials.get('site_url')
+    if not site_url:
+        return False
     
-    # Verificar campos requeridos
-    for field in required_fields:
-        if not credentials.get(field):
-            return False
+    auth_mode = credentials.get('auth_mode', 'jwt')
     
-    # Verificar que tenga al menos un método de autenticación
-    # PRIORIDAD: Application Password > Basic Auth > WooCommerce Auth
-    has_app_password = credentials.get('app_password') and credentials.get('username')
-    has_basic_auth = credentials.get('username') and credentials.get('password')
-    has_woocommerce_auth = credentials.get('consumer_key') and credentials.get('consumer_secret')
-    
-    return has_app_password or has_basic_auth or has_woocommerce_auth
+    if auth_mode == 'jwt':
+        # JWT funciona con settings, solo verificar que tengamos la URL
+        return bool(site_url)
+    elif auth_mode == 'app_password':
+        return bool(credentials.get('app_password') and credentials.get('username'))
+    elif auth_mode == 'woocommerce':
+        return bool(credentials.get('consumer_key') and credentials.get('consumer_secret'))
+    else:
+        # Para 'auto', JWT siempre está disponible si tenemos site_url
+        return bool(site_url)
 
 def _get_wp_auth_headers(credentials: Dict[str, str], auth_type: str = 'auto') -> Dict[str, str]:
-    """Genera headers de autenticación para WordPress con Application Password como prioridad."""
+    """Sistema inteligente de autenticación WordPress"""
+    
+    # Si es automático, usar el gestor centralizado
+    if auth_type == 'auto':
+        try:
+            auth_data = token_manager.get_wordpress_auth(
+                site_url=credentials.get('site_url'),
+                auth_mode=credentials.get('auth_mode')
+            )
+            logger.info(f"Usando autenticación automática: {auth_data['type']}")
+            return auth_data.get('headers', {})
+        except Exception as e:
+            logger.warning(f"Autenticación automática falló: {str(e)}, intentando fallbacks...")
+    
+    # Fallbacks manuales (mantener compatibilidad)
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'User-Agent': 'EliteDynamics-WordPress-Client/1.1.0'
+        'User-Agent': 'EliteDynamics-WordPress-Client/1.2.0'
     }
     
-    # AUTOMÁTICO: Detectar el mejor método de autenticación disponible
-    if auth_type == 'auto':
-        # 1. PRIORIDAD: Application Password (MODERNO Y RECOMENDADO)
-        if credentials.get('app_password') and credentials.get('username'):
-            auth_type = 'app_password'
-        # 2. FALLBACK: Basic Auth tradicional
-        elif credentials.get('username') and credentials.get('password'):
-            auth_type = 'basic'
-        else:
-            logger.warning("No se encontró método de autenticación válido")
+    # JWT manual
+    if auth_type == 'jwt' or (auth_type == 'auto' and not headers.get('Authorization')):
+        try:
+            jwt_token = token_manager.get_wordpress_jwt_token(credentials.get('site_url'))
+            headers['Authorization'] = f'Bearer {jwt_token}'
+            logger.info("Usando JWT manual como fallback")
             return headers
+        except Exception as jwt_error:
+            logger.warning(f"JWT manual falló: {str(jwt_error)}")
     
-    # APPLICATION PASSWORD (MÉTODO PREFERIDO)
-    if auth_type == 'app_password' and credentials.get('app_password') and credentials.get('username'):
-        # Formato: username:application_password
+    # Application Password fallback
+    if credentials.get('app_password') and credentials.get('username'):
         auth_string = f"{credentials['username']}:{credentials['app_password']}"
         encoded_auth = base64.b64encode(auth_string.encode()).decode()
         headers['Authorization'] = f'Basic {encoded_auth}'
-        logger.info(f"Usando Application Password para usuario: {credentials['username']}")
+        logger.info("Usando Application Password como fallback")
     
-    # BASIC AUTH (FALLBACK)
-    elif auth_type == 'basic' and credentials.get('username') and credentials.get('password'):
+    # Basic Auth último recurso
+    elif credentials.get('username') and credentials.get('password'):
         auth_string = f"{credentials['username']}:{credentials['password']}"
         encoded_auth = base64.b64encode(auth_string.encode()).decode()
         headers['Authorization'] = f'Basic {encoded_auth}'
-        logger.info(f"Usando Basic Auth para usuario: {credentials['username']}")
+        logger.info("Usando Basic Auth como último recurso")
     
     return headers
 
@@ -97,8 +114,11 @@ def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any],
                          data: Optional[Dict[str, Any]] = None, 
                          query_params: Optional[Dict[str, Any]] = None,
                          auth_type: str = 'auto') -> Any:
-    """Realiza una request a la API REST de WordPress con autenticación robusta."""
+    """Request WordPress con autenticación automática inteligente"""
     credentials = _get_wp_credentials(params)
+    
+    # Agregar modo de autenticación a credenciales
+    credentials['auth_mode'] = params.get('auth_mode') or 'jwt'
     
     if not _validate_wp_credentials(credentials):
         raise ValueError("Credenciales de WordPress incompletas o inválidas")
@@ -106,14 +126,21 @@ def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any],
     site_url = credentials['site_url'].rstrip('/')
     full_url = f"{site_url}/wp-json/wp/v2/{endpoint.lstrip('/')}"
     
-    # Obtener headers con autenticación automática
+    # Sistema inteligente de autenticación
     headers = _get_wp_auth_headers(credentials, auth_type)
     
+    # Configurar request
     request_params = {
         'headers': headers,
         'timeout': params.get('timeout', 30),
-        'verify': params.get('verify_ssl', True)  # SSL verification
+        'verify': params.get('verify_ssl', True)
     }
+    
+    # Agregar autenticación WooCommerce si es necesario
+    if credentials.get('auth_mode') == 'woocommerce':
+        auth_data = token_manager.get_wordpress_auth(site_url, 'woocommerce')
+        if 'auth' in auth_data:
+            request_params['auth'] = auth_data['auth']
     
     if data:
         request_params['json'] = data
@@ -130,12 +157,17 @@ def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any],
         
     except requests.exceptions.HTTPError as e:
         if response.status_code == 401:
-            # FALLBACK AUTOMÁTICO: Si falla Application Password, intentar Basic Auth
-            if auth_type == 'auto' and credentials.get('password'):
-                logger.warning("Application Password falló, intentando Basic Auth...")
-                return _make_wp_rest_request(method, endpoint, params, data, query_params, 'basic')
-            else:
-                raise ValueError(f"Error de autenticación WordPress (401): Verificar credenciales")
+            # Fallback automático inteligente
+            if auth_type == 'auto':
+                logger.warning("Autenticación principal falló, intentando métodos alternativos...")
+                # Intentar con app_password si JWT falló
+                if credentials.get('app_password'):
+                    return _make_wp_rest_request(method, endpoint, {**params, 'auth_mode': 'app_password'}, data, query_params, 'app_password')
+                # Último recurso: basic auth
+                elif credentials.get('password'):
+                    return _make_wp_rest_request(method, endpoint, {**params, 'auth_mode': 'basic'}, data, query_params, 'basic')
+            
+            raise ValueError(f"Error de autenticación WordPress (401): Verificar credenciales y plugins JWT")
         elif response.status_code == 403:
             raise ValueError(f"Sin permisos para esta operación WordPress (403)")
         elif response.status_code == 404:
@@ -152,58 +184,39 @@ def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any],
 def _make_wc_request(method: str, endpoint: str, params: Dict[str, Any],
                     data: Optional[Dict[str, Any]] = None,
                     query_params: Optional[Dict[str, Any]] = None) -> Any:
-    """Realiza una request a la API de WooCommerce con autenticación robusta."""
-    credentials = _get_wp_credentials(params)
-    
-    if not credentials.get('consumer_key') or not credentials.get('consumer_secret'):
-        raise ValueError("Consumer key y consumer secret de WooCommerce requeridos")
-    
-    site_url = credentials['site_url'].rstrip('/')
-    full_url = f"{site_url}/wp-json/wc/v3/{endpoint.lstrip('/')}"
-    
-    auth = (credentials['consumer_key'], credentials['consumer_secret'])
-    
-    headers = {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'User-Agent': 'EliteDynamics-WooCommerce-Client/1.1.0'
-    }
-    
-    request_params = {
-        'auth': auth,
-        'headers': headers,
-        'timeout': params.get('timeout', 30),
-        'verify': params.get('verify_ssl', True)
-    }
-    
-    if data:
-        request_params['json'] = data
-    
-    if query_params:
-        request_params['params'] = query_params
-    
+    """Request WooCommerce con autenticación automática"""
     try:
+        # Usar sistema de autenticación centralizado
+        site_url = params.get('site_url') or settings.WP_SITE_URL
+        auth_data = token_manager.get_wordpress_auth(site_url, 'woocommerce')
+        
+        full_url = f"{site_url.rstrip('/')}/wp-json/wc/v3/{endpoint.lstrip('/')}"
+        
+        request_params = {
+            'headers': auth_data['headers'],
+            'timeout': params.get('timeout', 30),
+            'verify': params.get('verify_ssl', True)
+        }
+        
+        # Agregar autenticación WooCommerce
+        if 'auth' in auth_data:
+            request_params['auth'] = auth_data['auth']
+        
+        if data:
+            request_params['json'] = data
+        
+        if query_params:
+            request_params['params'] = query_params
+        
         logger.info(f"WooCommerce API Request: {method} {full_url}")
         response = requests.request(method, full_url, **request_params)
         response.raise_for_status()
         
         return response.json() if response.content else {}
         
-    except requests.exceptions.HTTPError as e:
-        if response.status_code == 401:
-            raise ValueError(f"Error de autenticación WooCommerce (401): Verificar consumer keys")
-        elif response.status_code == 403:
-            raise ValueError(f"Sin permisos para esta operación WooCommerce (403)")
-        elif response.status_code == 404:
-            raise ValueError(f"Endpoint no encontrado WooCommerce (404): {endpoint}")
-        else:
-            raise ValueError(f"Error HTTP WooCommerce ({response.status_code}): {str(e)}")
-    
-    except requests.exceptions.ConnectionError:
-        raise ValueError(f"No se puede conectar al sitio WooCommerce: {site_url}")
-    
-    except requests.exceptions.Timeout:
-        raise ValueError(f"Timeout en la conexión a WooCommerce después de {request_params['timeout']}s")
+    except Exception as e:
+        # Usar el handler de errores existente
+        return _handle_wp_api_error(e, "woocommerce_request", params.get('site_url', ''))
 
 # === FUNCIONES PRINCIPALES (MANTIENEN ESTRUCTURA ORIGINAL) ===
 

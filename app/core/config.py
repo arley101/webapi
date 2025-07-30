@@ -116,6 +116,23 @@ class Settings(BaseSettings):
     YOUTUBE_CLIENT_SECRET: Optional[str] = Field(None, env="YOUTUBE_CLIENT_SECRET")
     YOUTUBE_REFRESH_TOKEN: Optional[str] = Field(None, env="YOUTUBE_REFRESH_TOKEN")
 
+    # WordPress Authentication Configuration
+    WP_AUTH_MODE: Optional[str] = Field(default="jwt", description="WordPress auth mode: jwt|app_password|woocommerce")
+    
+    # WordPress JWT Configuration (método preferido y que funciona)
+    WP_SITE_URL: Optional[str] = Field(default="https://elitecosmeticdental.com")
+    WP_JWT_USERNAME: Optional[str] = Field(default="Arleyadmin")
+    WP_JWT_PASSWORD: Optional[str] = Field(default="U7M0$f34@Ju@N90|2=2=*|")
+    
+    # WordPress App Password (fallback)
+    WP_USERNAME: Optional[str] = None
+    WP_PASSWORD: Optional[str] = None
+    WP_APP_PASSWORD: Optional[str] = None
+    
+    # WooCommerce REST API (para e-commerce)
+    WC_CONSUMER_KEY: Optional[str] = None
+    WC_CONSUMER_SECRET: Optional[str] = None
+    
     # NUEVO: Validator para mostrar el estado de configuración
     def model_post_init(self, __context) -> None:
         """Post-initialization para logging de configuración."""
