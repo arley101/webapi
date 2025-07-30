@@ -1,13 +1,8 @@
-import requests
-import json
-import base64
-import logging
-from typing import Dict, Any, Optional, List
+import requests, json, base64, logging
+from typing import Dict, Any, Optional, List  # ✅ Any disponible
 from datetime import datetime, timedelta
-import hashlib
-import time
+import hashlib, time, os
 from urllib.parse import urljoin, quote
-import os
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -20,11 +15,11 @@ def _get_wp_credentials(params: Dict[str, Any]) -> Dict[str, str]:
     """Obtiene credenciales de WordPress desde parámetros o variables de entorno."""
     return {
         'site_url': params.get('site_url') or os.getenv('WP_SITE_URL', ''),
-        'username': params.get('username') or os.getenv('WP_USERNAME', ''),
+        'username': params.get('username') or os.getenv('WP_USERNAME', ''),  # ← AUTOMÁTICO
         'password': params.get('password') or os.getenv('WP_PASSWORD', ''),
-        'app_password': params.get('app_password') or os.getenv('WP_APP_PASSWORD', ''),
-        'consumer_key': params.get('consumer_key') or os.getenv('WC_CONSUMER_KEY', ''),
-        'consumer_secret': params.get('consumer_secret') or os.getenv('WC_CONSUMER_SECRET', '')
+        'app_password': params.get('app_password') or os.getenv('WP_APP_PASSWORD', ''),  # ← AUTOMÁTICO
+        'consumer_key': params.get('consumer_key') or os.getenv('WC_CONSUMER_KEY', ''),  # ← AUTOMÁTICO
+        'consumer_secret': params.get('consumer_secret') or os.getenv('WC_CONSUMER_SECRET', '')  # ← AUTOMÁTICO
     }
 
 def _handle_wp_api_error(error: Exception, action_name: str, site_url: str = "") -> Dict[str, Any]:
@@ -212,7 +207,8 @@ def _make_wc_request(method: str, endpoint: str, params: Dict[str, Any],
 
 # === FUNCIONES PRINCIPALES (MANTIENEN ESTRUCTURA ORIGINAL) ===
 
-def wordpress_create_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_create_post(client, params: Dict[str, Any]) -> Dict[str, Any]:
+#                         ^^^^^^ ← CORREGIDO: sin Any
     """Crea un nuevo post en WordPress."""
     action_name = "wordpress_create_post"
     
@@ -249,7 +245,7 @@ def wordpress_create_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_update_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_update_post(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Actualiza un post existente en WordPress."""
     action_name = "wordpress_update_post"
     
@@ -282,7 +278,7 @@ def wordpress_update_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_delete_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_delete_post(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Elimina un post de WordPress."""
     action_name = "wordpress_delete_post"
     
@@ -308,7 +304,7 @@ def wordpress_delete_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_get_posts(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_get_posts(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene posts de WordPress con filtros."""
     action_name = "wordpress_get_posts"
     
@@ -347,7 +343,7 @@ def wordpress_get_posts(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_get_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_get_post(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene un post específico de WordPress."""
     action_name = "wordpress_get_post"
     
@@ -369,7 +365,7 @@ def wordpress_get_post(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_create_page(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_create_page(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea una nueva página en WordPress."""
     action_name = "wordpress_create_page"
     
@@ -403,7 +399,7 @@ def wordpress_create_page(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_get_pages(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_get_pages(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene páginas de WordPress."""
     action_name = "wordpress_get_pages"
     
@@ -434,7 +430,7 @@ def wordpress_get_pages(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_create_user(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_create_user(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un nuevo usuario en WordPress."""
     action_name = "wordpress_create_user"
     
@@ -474,7 +470,7 @@ def wordpress_create_user(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_get_users(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_get_users(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene usuarios de WordPress."""
     action_name = "wordpress_get_users"
     
@@ -504,7 +500,7 @@ def wordpress_get_users(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_upload_media(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_upload_media(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Sube un archivo de media a WordPress."""
     action_name = "wordpress_upload_media"
     
@@ -548,7 +544,7 @@ def wordpress_upload_media(client: Any, params: Dict[str, Any]) -> Dict[str, Any
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_get_categories(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_get_categories(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene categorías de WordPress."""
     action_name = "wordpress_get_categories"
     
@@ -579,7 +575,7 @@ def wordpress_get_categories(client: Any, params: Dict[str, Any]) -> Dict[str, A
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_create_category(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_create_category(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea una nueva categoría en WordPress."""
     action_name = "wordpress_create_category"
     
@@ -610,7 +606,7 @@ def wordpress_create_category(client: Any, params: Dict[str, Any]) -> Dict[str, 
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_get_tags(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_get_tags(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene tags de WordPress."""
     action_name = "wordpress_get_tags"
     
@@ -640,7 +636,7 @@ def wordpress_get_tags(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def wordpress_backup_content(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def wordpress_backup_content(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Realiza un backup de contenido de WordPress."""
     action_name = "wordpress_backup_content"
     
@@ -693,7 +689,7 @@ def wordpress_backup_content(client: Any, params: Dict[str, Any]) -> Dict[str, A
 
 # === FUNCIONES DE WOOCOMMERCE (OPTIMIZADAS) ===
 
-def woocommerce_create_product(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_create_product(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un nuevo producto en WooCommerce."""
     action_name = "woocommerce_create_product"
     
@@ -737,7 +733,7 @@ def woocommerce_create_product(client: Any, params: Dict[str, Any]) -> Dict[str,
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_get_products(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_get_products(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene productos de WooCommerce."""
     action_name = "woocommerce_get_products"
     
@@ -774,7 +770,7 @@ def woocommerce_get_products(client: Any, params: Dict[str, Any]) -> Dict[str, A
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_update_product(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_update_product(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Actualiza un producto en WooCommerce."""
     action_name = "woocommerce_update_product"
     
@@ -811,7 +807,7 @@ def woocommerce_update_product(client: Any, params: Dict[str, Any]) -> Dict[str,
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_get_orders(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_get_orders(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene órdenes de WooCommerce."""
     action_name = "woocommerce_get_orders"
     
@@ -844,7 +840,7 @@ def woocommerce_get_orders(client: Any, params: Dict[str, Any]) -> Dict[str, Any
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_create_order(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_create_order(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea una nueva orden en WooCommerce."""
     action_name = "woocommerce_create_order"
     
@@ -883,7 +879,7 @@ def woocommerce_create_order(client: Any, params: Dict[str, Any]) -> Dict[str, A
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_update_order_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_update_order_status(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Actualiza el estado de una orden en WooCommerce."""
     action_name = "woocommerce_update_order_status"
     
@@ -919,7 +915,7 @@ def woocommerce_update_order_status(client: Any, params: Dict[str, Any]) -> Dict
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_get_customers(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_get_customers(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene clientes de WooCommerce."""
     action_name = "woocommerce_get_customers"
     
@@ -950,7 +946,7 @@ def woocommerce_get_customers(client: Any, params: Dict[str, Any]) -> Dict[str, 
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_create_customer(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_create_customer(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Crea un nuevo cliente en WooCommerce."""
     action_name = "woocommerce_create_customer"
     
@@ -985,7 +981,7 @@ def woocommerce_create_customer(client: Any, params: Dict[str, Any]) -> Dict[str
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_get_orders_by_customer(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_get_orders_by_customer(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene pedidos de un cliente específico."""
     action_name = "woocommerce_get_orders_by_customer"
     
@@ -1020,7 +1016,7 @@ def woocommerce_get_orders_by_customer(client: Any, params: Dict[str, Any]) -> D
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_get_product_categories(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_get_product_categories(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene categorías de productos de WooCommerce."""
     action_name = "woocommerce_get_product_categories"
     
@@ -1051,7 +1047,7 @@ def woocommerce_get_product_categories(client: Any, params: Dict[str, Any]) -> D
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
 
-def woocommerce_get_reports(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+def woocommerce_get_reports(client, params: Dict[str, Any]) -> Dict[str, Any]:
     """Obtiene reportes de WooCommerce."""
     action_name = "woocommerce_get_reports"
     
