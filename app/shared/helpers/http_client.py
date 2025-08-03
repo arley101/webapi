@@ -14,7 +14,7 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 class AuthenticatedHttpClient:
-    """Cliente HTTP autenticado para Azure"""
+    """Cliente HTTP con autenticación para múltiples servicios"""
     
     def __init__(self, credential: Optional[Union[DefaultAzureCredential, ClientSecretCredential]] = None):
         """
@@ -53,6 +53,19 @@ class AuthenticatedHttpClient:
             'Accept': 'application/json'
         })
         logger.info(f"AuthenticatedHttpClient inicializado. User-Agent: {settings.APP_NAME}/{settings.APP_VERSION}, Default Timeout: {self.default_timeout}s, Default Graph Scope: {self.default_graph_scope}")
+
+        # Inicializar cliente Gemini si está configurado
+        if hasattr(settings, 'GEMINI_API_KEY') and settings.GEMINI_API_KEY:
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=settings.GEMINI_API_KEY)
+                self.genai = genai
+                logger.info("✅ Cliente Gemini inicializado")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo inicializar Gemini: {e}")
+                self.genai = None
+        else:
+            self.genai = None
 
     def _init_client_credentials(self):
         """Inicializa Client Credentials como fallback"""

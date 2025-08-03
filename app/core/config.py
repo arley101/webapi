@@ -110,6 +110,8 @@ class Settings(BaseSettings):
     GEMINI_PROJECT_ID: Optional[str] = Field(None, env="GEMINI_PROJECT_ID")
     GEMINI_LOCATION: str = Field("us-central1", env="GEMINI_LOCATION")
     GEMINI_MODEL: str = Field("gemini-1.5-flash", env="GEMINI_MODEL")
+    GEMINI_TEMPERATURE: float = Field(0.7, env="GEMINI_TEMPERATURE")
+    GEMINI_MAX_TOKENS: int = Field(8192, env="GEMINI_MAX_TOKENS")
 
     # Google Ads Configuration
     GOOGLE_ADS_CLIENT_ID: Optional[str] = Field(None, env="GOOGLE_ADS_CLIENT_ID")
