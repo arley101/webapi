@@ -138,21 +138,29 @@ def analyze_conversation_context(client: Any, params: Dict[str, Any]) -> Dict[st
         Solicitud del usuario: "{query}"
         
         Contexto:
-        - Cliente ID: {context.get('customer_id', '')}
-        - Email: {context.get('mailbox', '')}
-        - Empresa: {context.get('company', '')}
+        - Cliente ID: {context.get('customer_id', '1415018442')}
+        - Email: {context.get('mailbox', 'ceo@elitecosmeticdental.com')}
+        - Empresa: {context.get('company', 'Elite Cosmetic Dental')}
         
-        Acciones disponibles (solo las más relevantes):
+        Acciones disponibles más relevantes:
         - email_list_messages: listar correos (params: mailbox, top)
         - email_send_message: enviar correo (params: to, subject, body)
         - calendar_list_events: listar eventos (params: mailbox, top)
         - search_web: buscar en web (params: query, limit)
         - sp_list_folder_contents: listar archivos SharePoint (params: folder_path, top)
+        - onedrive_list_items: listar archivos OneDrive (params: path, top)
         - youtube_get_channel_info: info del canal YouTube (params: ninguno)
         - metaads_list_campaigns: listar campañas Meta (params: account_id)
         - googleads_get_campaigns: listar campañas Google (params: customer_id)
         
-        IMPORTANTE: Debes responder SOLO con un JSON en este formato exacto:
+        ANALIZA e INTERPRETA la solicitud:
+        - Si dice "archivos recientes de OneDrive", usa onedrive_list_items
+        - Si dice "correos" o "emails", usa email_list_messages
+        - Si dice "buscar" o "información sobre", usa search_web
+        - Si menciona "SharePoint" o "documentos", usa sp_list_folder_contents
+        - Si menciona "calendario" o "eventos", usa calendar_list_events
+        
+        IMPORTANTE: Responde SOLO con este JSON:
         {{
             "intent": "descripción de lo que el usuario quiere",
             "confidence": 0.95,
@@ -163,18 +171,19 @@ def analyze_conversation_context(client: Any, params: Dict[str, Any]) -> Dict[st
             }}
         }}
         
-        Ejemplos:
-        - Si pide "muéstrame los últimos 5 correos", responde:
-          {{"intent": "listar correos", "confidence": 0.95, "recommended_action": "email_list_messages", "parameters": {{"mailbox": "ceo@elitecosmeticdental.com", "top": 5}}}}
-        
-        - Si pide "buscar precios de iPhone", responde:
-          {{"intent": "buscar en web", "confidence": 0.9, "recommended_action": "search_web", "parameters": {{"query": "precios iPhone", "limit": 5}}}}
+        Si el usuario dice "muéstrame archivos recientes de OneDrive de Arley", debes responder:
+        {{"intent": "listar archivos OneDrive", "confidence": 0.95, "recommended_action": "onedrive_list_items", "parameters": {{"path": "/", "top": 20}}}}
         
         Responde SOLO con el JSON, sin texto adicional.
         """
         
+        # Verificar si el cliente tiene el modelo correcto configurado
+        if not hasattr(client, 'genai') or not client.genai:
+            # Si no hay cliente Gemini, usar un análisis basado en patrones
+            return _fallback_pattern_analysis(query, available_actions)
+        
         # Configurar el modelo
-        model = client.GenerativeModel(model_name)
+        model = client.genai.GenerativeModel(model_name)
         
         # Generar respuesta
         response = model.generate_content(prompt)
@@ -189,8 +198,9 @@ def analyze_conversation_context(client: Any, params: Dict[str, Any]) -> Dict[st
                 response_text = response_text.split('```')[1]
                 if response_text.startswith('json'):
                     response_text = response_text[4:]
+                response_text = response_text.strip()
             
-            analysis = json.loads(response_text.strip())
+            analysis = json.loads(response_text)
             
             # Validar que tenga los campos necesarios
             if 'recommended_action' not in analysis:
@@ -213,34 +223,109 @@ def analyze_conversation_context(client: Any, params: Dict[str, Any]) -> Dict[st
             logger.error(f"Error parseando JSON de Gemini: {e}")
             logger.error(f"Respuesta que causó el error: {response_text}")
             
-            # Intentar extraer información útil de la respuesta
-            action_match = re.search(r'"recommended_action":\s*"([^"]+)"', response_text)
-            if action_match:
-                return {
-                    "success": True,
-                    "data": {
-                        "analysis": {
-                            "intent": "extracted from failed parse",
-                            "confidence": 0.5,
-                            "recommended_action": action_match.group(1),
-                            "parameters": {}
-                        }
-                    }
-                }
-            
-            return {
-                "success": False,
-                "error": "No se pudo parsear la respuesta de Gemini",
-                "raw_response": response_text
-            }
+            # Usar análisis de patrones como fallback
+            return _fallback_pattern_analysis(query, available_actions)
         
     except Exception as e:
         logger.error(f"Error en analyze_conversation_context: {str(e)}")
-        return {
-            "success": False,
-            "error": str(e),
-            "error_type": type(e).__name__
+        # Si Gemini falla completamente, usar análisis de patrones
+        return _fallback_pattern_analysis(query, available_actions)
+
+def _fallback_pattern_analysis(query: str, available_actions: List[str]) -> Dict[str, Any]:
+    """
+    Análisis de patrones como fallback cuando Gemini no está disponible
+    """
+    logger.info("Usando análisis de patrones como fallback")
+    
+    query_lower = query.lower()
+    
+    # Mapeo de patrones a acciones
+    pattern_map = {
+        # OneDrive
+        r'onedrive|one drive|archivos.*onedrive': {
+            'action': 'onedrive_list_items',
+            'params': {'path': '/', 'top': 20},
+            'intent': 'listar archivos de OneDrive'
+        },
+        # Email
+        r'correo|email|mensaje|mail': {
+            'action': 'email_list_messages',
+            'params': {'mailbox': 'ceo@elitecosmeticdental.com', 'top': 10},
+            'intent': 'listar correos electrónicos'
+        },
+        # SharePoint
+        r'sharepoint|documento|archivo': {
+            'action': 'sp_list_folder_contents',
+            'params': {'folder_path': '/', 'top': 20},
+            'intent': 'listar documentos de SharePoint'
+        },
+        # Calendar
+        r'calendario|evento|reunión|cita': {
+            'action': 'calendar_list_events',
+            'params': {'mailbox': 'ceo@elitecosmeticdental.com', 'top': 10},
+            'intent': 'listar eventos del calendario'
+        },
+        # Web search
+        r'buscar|búsqueda|información sobre|investigar': {
+            'action': 'search_web',
+            'params': {'query': query, 'limit': 5},
+            'intent': 'buscar información en la web'
+        },
+        # YouTube
+        r'youtube|canal|video': {
+            'action': 'youtube_get_channel_info',
+            'params': {},
+            'intent': 'obtener información del canal de YouTube'
+        },
+        # Teams
+        r'teams|equipo|chat': {
+            'action': 'teams_list_joined_teams',
+            'params': {'top': 10},
+            'intent': 'listar equipos de Teams'
         }
+    }
+    
+    # Buscar coincidencias
+    for pattern, config in pattern_map.items():
+        if re.search(pattern, query_lower):
+            # Extraer números si existen
+            numbers = re.findall(r'\d+', query)
+            if numbers and 'top' in config['params']:
+                config['params']['top'] = int(numbers[0])
+            
+            return {
+                "success": True,
+                "data": {
+                    "analysis": {
+                        "intent": config['intent'],
+                        "confidence": 0.85,
+                        "recommended_action": config['action'],
+                        "parameters": config['params']
+                    },
+                    "model_used": "pattern_matching"
+                }
+            }
+    
+    # Si no hay coincidencia, usar búsqueda web como último recurso
+    return {
+        "success": True,
+        "data": {
+            "analysis": {
+                "intent": "búsqueda general",
+                "confidence": 0.6,
+                "recommended_action": "search_web",
+                "parameters": {
+                    "query": query,
+                    "limit": 5
+                }
+            },
+            "model_used": "default_fallback"
+        }
+    }
+
+# ============================================================================
+# FUNCIONES PÚBLICAS (CONTINUACIÓN)
+# ============================================================================
 
 def generate_response_suggestions(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Genera sugerencias de respuesta basadas en el contexto"""
