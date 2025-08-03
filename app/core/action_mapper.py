@@ -27,7 +27,7 @@ from app.actions import (
     stream_actions, teams_actions, tiktok_ads_actions, todo_actions,
     userprofile_actions, users_actions, vivainsights_actions,
     youtube_channel_actions, gemini_actions, x_ads_actions, webresearch_actions, 
-    wordpress_actions, resolver_actions
+    wordpress_actions, resolver_actions  # ✅ AGREGADO RESOLVER_ACTIONS
 )
 
 # ============================================================================
@@ -420,11 +420,10 @@ RESOLVER_ACTIONS: Dict[str, Callable] = {
     "validate_resource_id": resolver_actions.validate_resource_id,
     "get_resource_config": resolver_actions.get_resource_config,
     "search_resources": resolver_actions.search_resources,
-    # NUEVAS ACCIONES DEL SISTEMA MEJORADO
-    "smart_save_resource": resolver_actions.smart_save_resource,
-    "get_credentials_from_vault": resolver_actions.get_credentials_from_vault,
     "execute_workflow": resolver_actions.execute_workflow,
+    "smart_save_resource": resolver_actions.smart_save_resource,
     "save_to_notion_registry": resolver_actions.save_to_notion_registry,
+    "get_credentials_from_vault": resolver_actions.get_credentials_from_vault,
 }
 
 # ============================================================================
@@ -722,28 +721,28 @@ category_counts = {
     CALENDAR_CATEGORY: len(CALENDAR_ACTIONS),            # 7
     EMAIL_CATEGORY: len(EMAIL_ACTIONS),                  # 10
     FORMS_CATEGORY: len(FORMS_ACTIONS),                  # 3
-    GEMINI_CATEGORY: len(GEMINI_ACTIONS),                # 6 ✅ RESTAURADO
+    GEMINI_CATEGORY: len(GEMINI_ACTIONS),                # 7
     GITHUB_CATEGORY: len(GITHUB_ACTIONS),                # 3
     GOOGLEADS_CATEGORY: len(GOOGLEADS_ACTIONS),          # 19
     GRAPH_CATEGORY: len(GRAPH_ACTIONS),                  # 2
-    HUBSPOT_CATEGORY: len(HUBSPOT_ACTIONS),              # 21 ✅ RESTAURADO
-    LINKEDIN_CATEGORY: len(LINKEDIN_ADS_ACTIONS),        # 17 ✅ RESTAURADO
-    META_CATEGORY: len(METAADS_ACTIONS),                 # 29 ✅ RESTAURADO
+    HUBSPOT_CATEGORY: len(HUBSPOT_ACTIONS),              # 21
+    LINKEDIN_CATEGORY: len(LINKEDIN_ADS_ACTIONS),        # 17
+    META_CATEGORY: len(METAADS_ACTIONS),                 # 29
     NOTION_CATEGORY: len(NOTION_ACTIONS),                # 16
     OFFICE_CATEGORY: len(OFFICE_ACTIONS),                # 8
-    ONEDRIVE_CATEGORY: len(ONEDRIVE_ACTIONS),            # 11 ✅ RESTAURADO
+    ONEDRIVE_CATEGORY: len(ONEDRIVE_ACTIONS),            # 11
     OPENAI_CATEGORY: len(OPENAI_ACTIONS),                # 4
-    PLANNER_CATEGORY: len(PLANNER_ACTIONS),              # 10 ✅ RESTAURADO
+    PLANNER_CATEGORY: len(PLANNER_ACTIONS),              # 10
     POWER_AUTOMATE_CATEGORY: len(POWER_AUTOMATE_ACTIONS), # 7
     POWERBI_CATEGORY: len(POWERBI_ACTIONS),              # 5
-    RESOLVER_CATEGORY: len(RESOLVER_ACTIONS),            # 10
+    RESOLVER_CATEGORY: len(RESOLVER_ACTIONS),            # 14 ✅ AHORA DEBE MOSTRAR 14
     SHAREPOINT_CATEGORY: len(SHAREPOINT_ACTIONS),        # 35
     STREAM_CATEGORY: len(STREAM_ACTIONS),                # 4
     TEAMS_CATEGORY: len(TEAMS_ACTIONS),                  # 16
-    TIKTOK_CATEGORY: len(TIKTOK_ADS_ACTIONS),            # 7 ✅
+    TIKTOK_CATEGORY: len(TIKTOK_ADS_ACTIONS),            # 7
     TODO_CATEGORY: len(TODO_ACTIONS),                    # 7
     USER_PROFILE_CATEGORY: len(USER_PROFILE_ACTIONS),    # 5
-    USERS_CATEGORY: len(USERS_ACTIONS),                  # 11 ✅ RESTAURADO
+    USERS_CATEGORY: len(USERS_ACTIONS),                  # 11
     VIVA_CATEGORY: len(VIVA_INSIGHTS_ACTIONS),           # 2
     YOUTUBE_CATEGORY: len(YOUTUBE_CHANNEL_ACTIONS),      # 15
     X_ADS_CATEGORY: len(X_ADS_ACTIONS),                  # 5
