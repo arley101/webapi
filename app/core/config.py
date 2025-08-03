@@ -102,7 +102,14 @@ class Settings(BaseSettings):
     YOUTUBE_API_KEY: Optional[str] = None 
     YOUTUBE_ACCESS_TOKEN: Optional[str] = None
     
-    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = Field(None, env="GEMINI_API_KEY")
+    GEMINI_API_URL: str = Field(
+        "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent",
+        env="GEMINI_API_URL"
+    )
+    GEMINI_PROJECT_ID: Optional[str] = Field(None, env="GEMINI_PROJECT_ID")
+    GEMINI_LOCATION: str = Field("us-central1", env="GEMINI_LOCATION")
+    GEMINI_MODEL: str = Field("gemini-1.5-flash", env="GEMINI_MODEL")
 
     # Google Ads Configuration
     GOOGLE_ADS_CLIENT_ID: Optional[str] = Field(None, env="GOOGLE_ADS_CLIENT_ID")
