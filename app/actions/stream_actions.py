@@ -343,3 +343,41 @@ def obtener_transcripcion_video(client: AuthenticatedHttpClient, params: Dict[st
     }
 
 # --- FIN DEL MÓDULO actions/stream_actions.py ---
+
+def _obtener_site_id_sp(graph_client) -> str:
+    """Obtiene el site ID de SharePoint"""
+    try:
+        site_url = "https://graph.microsoft.com/v1.0/sites/root"
+        response = graph_client.get(site_url)
+        response.raise_for_status()
+        return response.json().get('id')
+    except Exception as e:
+        logger.error(f"Error obteniendo site ID: {str(e)}")
+        return None
+
+def _get_drive_id(graph_client, site_id: str) -> str:
+    """Obtiene el drive ID del sitio"""
+    try:
+        drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
+        response = graph_client.get(drive_url)
+        response.raise_for_status()
+        return response.json().get('id')
+    except Exception as e:
+        logger.error(f"Error obteniendo drive ID: {str(e)}")
+        return None
+
+def _get_item_id_from_path_if_needed_sp(graph_client, path_or_id: str, drive_id: str) -> str:
+    """Convierte un path a ID si es necesario"""
+    if path_or_id.startswith('/') or '/' in path_or_id:
+        # Es un path, convertir a ID
+        try:
+            item_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/root:/{path_or_id}"
+            response = graph_client.get(item_url)
+            response.raise_for_status()
+            return response.json().get('id')
+        except Exception as e:
+            logger.error(f"Error obteniendo ID desde path: {str(e)}")
+            return None
+    else:
+        # Ya es un ID
+        return path_or_id

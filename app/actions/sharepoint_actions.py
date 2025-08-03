@@ -6,6 +6,7 @@ import csv
 from io import StringIO
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, timezone as dt_timezone
+from urllib.parse import quote
 
 # Importar la configuración y el cliente HTTP autenticado
 from app.core.config import settings
@@ -15,304 +16,265 @@ logger = logging.getLogger(__name__)
 
 # --- Helper para validar si un input parece un Graph Site ID ---
 def _is_valid_graph_site_id_format(site_id_string: str) -> bool:
-    if not site_id_string:
+    """
+    Verifica si el string tiene formato de Graph Site ID.
+    Formato esperado: tenant.sharepoint.com,{guid},{guid}
+    """
+    if not site_id_string or not isinstance(site_id_string, str):
         return False
-    is_composite_id = ',' in site_id_string and site_id_string.count(',') >= 1
-    is_server_relative_path_format = ':' in site_id_string and ('/sites/' in site_id_string or '/teams/' in site_id_string)
-    is_graph_path_segment_format = site_id_string.startswith('sites/') and '{' in site_id_string and '}' in site_id_string
-    is_root_keyword = site_id_string.lower() == "root"
-    is_guid_like = len(site_id_string) == 36 and site_id_string.count('-') == 4
-    return is_composite_id or is_server_relative_path_format or is_graph_path_segment_format or is_root_keyword or is_guid_like
+    
+    parts = site_id_string.split(',')
+    if len(parts) != 3:
+        return False
+    
+    # Verificar que tenga formato de dominio SharePoint
+    if not parts[0].endswith('.sharepoint.com'):
+        return False
+    
+    # Verificar que las otras partes parezcan GUIDs
+    import re
+    guid_pattern = r'^[a-fA-F0-9\-]{36}$'
+    
+    return bool(re.match(guid_pattern, parts[1]) and re.match(guid_pattern, parts[2]))
 
 # --- Helper Interno para Obtener Site ID (versión robusta) ---
 def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
-    # Esta función es interna, el logger.info principal debe estar en la función pública que la llama si es necesario.
-    # params ya debería ser un dict (params or {} hecho en la pública).
-    site_input: Optional[str] = params.get("site_id") or params.get("site_identifier")
-    sharepoint_default_site_id_from_settings = getattr(settings, 'SHAREPOINT_DEFAULT_SITE_ID', None)
-
-    if site_input:
-        if _is_valid_graph_site_id_format(site_input):
-            logger.debug(f"SP Site ID con formato Graph reconocido: '{site_input}'.")
-            return site_input
-        lookup_path = site_input
-        if not ':' in site_input and (site_input.startswith("/sites/") or site_input.startswith("/teams/")):
-             try:
-                 sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-                 root_site_info_resp = client.get(f"{settings.GRAPH_API_BASE_URL}/sites/root?$select=siteCollection", scope=sites_read_scope)
-                 
-                 # --- CORRECCIÓN ---
-                 # `client.get` ya devuelve un dict. Se elimina `.json()`.
-                 root_site_hostname = root_site_info_resp.get("siteCollection", {}).get("hostname")
-
-                 if root_site_hostname:
-                     lookup_path = f"{root_site_hostname}:{site_input}"
-                     logger.info(f"SP Path relativo '{site_input}' convertido a: '{lookup_path}' para búsqueda de ID.")
-             except Exception as e_root_host:
-                 logger.warning(f"Error obteniendo hostname para SP path relativo '{site_input}': {e_root_host}. Se usará el path original para lookup.")
+    """Obtiene el Site ID de SharePoint de manera robusta."""
+    
+    # 1. Si se proporciona site_id directamente
+    site_id = params.get("site_id")
+    if site_id and _is_valid_graph_site_id_format(site_id):
+        return site_id
+    
+    # 2. Si se proporciona site_name
+    site_name = params.get("site_name")
+    if site_name:
+        # Buscar el sitio por nombre
+        search_url = f"{settings.GRAPH_API_BASE_URL}/sites?search={quote(site_name)}"
+        response = client.get(search_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
         
-        url_lookup = f"{settings.GRAPH_API_BASE_URL}/sites/{lookup_path}?$select=id,displayName,webUrl,siteCollection"
-        logger.debug(f"Intentando obtener SP Site ID para el identificador/path: '{lookup_path}'")
-        try:
-            sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-            response = client.get(url_lookup, scope=sites_read_scope)
-
-            # --- CORRECCIÓN ---
-            site_data = response; resolved_site_id = site_data.get("id")
-
-            if resolved_site_id:
-                logger.info(f"SP Site ID resuelto para input '{site_input}' (usando lookup path '{lookup_path}'): '{resolved_site_id}' (Nombre: {site_data.get('displayName')})")
-                return resolved_site_id
-        except Exception as e:
-            logger.warning(f"Error buscando SP sitio por '{lookup_path}': {e}. Intentando fallback si no se encontró Site ID.")
-
-    if sharepoint_default_site_id_from_settings and _is_valid_graph_site_id_format(sharepoint_default_site_id_from_settings):
-        logger.debug(f"Usando SP Site ID por defecto de settings: '{sharepoint_default_site_id_from_settings}' como fallback.")
-        return sharepoint_default_site_id_from_settings
-
-    url_root_site = f"{settings.GRAPH_API_BASE_URL}/sites/root?$select=id,displayName"
-    logger.debug(f"Ningún Site ID provisto o resuelto. Intentando obtener SP sitio raíz como fallback final.")
-    try:
-        sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response_root = client.get(url_root_site, scope=sites_read_scope)
-
-        # --- CORRECCIÓN ---
-        root_site_data = response_root; root_site_id = root_site_data.get("id")
-
-        if root_site_id:
-            logger.info(f"Usando SP Site ID raíz como fallback final: '{root_site_id}' (Nombre: {root_site_data.get('displayName')})")
-            return root_site_id
-    except Exception as e_root:
-        raise ValueError(f"Fallo CRÍTICO al obtener SP Site ID. No se pudo resolver ni obtener el sitio raíz. Error: {e_root}")
-    raise ValueError("No se pudo determinar SP Site ID. Verifique el parámetro 'site_id'/'site_identifier' o la configuración de SHAREPOINT_DEFAULT_SITE_ID.")
+        if response.get("value"):
+            # Retornar el primer sitio encontrado
+            return response["value"][0]["id"]
+        else:
+            raise ValueError(f"No se encontró el sitio con nombre: {site_name}")
+    
+    # 3. Usar el site_id por defecto de la configuración
+    default_site_id = settings.SHAREPOINT_DEFAULT_SITE_ID
+    if default_site_id:
+        return default_site_id
+    
+    # 4. Si no hay nada configurado, obtener el sitio raíz
+    root_url = f"{settings.GRAPH_API_BASE_URL}/sites/root"
+    response = client.get(root_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+    
+    if response.get("id"):
+        return response["id"]
+    
+    raise ValueError("No se pudo determinar el Site ID de SharePoint")
 
 # --- Helper Interno para Obtener Drive ID ---
 def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str] = None) -> str:
-    sharepoint_default_drive_name = getattr(settings, 'SHAREPOINT_DEFAULT_DRIVE_ID_OR_NAME', 'Documents')
-    target_drive_identifier = drive_id_or_name_input or sharepoint_default_drive_name
+    """Obtiene el Drive ID basado en ID o nombre."""
     
-    if not target_drive_identifier: 
-        raise ValueError("Se requiere un nombre o ID de Drive para operar (parámetro 'drive_id_or_name' o config SHAREPOINT_DEFAULT_DRIVE_ID_OR_NAME).")
-
-    is_likely_id = '!' in target_drive_identifier or \
-                   (len(target_drive_identifier) > 30 and not any(c in target_drive_identifier for c in [' ', '/'])) or \
-                   target_drive_identifier.startswith("b!") # Formato común de Drive ID
+    # Si no se proporciona input, usar el default
+    drive_input = drive_id_or_name_input or settings.SHAREPOINT_DEFAULT_DRIVE_ID_OR_NAME or "Documents"
     
-    files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+    # Si parece ser un ID (tiene formato GUID), retornarlo directamente
+    import re
+    if re.match(r'^[a-fA-F0-9\-]{36}$', drive_input):
+        return drive_input
     
-    if is_likely_id:
-        logger.debug(f"Asumiendo que '{target_drive_identifier}' es un Drive ID. Intentando verificar.")
-        url_drive_by_id = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives/{target_drive_identifier}?$select=id,name"
-        try:
-            response = client.get(url_drive_by_id, scope=files_read_scope)
-            
-            # --- CORRECCIÓN ---
-            drive_data = response; drive_id = drive_data.get("id")
-
-            if drive_id: 
-                logger.info(f"Drive ID '{drive_id}' verificado para sitio '{site_id}'.")
-                return drive_id
-        except Exception as e: 
-            logger.warning(f"Error obteniendo SP Drive por ID '{target_drive_identifier}' para sitio '{site_id}': {e}. Procediendo a buscar por nombre.")
-
-    logger.debug(f"Buscando Drive por nombre/displayName '{target_drive_identifier}' en sitio '{site_id}'.")
-    url_list_drives = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives?$select=id,name,displayName,webUrl"
-    try:
-        response_drives = client.get(url_list_drives, scope=files_read_scope)
-        
-        # --- CORRECCIÓN ---
-        drives_list = response_drives.get("value", [])
-
-        for drive_obj in drives_list:
-            if drive_obj.get("name", "").lower() == target_drive_identifier.lower() or \
-               drive_obj.get("displayName", "").lower() == target_drive_identifier.lower():
-                drive_id = drive_obj.get("id")
-                if drive_id: 
-                    logger.info(f"Drive ID '{drive_id}' (Nombre: {drive_obj.get('name')}, DisplayName: {drive_obj.get('displayName')}) encontrado para sitio '{site_id}'.")
-                    return drive_id
-        raise ValueError(f"SP Drive con nombre/displayName '{target_drive_identifier}' no encontrado en sitio '{site_id}'. Drives disponibles: {[d.get('name') for d in drives_list]}")
-    except Exception as e_list: 
-        raise ConnectionError(f"Error obteniendo lista de Drives para sitio '{site_id}' para resolver '{target_drive_identifier}': {e_list}") from e_list
+    # Si es un nombre, buscar el drive
+    drives_url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives"
+    response = client.get(drives_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+    
+    if not response.get("value"):
+        raise ValueError(f"No se encontraron drives en el sitio {site_id}")
+    
+    # Buscar por nombre
+    for drive in response["value"]:
+        if drive.get("name", "").lower() == drive_input.lower():
+            return drive["id"]
+    
+    # Si no se encuentra por nombre exacto, buscar parcialmente
+    for drive in response["value"]:
+        if drive_input.lower() in drive.get("name", "").lower():
+            return drive["id"]
+    
+    # Si no se encuentra, usar el primer drive disponible
+    logger.warning(f"No se encontró el drive '{drive_input}', usando el primero disponible")
+    return response["value"][0]["id"]
 
 def _get_sp_item_endpoint_by_path(site_id: str, drive_id: str, item_path: str) -> str:
-    safe_path = item_path.strip()
-    if not safe_path or safe_path == '/': 
-        return f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives/{drive_id}/root"
-    if safe_path.startswith('/'): 
-        safe_path = safe_path[1:]
-    # Asegurar que el path está correctamente encodeado para la URL si tiene caracteres especiales
-    # La librería requests usualmente maneja esto para params, pero aquí es parte del path.
-    # El http_client.request debería manejar la URL final, así que no se requiere quote aquí.
-    return f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives/{drive_id}/root:/{safe_path}"
+    """Construye el endpoint para acceder a un item por path."""
+    # Limpiar el path
+    clean_path = item_path.strip()
+    if not clean_path.startswith('/'):
+        clean_path = '/' + clean_path
+    
+    # Codificar el path para URL
+    encoded_path = quote(clean_path, safe='')
+    
+    return f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives/{drive_id}/root:{encoded_path}"
 
 def _get_sp_item_endpoint_by_id(site_id: str, drive_id: str, item_id: str) -> str:
+    """Construye el endpoint para acceder a un item por ID."""
     return f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives/{drive_id}/items/{item_id}"
 
 def _handle_graph_api_error(e: Exception, action_name: str, params_for_log: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    log_message = f"Error en SharePoint action '{action_name}'"
-    safe_params = {} # Inicializar safe_params
-    if params_for_log:
-        # Definir claves sensibles a omitir del log
-        sensitive_keys = ['valor', 'content_bytes', 'nuevos_valores_campos', 'datos_campos',
-                          'metadata_updates', 'password', 'columnas', 'update_payload',
-                          'recipients_payload', 'body', 'payload']
-        safe_params = {k: (v if k not in sensitive_keys else "[CONTENIDO OMITIDO]") for k, v in params_for_log.items()}
-        log_message += f" con params: {safe_params}"
+    """Maneja errores de la API de Graph de manera consistente."""
+    error_msg = str(e)
+    error_details = {}
     
-    logger.error(f"{log_message}: {type(e).__name__} - {str(e)}", exc_info=True)
-    
-    details_str = str(e)
-    status_code_int = 500
-    graph_error_code = None
-
-    if isinstance(e, requests.exceptions.HTTPError) and e.response is not None:
-        status_code_int = e.response.status_code
+    # Intentar extraer detalles del error si es una respuesta HTTP
+    if hasattr(e, 'response') and e.response:
         try:
             error_data = e.response.json()
-            error_info = error_data.get("error", {})
-            details_str = error_info.get("message", e.response.text)
-            graph_error_code = error_info.get("code")
-        except json.JSONDecodeError: 
-            details_str = e.response.text[:500] if e.response.text else "No response body"
-            
-    return {
-        "status": "error",
+            error_details = {
+                "code": error_data.get("error", {}).get("code"),
+                "message": error_data.get("error", {}).get("message"),
+                "status_code": e.response.status_code
+            }
+            error_msg = error_details.get("message", error_msg)
+        except:
+            error_details["status_code"] = getattr(e.response, 'status_code', 'Unknown')
+    
+    logger.error(f"Error in {action_name}: {error_msg}", extra={
         "action": action_name,
-        "message": f"Error ejecutando {action_name}: {type(e).__name__}",
-        "http_status": status_code_int,
-        "details": details_str,
-        "graph_error_code": graph_error_code
+        "params": params_for_log,
+        "error_details": error_details
+    })
+    
+    return {
+        "success": False,
+        "error": error_msg,
+        "error_details": error_details,
+        "action": action_name
     }
 
 def _get_current_timestamp_iso_z() -> str:
-    return datetime.now(dt_timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    """Obtiene el timestamp actual en formato ISO con Z."""
+    return datetime.now(dt_timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
 
 def _sp_paged_request(
     client: AuthenticatedHttpClient, url_base: str, scope: List[str],
     params_input: Dict[str, Any], query_api_params_initial: Dict[str, Any],
     max_items_total: Optional[int], action_name_for_log: str
 ) -> Dict[str, Any]:
-    all_items: List[Dict[str, Any]] = []
-    current_url: Optional[str] = url_base
-    page_count = 0
-    max_pages_to_fetch = getattr(settings, 'MAX_PAGING_PAGES', 20)
-    top_value_initial = query_api_params_initial.get('$top', getattr(settings, 'DEFAULT_PAGING_SIZE', 50))
+    """Realiza una petición paginada a SharePoint/Graph API."""
     
-    # El logger.info principal ya se hizo en la función llamante
-    logger.debug(f"Iniciando solicitud paginada SP para '{action_name_for_log}' desde '{url_base.split('?')[0]}...'. Max total: {max_items_total or 'todos'}, por pág: {top_value_initial}, max_págs: {max_pages_to_fetch}")
-    try:
-        while current_url and (max_items_total is None or len(all_items) < max_items_total) and page_count < max_pages_to_fetch:
-            page_count += 1
-            is_first_call = (page_count == 1 and current_url == url_base)
-            current_params = query_api_params_initial if is_first_call else None
-            
-            logger.debug(f"Página SP {page_count} para '{action_name_for_log}': GET {current_url.split('?')[0]} con params: {current_params}")
-            response = client.get(url=current_url, scope=scope, params=current_params)
-
-            # --- CORRECCIÓN ---
-            response_data = response
-
-            page_items = response_data.get('value', [])
-            if not isinstance(page_items, list): 
-                logger.warning(f"Respuesta paginada SP inesperada, 'value' no es lista: {response_data}")
-                break
-            for item in page_items:
-                if max_items_total is None or len(all_items) < max_items_total: 
-                    all_items.append(item)
-                else: break
-            current_url = response_data.get('@odata.nextLink')
-            if not current_url or (max_items_total is not None and len(all_items) >= max_items_total): 
-                break
-        logger.info(f"'{action_name_for_log}' recuperó {len(all_items)} items en {page_count} páginas.")
-        return {"status": "success", "data": {"value": all_items, "@odata.count": len(all_items)}, "total_retrieved": len(all_items), "pages_processed": page_count}
-    except Exception as e: 
-        return _handle_graph_api_error(e, action_name_for_log, params_input)
+    all_items = []
+    next_link = None
+    page_count = 0
+    max_pages = 50  # Límite de seguridad
+    
+    # Primera petición
+    if not next_link:
+        response = client.get(url_base, params=query_api_params_initial, scope=scope)
+    else:
+        response = client.get(next_link, scope=scope)
+    
+    while True:
+        page_count += 1
+        
+        # Agregar items de esta página
+        if "value" in response:
+            all_items.extend(response["value"])
+        
+        # Verificar si alcanzamos el límite
+        if max_items_total and len(all_items) >= max_items_total:
+            all_items = all_items[:max_items_total]
+            break
+        
+        # Verificar si hay más páginas
+        next_link = response.get("@odata.nextLink")
+        if not next_link or page_count >= max_pages:
+            break
+        
+        # Obtener siguiente página
+        logger.debug(f"Obteniendo página {page_count + 1} para {action_name_for_log}")
+        response = client.get(next_link, scope=scope)
+    
+    return {
+        "success": True,
+        "data": all_items,
+        "count": len(all_items),
+        "pages_retrieved": page_count
+    }
 
 def _get_item_id_from_path_if_needed_sp(
     client: AuthenticatedHttpClient, item_path_or_id: str,
     site_id: str, drive_id: str,
-    # params_for_metadata es el dict de params ORIGINAL de la acción que llama a este helper.
-    # Esto es para _handle_graph_api_error si get_file_metadata falla.
     params_for_metadata: Optional[Dict[str, Any]] = None
-) -> Union[str, Dict[str, Any]]: # Devuelve ID de item o un dict de error
+) -> Union[str, Dict[str, Any]]:
+    """
+    Determina si el input es un path o ID, y obtiene el ID si es necesario.
+    Retorna el item_id o un dict con error.
+    """
+    import re
     
-    is_likely_id = '!' in item_path_or_id or \
-                   (len(item_path_or_id) > 30 and '/' not in item_path_or_id and '.' not in item_path_or_id) or \
-                   item_path_or_id.startswith("driveItem_") or \
-                   (len(item_path_or_id) > 60 and item_path_or_id.count('-') > 3) # IDs de listItem
-
-    if is_likely_id:
-        logger.debug(f"Asumiendo que '{item_path_or_id}' ya es un ID de item SP (DriveItem o ListItem).")
+    # Si parece ser un ID (formato GUID), retornarlo
+    if re.match(r'^[a-fA-F0-9\-]{36}$', item_path_or_id):
         return item_path_or_id
-
-    logger.debug(f"'{item_path_or_id}' parece un path SP. Intentando obtener su ID para sitio '{site_id}', drive '{drive_id}'.")
-    # Usar los params originales de la acción que llama a este helper para el get_file_metadata
-    metadata_call_params = {
-        "site_id": site_id, # Asegurar que pasamos site_id ya resuelto
-        "drive_id_or_name": drive_id, # Asegurar que pasamos drive_id ya resuelto
-        "item_id_or_path": item_path_or_id,
-        "select": "id,name" # Solo necesitamos id y name para confirmación
-    }
-    # Añadir el "site_identifier" original si estaba en params_for_metadata, por si _obtener_site_id_sp lo necesita dentro de get_file_metadata
-    if params_for_metadata and params_for_metadata.get("site_identifier"):
-        metadata_call_params["site_identifier"] = params_for_metadata.get("site_identifier")
-
+    
+    # Si parece ser un path, obtener metadatos para conseguir el ID
     try:
-        item_metadata_response = get_file_metadata(client, metadata_call_params)
-        if item_metadata_response.get("status") == "success":
-            item_data = item_metadata_response.get("data", {})
-            item_id = item_data.get("id")
-            if item_id:
-                logger.info(f"ID '{item_id}' (Nombre: {item_data.get('name')}) obtenido para SP path '{item_path_or_id}' en drive '{drive_id}', sitio '{site_id}'.")
-                return item_id
-            else:
-                # Si status es success pero no hay ID (improbable pero posible)
-                msg = f"ID no encontrado en metadatos para SP path '{item_path_or_id}' (Sitio: {site_id}, Drive: {drive_id})."
-                logger.error(msg + f" Metadata obtenida: {item_data}")
-                return {"status": "error", "message": msg, "details": item_data, "http_status": 404}
+        endpoint = _get_sp_item_endpoint_by_path(site_id, drive_id, item_path_or_id)
+        response = client.get(endpoint, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+        
+        if response.get("id"):
+            return response["id"]
         else:
-            # Propagar el error ya formateado por get_file_metadata
-            msg = f"Fallo al obtener metadatos para resolver ID de SP path '{item_path_or_id}' (Sitio: {site_id}, Drive: {drive_id})."
-            logger.error(msg + f" Respuesta de get_file_metadata: {item_metadata_response}")
-            # Devolver la respuesta de error original de get_file_metadata
-            return item_metadata_response
-    except Exception as e_meta:
-        # Capturar cualquier otra excepción y formatearla
-        msg = f"Excepción al intentar obtener ID para SP path '{item_path_or_id}' (Sitio: {site_id}, Drive: {drive_id}): {type(e_meta).__name__} - {e_meta}"
-        logger.error(msg, exc_info=True)
-        # Usar el helper estándar de error de este módulo.
-        # Usar params_for_metadata si está disponible para el log de error.
-        return _handle_graph_api_error(e_meta, "_get_item_id_from_path_if_needed_sp", params_for_metadata or metadata_call_params)
+            return {
+                "success": False,
+                "error": f"No se pudo obtener el ID del item en path: {item_path_or_id}"
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Error obteniendo ID del item: {str(e)}"
+        }
 
 
 # ============================================
 # ==== ACCIONES PÚBLICAS (Mapeadas) ====
 # ============================================
 def get_site_info(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    logger.info("Ejecutando get_site_info con params: %s", params)
-    action_name = "get_site_info"
-    
-    select_fields: Optional[str] = params.get("select")
+    """Obtiene información detallada de un sitio de SharePoint."""
     try:
-        # _obtener_site_id_sp toma 'params' y busca 'site_id' o 'site_identifier' dentro.
-        target_site_identifier = _obtener_site_id_sp(client, params) 
-        url = f"{settings.GRAPH_API_BASE_URL}/sites/{target_site_identifier}"
+        site_id = _obtener_site_id_sp(client, params)
         
-        query_api_params: Dict[str, str] = {}
-        if select_fields: 
-            query_api_params['$select'] = select_fields
-        else: 
-            query_api_params['$select'] = "id,displayName,name,webUrl,createdDateTime,lastModifiedDateTime,description,siteCollection"
+        # Obtener información del sitio
+        site_url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}"
+        site_info = client.get(site_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
         
-        logger.info(f"Obteniendo información del sitio SP: '{target_site_identifier}' (Select: {query_api_params['$select']})")
-        sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.get(url, scope=sites_read_scope, params=query_api_params if query_api_params else None)
+        # Obtener drives del sitio
+        drives_url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives"
+        drives_response = client.get(drives_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
         
-        # --- CORRECCIÓN ---
-        return {"status": "success", "data": response}
-    except Exception as e: 
-        return _handle_graph_api_error(e, action_name, params)
+        # Obtener listas del sitio
+        lists_url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/lists"
+        lists_response = client.get(lists_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+        
+        return {
+            "success": True,
+            "data": {
+                "site": site_info,
+                "drives": drives_response.get("value", []),
+                "lists": lists_response.get("value", [])[:10],  # Limitar a 10 listas
+                "summary": {
+                    "name": site_info.get("name"),
+                    "displayName": site_info.get("displayName"),
+                    "webUrl": site_info.get("webUrl"),
+                    "id": site_info.get("id"),
+                    "drives_count": len(drives_response.get("value", [])),
+                    "lists_count": len(lists_response.get("value", []))
+                }
+            }
+        }
+    except Exception as e:
+        return _handle_graph_api_error(e, "get_site_info", params)
 
 def search_sites(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
@@ -343,31 +305,127 @@ def search_sites(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
         return _handle_graph_api_error(e, action_name, params)
 
 def create_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    logger.info("Ejecutando create_list con params (columnas omitidas del log si presentes): %s", {k:v for k,v in params.items() if k != 'columnas'})
-    action_name = "create_list"
-
-    list_name: Optional[str] = params.get("nombre_lista")
-    columns_definition: Optional[List[Dict[str, Any]]] = params.get("columnas")
-    list_template: str = params.get("template", "genericList") # default a lista genérica
-
-    if not list_name: 
-        return _handle_graph_api_error(ValueError("'nombre_lista' es requerido."), action_name, params)
-    
+    """Crea una nueva lista en SharePoint con columnas opcionales"""
     try:
-        target_site_id = _obtener_site_id_sp(client, params)
-        url = f"{settings.GRAPH_API_BASE_URL}/sites/{target_site_id}/lists"
+        site_id = params.get("site_id")
+        list_name = params.get("name")
+        description = params.get("description", "")
+        columns = params.get("columns", [])
         
-        body_payload: Dict[str, Any] = {"displayName": list_name, "list": {"template": list_template}}
-        if columns_definition and isinstance(columns_definition, list): 
-            body_payload["columns"] = columns_definition
+        if not site_id or not list_name:
+            return {
+                "success": False,
+                "error": "site_id and name are required"
+            }
         
-        logger.info(f"Creando lista SP '{list_name}' en sitio '{target_site_id}' (Template: {list_template}). Columnas provistas: {bool(columns_definition)}")
-        sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.post(url, scope=sites_manage_scope, json_data=body_payload)
-        return {"status": "success", "data": response.json()}
-    except Exception as e: 
-        return _handle_graph_api_error(e, action_name, params)
+        # Preparar el payload
+        list_data = {
+            "displayName": list_name,
+            "description": description,
+            "list": {
+                "template": "genericList"
+            }
+        }
+        
+        # Hacer la llamada a la API
+        url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists"
+        response = client.post(url, json=list_data)
+        
+        if response.status_code == 201:
+            created_list = response.json()
+            list_id = created_list["id"]
+            
+            # Crear columnas adicionales si se especificaron
+            for column in columns:
+                column_result = _create_list_column(client, site_id, list_id, column)
+                if not column_result.get("success"):
+                    logger.warning(f"Failed to create column {column['name']}: {column_result.get('error')}")
+            
+            # Auto-registrar en el sistema
+            from app.actions import resolver_actions
+            register_result = resolver_actions.smart_save_resource(client, {
+                "resource_type": "sharepoint_list",
+                "resource_data": {
+                    "id": list_id,
+                    "name": list_name,
+                    "webUrl": created_list.get("webUrl"),
+                    "site_id": site_id,
+                    "columns": columns
+                },
+                "action_name": "sp_create_list",
+                "tags": ["sharepoint", "list", "created"]
+            })
+            
+            return {
+                "success": True,
+                "data": {
+                    "id": list_id,
+                    "name": created_list.get("displayName"),
+                    "webUrl": created_list.get("webUrl"),
+                    "createdDateTime": created_list.get("createdDateTime"),
+                    "description": created_list.get("description"),
+                    "list": created_list,
+                    "auto_registered": register_result.get("success", False),
+                    "registry_id": register_result.get("registry_id") if register_result.get("success") else None
+                },
+                "message": f"List '{list_name}' created successfully"
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"Failed to create list: {response.status_code}",
+                "details": response.text
+            }
+            
+    except Exception as e:
+        logger.error(f"Error creating SharePoint list: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+def _create_list_column(client: Any, site_id: str, list_id: str, column_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea una columna en una lista"""
+    try:
+        column_type = column_config.get("type", "text")
+        column_name = column_config.get("name")
+        
+        if not column_name:
+            return {"success": False, "error": "Column name is required"}
+        
+        # Mapear tipos de columna
+        type_mapping = {
+            "text": {"text": {}},
+            "note": {"text": {"allowMultipleLines": True}},
+            "number": {"number": {"decimalPlaces": "automatic"}},
+            "boolean": {"boolean": {}},
+            "dateTime": {"dateTime": {"format": "dateTime"}},
+            "choice": {"choice": {"choices": column_config.get("choices", [])}},
+            "url": {"hyperlinkOrPicture": {}}
+        }
+        
+        column_definition = type_mapping.get(column_type, {"text": {}})
+        
+        column_data = {
+            "name": column_name,
+            "displayName": column_config.get("displayName", column_name),
+            "required": column_config.get("required", False),
+            **column_definition
+        }
+        
+        if column_config.get("defaultValue"):
+            column_data["defaultValue"] = {"value": str(column_config["defaultValue"])}
+        
+        url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/columns"
+        response = client.post(url, json=column_data)
+        
+        if response.status_code == 201:
+            return {"success": True, "data": response.json()}
+        else:
+            return {"success": False, "error": f"Failed to create column: {response.text}"}
+            
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 def list_lists(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
@@ -473,28 +531,70 @@ def delete_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         return _handle_graph_api_error(e, action_name, params)
 
 def add_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
-    logger.info("Ejecutando add_list_item con params (datos_campos omitido del log si presente): %s", {k:v for k,v in params.items() if k != 'datos_campos'})
-    action_name = "add_list_item"
-
-    list_id_or_name: Optional[str] = params.get("lista_id_o_nombre")
-    fields_data: Optional[Dict[str, Any]] = params.get("datos_campos")
-
-    if not list_id_or_name or not fields_data or not isinstance(fields_data, dict): 
-        return _handle_graph_api_error(ValueError("'lista_id_o_nombre' y 'datos_campos' (dict) son requeridos."), action_name, params)
-    
+    """Añade un item a una lista de SharePoint con auto-registro"""
     try:
-        target_site_id = _obtener_site_id_sp(client, params)
-        # El payload para crear un item es {"fields": { ... }}
-        body_payload = {"fields": fields_data}
-        url = f"{settings.GRAPH_API_BASE_URL}/sites/{target_site_id}/lists/{list_id_or_name}/items"
+        site_id = params.get("site_id")
+        list_id = params.get("list_id")
+        fields = params.get("fields", {})
         
-        logger.info(f"Añadiendo item a lista SP '{list_id_or_name}' en sitio '{target_site_id}'. Campos: {list(fields_data.keys())}")
-        sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE) # Sites.ReadWrite.All o equivalente
-        response = client.post(url, scope=sites_manage_scope, json_data=body_payload)
-        return {"status": "success", "data": response.json()}
-    except Exception as e: 
-        return _handle_graph_api_error(e, action_name, params)
+        if not site_id or not list_id:
+            return {
+                "success": False,
+                "error": "site_id and list_id are required"
+            }
+        
+        # Preparar el payload
+        item_data = {
+            "fields": fields
+        }
+        
+        # Hacer la llamada a la API
+        url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items"
+        response = client.post(url, json=item_data)
+        
+        if response.status_code == 201:
+            created_item = response.json()
+            
+            # Auto-registrar si el item es importante
+            if len(json.dumps(fields)) > 100:  # Si tiene contenido significativo
+                from app.actions import resolver_actions
+                register_result = resolver_actions.smart_save_resource(client, {
+                    "resource_type": "sharepoint_item",
+                    "resource_data": {
+                        "id": created_item.get("id"),
+                        "list_id": list_id,
+                        "site_id": site_id,
+                        "fields": fields,
+                        "webUrl": created_item.get("webUrl")
+                    },
+                    "action_name": "sp_add_list_item",
+                    "tags": ["sharepoint", "list_item", "created"]
+                })
+            
+            return {
+                "success": True,
+                "data": {
+                    "id": created_item.get("id"),
+                    "webUrl": created_item.get("webUrl"),
+                    "createdDateTime": created_item.get("createdDateTime"),
+                    "fields": created_item.get("fields", {}),
+                    "item": created_item
+                },
+                "message": "Item added successfully to list"
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"Failed to add item: {response.status_code}",
+                "details": response.text
+            }
+            
+    except Exception as e:
+        logger.error(f"Error adding item to SharePoint list: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 def list_list_items(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     params = params or {}
@@ -558,7 +658,7 @@ def get_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
         logger.info(f"Obteniendo item SP ID '{item_id}' de lista '{list_id_or_name}', sitio '{target_site_id}'. (Expand: {expand_fields})")
         sites_read_scope = getattr(settings, 'GRAPH_SCOPE_SITES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.get(url, scope=sites_read_scope, params=query_api_params if query_api_params else None)
-        
+
         # --- CORRECCIÓN ---
         return {"status": "success", "data": response}
     except Exception as e: 
@@ -1498,64 +1598,63 @@ def memory_get(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[
     action_name = "memory_get"
 
     session_id: Optional[str] = params.get("session_id")
-    clave: Optional[str] = params.get("clave") # Clave específica a obtener, o None para todas las de la sesión
+    clave: Optional[str] = params.get("clave")
 
-    if not session_id: 
-        return _handle_graph_api_error(ValueError("'session_id' es requerido para memory_get."), action_name, params)
+    if not session_id or not clave: 
+        return _handle_graph_api_error(ValueError("'session_id' y 'clave' son requeridos para memory_get."), action_name, params)
     
     try:
         target_site_id = _obtener_site_id_sp(client, params)
-        # No es necesario asegurar la lista aquí, si no existe, la búsqueda no devolverá nada.
-
-        filter_parts = [f"fields/SessionID eq '{session_id}'"]
-        if clave:
-            filter_parts.append(f"fields/Clave eq '{clave}'")
         
+        # Asegurar que la lista exista
+        if not _ensure_memory_list_exists(client, target_site_id):
+            return {"status": "error", "action": action_name, "message": f"No se pudo asegurar/crear la lista memoria '{MEMORIA_LIST_NAME_FROM_SETTINGS}' en sitio '{target_site_id}'."}
+
+        # Buscar el item con esa SessionID y Clave
+        filter_q = f"fields/SessionID eq '{session_id}' and fields/Clave eq '{clave}'"
         list_params = {
             "site_id": target_site_id,
             "site_identifier": params.get("site_identifier", params.get("site_id")),
             "lista_id_o_nombre": MEMORIA_LIST_NAME_FROM_SETTINGS, 
-            "filter_query": " and ".join(filter_parts), 
-            "select": "id", # Para ListItem
-            "expand": "fields(select=Clave,Valor,Timestamp)", # Campos de usuario
-            "orderby": "fields/Timestamp desc", # Más reciente primero si hay múltiples para una clave (no debería si save es upsert)
-            "max_items_total": None if not clave else 1 # Si se busca clave específica, solo 1 resultado. Si todas, paginar.
+            "filter_query": filter_q, 
+            "top_per_page": 1, 
+            "max_items_total": 1,
+            "expand": "fields(select=*)"
         }
         
-        logger.info(f"Obteniendo memoria para SessionID: '{session_id}'" + (f", Clave: '{clave}'" if clave else ", Todas las claves"))
         items_response = list_list_items(client, list_params)
         
-        if items_response.get("status") != "success":
-            return items_response # Propagar error
+        if items_response.get("status") == "success":
+            items_value = items_response.get("data", [])
+            if items_value and len(items_value) > 0:
+                item = items_value[0]
+                fields = item.get("fields", {})
+                valor_str = fields.get("Valor", "")
+                
+                # Deserializar el valor
+                try:
+                    valor = json.loads(valor_str)
+                except:
+                    valor = valor_str  # Si no es JSON válido, devolver como string
+                
+                return {
+                    "status": "success",
+                    "data": {
+                        "session_id": session_id,
+                        "clave": clave,
+                        "valor": valor,
+                        "timestamp": fields.get("Timestamp"),
+                        "item_id": item.get("id")
+                    }
+                }
+            else:
+                return {
+                    "status": "not_found",
+                    "message": f"No se encontró valor para SessionID: {session_id}, Clave: {clave}"
+                }
+        else:
+            return items_response  # Propagar el error
             
-        retrieved_data: Any = {} if not clave else None # Si no hay clave, devolver dict. Si hay clave, el valor o None.
-        items = items_response.get("data", {}).get("value", [])
-        
-        if not items:
-            logger.info(f"No se encontró data en memoria para SessionID: '{session_id}'" + (f", Clave: '{clave}'" if clave else "."))
-            return {"status": "success", "data": retrieved_data, "message": "No se encontró data en memoria para los criterios dados."}
-
-        if clave: # Se buscó una clave específica
-            valor_str = items[0].get("fields", {}).get("Valor")
-            try:
-                retrieved_data = json.loads(valor_str) if valor_str else None
-            except json.JSONDecodeError:
-                logger.warning(f"Valor para memoria (SessionID: {session_id}, Clave: {clave}) no es JSON válido: '{valor_str}'. Devolviendo como string.")
-                retrieved_data = valor_str
-            logger.info(f"Memoria obtenida para SessionID: {session_id}, Clave: {clave}. Tipo de valor: {type(retrieved_data).__name__}")
-        else: # Se buscan todas las claves de la sesión
-            for item in items:
-                item_fields = item.get("fields", {})
-                current_clave = item_fields.get("Clave")
-                valor_str = item_fields.get("Valor")
-                if current_clave and current_clave not in retrieved_data: # Tomar el más reciente (primero por orderby)
-                    try:
-                        retrieved_data[current_clave] = json.loads(valor_str) if valor_str else None
-                    except json.JSONDecodeError:
-                        retrieved_data[current_clave] = valor_str
-            logger.info(f"Memoria obtenida para SessionID: {session_id}. {len(retrieved_data)} claves recuperadas.")
-            
-        return {"status": "success", "data": retrieved_data}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -1565,239 +1664,269 @@ def memory_delete(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     action_name = "memory_delete"
 
     session_id: Optional[str] = params.get("session_id")
-    clave: Optional[str] = params.get("clave") # Clave específica a eliminar, o None para toda la sesión
+    clave: Optional[str] = params.get("clave")
 
-    if not session_id: 
-        return _handle_graph_api_error(ValueError("'session_id' es requerido para memory_delete."),action_name, params)
+    if not session_id or not clave: 
+        return _handle_graph_api_error(ValueError("'session_id' y 'clave' son requeridos para memory_delete."), action_name, params)
     
     try:
         target_site_id = _obtener_site_id_sp(client, params)
         
-        filter_parts = [f"fields/SessionID eq '{session_id}'"]
-        log_action_detail = f"toda la memoria para sesión '{session_id}'"
-        if clave:
-            filter_parts.append(f"fields/Clave eq '{clave}'")
-            log_action_detail = f"memoria para clave '{clave}' de sesión '{session_id}'"
-        
+        # Buscar el item a eliminar
+        filter_q = f"fields/SessionID eq '{session_id}' and fields/Clave eq '{clave}'"
         list_params = {
             "site_id": target_site_id,
             "site_identifier": params.get("site_identifier", params.get("site_id")),
             "lista_id_o_nombre": MEMORIA_LIST_NAME_FROM_SETTINGS, 
-            "filter_query": " and ".join(filter_parts), 
-            "select": "id", # Solo necesitamos ID para eliminar
-            "max_items_total": None # Eliminar todos los que coincidan
+            "filter_query": filter_q, 
+            "top_per_page": 1, 
+            "max_items_total": 1,
+            "select": "id"
         }
         
-        logger.info(f"Buscando items de memoria para eliminar: {log_action_detail}")
-        items_to_delete_resp = list_list_items(client, list_params)
+        items_response = list_list_items(client, list_params)
         
-        if items_to_delete_resp.get("status") != "success":
-            return items_to_delete_resp # Propagar error
-            
-        items = items_to_delete_resp.get("data", {}).get("value", [])
-        if not items:
-            return {"status": "success", "message": f"No se encontró {log_action_detail} para eliminar."}
-            
-        deleted_count = 0
-        errors_on_delete: List[str] = []
-        logger.info(f"Se encontraron {len(items)} items de memoria para eliminar ({log_action_detail}). Procediendo con la eliminación.")
-        
-        for item in items:
-            item_id_to_del = item.get("id")
-            if item_id_to_del:
-                del_params = {
+        if items_response.get("status") == "success":
+            items_value = items_response.get("data", [])
+            if items_value and len(items_value) > 0:
+                item_id = items_value[0].get("id")
+                
+                # Eliminar el item
+                delete_params = {
                     "site_id": target_site_id,
                     "site_identifier": params.get("site_identifier", params.get("site_id")),
-                    "lista_id_o_nombre": MEMORIA_LIST_NAME_FROM_SETTINGS, 
-                    "item_id": item_id_to_del
+                    "lista_id_o_nombre": MEMORIA_LIST_NAME_FROM_SETTINGS,
+                    "item_id": item_id
                 }
-                # delete_list_item ya hace logging interno.
-                del_response = delete_list_item(client, del_params)
-                if del_response.get("status") == "success":
-                    deleted_count += 1
-                else:
-                    error_msg = f"Error eliminando item de memoria ID {item_id_to_del}: {del_response.get('message', 'Error desconocido')}. Detalles: {del_response.get('details')}"
-                    logger.error(error_msg)
-                    errors_on_delete.append(error_msg)
-            else:
-                logger.warning("Item encontrado sin ID durante eliminación de memoria, omitiendo.")
                 
-        if errors_on_delete:
-            return {"status": "partial_error", "action":action_name, "message": f"{deleted_count} items de {log_action_detail} eliminados, pero ocurrieron {len(errors_on_delete)} errores.", "details": errors_on_delete, "deleted_count": deleted_count}
-        
-        return {"status": "success", "message": f"Memoria para {log_action_detail} eliminada exitosamente. {deleted_count} items borrados."}
+                return delete_list_item(client, delete_params)
+            else:
+                return {
+                    "status": "not_found",
+                    "message": f"No se encontró item para eliminar con SessionID: {session_id}, Clave: {clave}"
+                }
+        else:
+            return items_response  # Propagar el error
+            
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
 def memory_list_keys(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Lista todas las keys en memoria con filtros opcionales"""
     params = params or {}
     logger.info("Ejecutando memory_list_keys con params: %s", params)
     action_name = "memory_list_keys"
-
-    session_id: Optional[str] = params.get("session_id")
-    if not session_id: 
-        return _handle_graph_api_error(ValueError("'session_id' es requerido para memory_list_keys."), action_name, params)
     
     try:
         target_site_id = _obtener_site_id_sp(client, params)
+        # Construir filtro
+        filters = []
+        if params.get("session_id"):
+            filters.append(f"fields/SessionID eq '{params['session_id']}'")
+        
+        # Obtener items
         list_params = {
             "site_id": target_site_id,
             "site_identifier": params.get("site_identifier", params.get("site_id")),
-            "lista_id_o_nombre": MEMORIA_LIST_NAME_FROM_SETTINGS, 
-            "filter_query": f"fields/SessionID eq '{session_id}'", 
-            "select": "id", # Para ListItem
-            "expand": "fields(select=Clave)", # Solo necesitamos Clave de los campos
-            "max_items_total": None # Obtener todas las claves para la sesión
+            "lista_id_o_nombre": MEMORIA_LIST_NAME_FROM_SETTINGS,
+            "expand": "fields(select=*)",
+            "top_per_page": params.get("limit", 100),
+            "max_items_total": params.get("limit", 100)
         }
         
-        logger.info(f"Listando claves de memoria para SessionID: '{session_id}'")
+        if filters:
+            list_params["filter_query"] = " and ".join(filters)
+        
         items_response = list_list_items(client, list_params)
         
         if items_response.get("status") != "success":
-            return items_response # Propagar error
-            
-        keys: List[str] = []
-        items_value = items_response.get("data", {}).get("value", [])
-        if items_value and isinstance(items_value, list):
-            keys = list(set(
-                item.get("fields", {}).get("Clave") 
-                for item in items_value 
-                if item.get("fields", {}).get("Clave") is not None
-            ))
+            return items_response
         
-        logger.info(f"Se encontraron {len(keys)} claves de memoria para SessionID '{session_id}'.")
-        return {"status": "success", "data": sorted(keys)} # Devolver lista ordenada de claves únicas
-    except Exception as e: 
+        # Formatear respuesta
+        keys_data = []
+        items_value = items_response.get("data", [])
+        for item in items_value:
+            fields = item.get("fields", {})
+            
+            keys_data.append({
+                "session_id": fields.get("SessionID"),
+                "clave": fields.get("Clave"),
+                "timestamp": fields.get("Timestamp"),
+                "item_id": item.get("id")
+            })
+        
+        return {
+            "status": "success",
+            "data": {
+                "keys": keys_data,
+                "total": len(keys_data),
+                "site_id": target_site_id
+            }
+        }
+        
+    except Exception as e:
         return _handle_graph_api_error(e, action_name, params)
 
 def memory_export_session(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
+    """Exporta toda la memoria de una sesión"""
     params = params or {}
     logger.info("Ejecutando memory_export_session con params: %s", params)
     action_name = "memory_export_session"
-
-    session_id: Optional[str] = params.get("session_id")
-    export_format: str = params.get("format", "json").lower()
-
-    if not session_id: 
-        return _handle_graph_api_error(ValueError("'session_id' es requerido para memory_export_session."), action_name, params)
-    if export_format not in ["json", "csv"]: 
-        return _handle_graph_api_error(ValueError("Formato de exportación no válido. Use 'json' o 'csv'."), action_name, params)
     
-    # Reutilizar sp_export_list_to_format
-    export_params = {
-        "site_id": params.get("site_id"), # Para _obtener_site_id_sp
-        "site_identifier": params.get("site_identifier", params.get("site_id")), # Para _obtener_site_id_sp
-        "lista_id_o_nombre": MEMORIA_LIST_NAME_FROM_SETTINGS,
-        "format": export_format,
-        "filter_query": f"fields/SessionID eq '{session_id}'",
-        "select_fields": "SessionID,Clave,Valor,Timestamp", # Campos a exportar
-        "max_items_total": None # Exportar todos los items de la sesión
-    }
-    logger.info(f"Exportando sesión de memoria '{session_id}' a formato '{export_format}'.")
-    return sp_export_list_to_format(client, export_params)
+    try:
+        session_id = params.get("session_id")
+        export_format = params.get("format", "json")  # json, csv
+        
+        if not session_id:
+            raise ValueError("'session_id' es requerido")
+        
+        # Obtener todas las claves de la sesión
+        keys_result = memory_list_keys(client, params)
+        
+        if keys_result.get("status") != "success":
+            return keys_result
+        
+        # Obtener todos los valores
+        session_data = {}
+        for key_info in keys_result["data"]["keys"]:
+            get_result = memory_get(client, {
+                **params,
+                "session_id": session_id,
+                "clave": key_info["clave"]
+            })
+            
+            if get_result.get("status") == "success":
+                session_data[key_info["clave"]] = {
+                    "valor": get_result["data"]["valor"],
+                    "timestamp": get_result["data"]["timestamp"]
+                }
+        
+        # Formatear según el formato solicitado
+        if export_format == "csv":
+            # Crear CSV
+            output = StringIO()
+            writer = csv.writer(output)
+            writer.writerow(["session_id", "clave", "valor", "timestamp"])
+            
+            for clave, data in session_data.items():
+                writer.writerow([
+                    session_id,
+                    clave,
+                    json.dumps(data["valor"]) if isinstance(data["valor"], (dict, list)) else data["valor"],
+                    data["timestamp"]
+                ])
+            
+            return output.getvalue()
+        else:
+            # JSON por defecto
+            return {
+                "status": "success",
+                "action": action_name,
+                "data": {
+                    "session_id": session_id,
+                    "export_date": datetime.now().isoformat(),
+                    "total_keys": len(session_data),
+                    "session_data": session_data
+                }
+            }
+            
+    except Exception as e:
+        return _handle_graph_api_error(e, action_name, params)
 
 def sp_export_list_to_format(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Union[str, Dict[str, Any]]:
-    # Esta función ahora devuelve Union[str, Dict[str,Any]] porque el formato CSV es un string,
-    # pero los errores y el formato JSON son diccionarios.
+    """Exporta los items de una lista a CSV o JSON"""
     params = params or {}
     logger.info("Ejecutando sp_export_list_to_format con params: %s", params)
     action_name = "sp_export_list_to_format"
-
-    lista_id_o_nombre: Optional[str] = params.get("lista_id_o_nombre")
-    export_format: str = params.get("format", "json").lower()
-    filter_query: Optional[str] = params.get("filter_query")
-    select_fields: Optional[str] = params.get("select_fields") # Campos de 'fields' a seleccionar. Ej: "Title,Author,Created"
-    max_items_total: Optional[int] = params.get('max_items_total') # Opcional
-
-    if not lista_id_o_nombre: 
-        return _handle_graph_api_error(ValueError("'lista_id_o_nombre' es requerido."), action_name, params)
-    if export_format not in ["json", "csv"]: 
-        return _handle_graph_api_error(ValueError("Formato de exportación no válido. Use 'json' o 'csv'."), action_name, params)
     
     try:
-        target_site_id = _obtener_site_id_sp(client, params)
+        # Obtener todos los items de la lista
+        items_result = list_list_items(client, params)
         
-        # Configurar parámetros para list_list_items
-        list_items_params: Dict[str, Any] = {
-            "site_id": target_site_id,
-            "site_identifier": params.get("site_identifier", params.get("site_id")),
-            "lista_id_o_nombre": lista_id_o_nombre,
-            "max_items_total": max_items_total # Pasar el límite si existe
-        }
-        if filter_query: 
-            list_items_params["filter_query"] = filter_query
+        if items_result.get("status") != "success":
+            return items_result
         
-        # Configurar expand y select para obtener los campos deseados
-        expand_val = "fields" # Por defecto, expandir 'fields'
-        select_val_listitem = "id,@odata.etag" # Campos base del ListItem
+        items = items_result.get("data", [])
+        export_format = params.get("format", "json").lower()
         
-        if select_fields:
-            expand_val = f"fields(select={select_fields})"
-        else: # Si no se especifica select_fields, obtener todos los campos de usuario
-            expand_val = "fields(select=*)"
+        if export_format == "csv":
+            # Crear CSV
+            output = StringIO()
             
-        list_items_params["expand"] = expand_val
-        list_items_params["select"] = select_val_listitem # Seleccionar campos base del ListItem además de los expandidos
-        
-        logger.info(f"Exportando items de lista SP '{lista_id_o_nombre}' (Sitio: '{target_site_id}') a formato '{export_format}'. Expand: '{expand_val}'")
-        items_response = list_list_items(client, list_items_params)
-        
-        if items_response.get("status") != "success":
-            return items_response # Propagar el error
+            if items:
+                # Obtener todas las columnas únicas
+                all_fields = set()
+                for item in items:
+                    if "fields" in item:
+                        all_fields.update(item["fields"].keys())
+                
+                # Escribir encabezados
+                fieldnames = ["id"] + sorted(all_fields)
+                writer = csv.DictWriter(output, fieldnames=fieldnames)
+                writer.writeheader()
+                
+                # Escribir datos
+                for item in items:
+                    row = {"id": item.get("id", "")}
+                    fields = item.get("fields", {})
+                    for field in all_fields:
+                        value = fields.get(field, "")
+                        # Convertir valores complejos a string
+                        if isinstance(value, (dict, list)):
+                            value = json.dumps(value)
+                        row[field] = value
+                    writer.writerow(row)
             
-        items_data = items_response.get("data", {}).get("value", [])
-        
-        # Procesar los items para extraer los 'fields' y añadir ID/ETag del ListItem
-        processed_items: List[Dict[str, Any]] = []
-        if items_data and isinstance(items_data, list):
-            for item in items_data:
-                fields = item.get("fields", {})
-                # Añadir metadatos del ListItem al diccionario de campos para el export
-                fields["_ListItemID_"] = item.get("id")
-                fields["_ListItemETag_"] = item.get("@odata.etag")
-                fields["_ListItemCreatedBy_"] = item.get("createdBy", {}).get("user", {}).get("displayName")
-                fields["_ListItemCreatedDateTime_"] = item.get("createdDateTime")
-                fields["_ListItemLastModifiedBy_"] = item.get("lastModifiedBy", {}).get("user", {}).get("displayName")
-                fields["_ListItemLastModifiedDateTime_"] = item.get("lastModifiedDateTime")
-                fields["_ListItemWebUrl_"] = item.get("webUrl")
-                processed_items.append(fields)
-        
-        if not processed_items:
-            logger.info("No se encontraron items para exportar.")
-            return {"status": "success", "data": []} if export_format == "json" else ""
-
-        if export_format == "json":
-            logger.info(f"{len(processed_items)} items procesados para exportación JSON.")
-            # El router FastAPI manejará la serialización a JSON si devolvemos un dict.
-            # Devolver el dict directamente con status y data.
-            return {"status": "success", "data": processed_items}
-        
-        # Para CSV
-        logger.info(f"{len(processed_items)} items procesados para exportación CSV.")
-        output = StringIO()
-        
-        # Determinar todos los posibles nombres de campo para el encabezado CSV
-        all_field_keys = set()
-        for item_fields_dict in processed_items:
-            all_field_keys.update(item_fields_dict.keys())
-        
-        # Ordenar las claves, poniendo las de metadatos del ListItem primero si existen
-        fieldnames_ordered = sorted(list(all_field_keys))
-        meta_keys_ordered = ["_ListItemID_", "_ListItemETag_", "_ListItemWebUrl_", "_ListItemCreatedDateTime_", "_ListItemCreatedBy_", "_ListItemLastModifiedDateTime_", "_ListItemLastModifiedBy_"]
-        final_fieldnames = [mk for mk in meta_keys_ordered if mk in fieldnames_ordered]
-        final_fieldnames.extend([fk for fk in fieldnames_ordered if fk not in meta_keys_ordered])
-
-        writer = csv.DictWriter(output, fieldnames=final_fieldnames, extrasaction='ignore', quoting=csv.QUOTE_ALL)
-        writer.writeheader()
-        writer.writerows(processed_items)
-        
-        csv_content = output.getvalue()
-        output.close()
-        logger.info(f"Exportación a CSV completada. Tamaño: {len(csv_content)} bytes.")
-        # Para CSV, devolvemos el string directamente. El router FastAPI debe manejar esto.
-        return csv_content 
-        
-    except Exception as e: 
+            return output.getvalue()
+        else:
+            # JSON por defecto
+            return {
+                "status": "success",
+                "action": action_name,
+                "data": {
+                    "list_name": params.get("lista_id_o_nombre", ""),
+                    "export_date": datetime.now().isoformat(),
+                    "total_items": len(items),
+                    "items": items
+                }
+            }
+            
+    except Exception as e:
         return _handle_graph_api_error(e, action_name, params)
 
-# --- FIN DEL MÓDULO actions/sharepoint_actions.py ---
+# --- Función prefijada para el proxy ---
+# Todas las funciones que comienzan con sp_ para el proxy
+sp_get_site_info = get_site_info
+sp_search_sites = search_sites
+sp_list_document_libraries = list_document_libraries
+sp_create_list = create_list
+sp_list_lists = list_lists
+sp_get_list = get_list
+sp_update_list = update_list
+sp_delete_list = delete_list
+sp_add_list_item = add_list_item
+sp_list_list_items = list_list_items
+sp_get_list_item = get_list_item
+sp_update_list_item = update_list_item
+sp_delete_list_item = delete_list_item
+sp_search_list_items = search_list_items
+sp_list_folder_contents = list_folder_contents
+sp_get_file_metadata = get_file_metadata
+sp_upload_document = upload_document
+sp_download_document = download_document
+sp_delete_document = delete_document
+sp_delete_item = delete_item
+sp_create_folder = create_folder
+sp_move_item = move_item
+sp_copy_item = copy_item
+sp_update_file_metadata = update_file_metadata
+sp_get_sharing_link = get_sharing_link
+sp_list_item_permissions = list_item_permissions
+sp_add_item_permissions = add_item_permissions
+sp_remove_item_permissions = remove_item_permissions
+sp_memory_ensure_list = memory_ensure_list
+sp_memory_save = memory_save
+sp_memory_get = memory_get
+sp_memory_delete = memory_delete
+sp_memory_list_keys = memory_list_keys
+sp_memory_export_session = memory_export_session

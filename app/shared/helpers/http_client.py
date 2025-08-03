@@ -2,10 +2,11 @@
 import logging
 import requests
 import json 
-from azure.identity import DefaultAzureCredential, CredentialUnavailableError
+from azure.identity import DefaultAzureCredential, ClientSecretCredential, CredentialUnavailableError
 from azure.core.exceptions import ClientAuthenticationError
 
 from typing import List, Optional, Any, Dict, Union # Añadido Union
+import os
 
 # Importar la configuración de la aplicación
 from app.core.config import settings
@@ -13,14 +14,31 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 class AuthenticatedHttpClient:
-    def __init__(self, credential: DefaultAzureCredential, default_timeout: Optional[int] = None):
-        if not isinstance(credential, DefaultAzureCredential):
-            logger.error("AuthenticatedHttpClient: Se requiere una instancia de DefaultAzureCredential. Tipo recibido: %s", type(credential).__name__)
-            raise TypeError("Se requiere una instancia de DefaultAzureCredential para AuthenticatedHttpClient.")
+    """Cliente HTTP autenticado para Azure"""
+    
+    def __init__(self, credential: Optional[Union[DefaultAzureCredential, ClientSecretCredential]] = None):
+        """
+        Inicializa el cliente con credenciales Azure flexibles
+        """
+        if credential is None:
+            # Intentar usar Managed Identity primero, luego Client Credentials
+            try:
+                self.credential = DefaultAzureCredential()
+                logger.info("✅ Usando DefaultAzureCredential (Managed Identity)")
+            except Exception as e:
+                logger.warning(f"Managed Identity no disponible: {str(e)}")
+                # Fallback a Client Credentials
+                self._init_client_credentials()
+        elif isinstance(credential, (DefaultAzureCredential, ClientSecretCredential)):
+            self.credential = credential
+            logger.info(f"✅ Usando credencial proporcionada: {type(credential).__name__}")
+        else:
+            # Si se pasa otro tipo, intentar Client Credentials
+            logger.warning(f"Tipo de credencial no reconocido: {type(credential)}, usando Client Credentials")
+            self._init_client_credentials()
         
-        self.credential = credential
         self.session = requests.Session()
-        self.default_timeout = default_timeout if default_timeout is not None else settings.DEFAULT_API_TIMEOUT
+        self.default_timeout = settings.DEFAULT_API_TIMEOUT
         
         # Establecer el scope por defecto para Graph API al inicializar
         self.default_graph_scope: List[str] = settings.GRAPH_API_DEFAULT_SCOPE
@@ -35,6 +53,22 @@ class AuthenticatedHttpClient:
             'Accept': 'application/json'
         })
         logger.info(f"AuthenticatedHttpClient inicializado. User-Agent: {settings.APP_NAME}/{settings.APP_VERSION}, Default Timeout: {self.default_timeout}s, Default Graph Scope: {self.default_graph_scope}")
+
+    def _init_client_credentials(self):
+        """Inicializa Client Credentials como fallback"""
+        tenant_id = os.environ.get('AZURE_TENANT_ID')
+        client_id = os.environ.get('AZURE_CLIENT_ID')
+        client_secret = os.environ.get('AZURE_CLIENT_SECRET')
+        
+        if tenant_id and client_id and client_secret:
+            self.credential = ClientSecretCredential(
+                tenant_id=tenant_id,
+                client_id=client_id,
+                client_secret=client_secret
+            )
+            logger.info("✅ Usando ClientSecretCredential como fallback")
+        else:
+            raise ValueError("No se encontraron credenciales Azure válidas")
 
     def _get_access_token(self, scope: List[str]) -> Optional[str]:
         if not scope or not isinstance(scope, list) or not all(isinstance(s, str) for s in scope):

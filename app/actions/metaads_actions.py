@@ -1,19 +1,19 @@
 # app/actions/metaads_actions.py
 import logging
 from typing import Dict, Any
-
-from facebook_business.api import FacebookAdsApi
-from facebook_business.adobjects.business import Business
+from datetime import datetime
+from app.core.config import settings
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.campaign import Campaign
+from facebook_business.api import FacebookAdsApi
+
+from facebook_business.adobjects.business import Business
 from facebook_business.adobjects.adset import AdSet
 from facebook_business.adobjects.adcreative import AdCreative
 from facebook_business.adobjects.customaudience import CustomAudience
 from facebook_business.adobjects.ad import Ad
 from facebook_business.adobjects.page import Page
 from facebook_business.exceptions import FacebookRequestError
-
-from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -34,21 +34,22 @@ def _get_meta_ads_api_client(params: Dict[str, Any]) -> FacebookAdsApi:
         api_version="v19.0"
     )
 
-def _handle_meta_ads_api_error(e: Exception, action_name: str) -> Dict[str, Any]:
-    logger.error(f"Error en Meta Ads Action '{action_name}': {type(e).__name__} - {e}", exc_info=True)
-    status_code, error_message, details = 500, str(e), {}
-
-    if isinstance(e, FacebookRequestError):
-        status_code = e.http_status() or 500
-        error_body = e.body() if hasattr(e, 'body') and callable(e.body) else {}
-        if error_body and 'error' in error_body:
-            details = error_body['error']
-            error_message = details.get('message', "Unknown Facebook API Error")
-        else:
-            details = {"raw_response": str(e)}
-            error_message = e.api_error_message() or "Unknown Facebook API Error"
+# Función helper para manejar errores (si no existe)
+def _handle_meta_ads_api_error(error: Exception, action_name: str) -> Dict[str, Any]:
+    """
+    Maneja errores de la API de Meta Ads de manera consistente
+    """
+    error_message = str(error)
+    error_code = getattr(error, 'api_error_code', 'UNKNOWN')
     
-    return {"status": "error", "action": action_name, "message": error_message, "http_status": status_code, "details": details}
+    logger.error(f"Meta Ads API Error in {action_name}: {error_message}")
+    
+    return {
+        "status": "error",
+        "message": f"Error en {action_name}: {error_message}",
+        "error_code": error_code,
+        "action": action_name
+    }
 
 def _get_ad_account_id(params: Dict[str, Any]) -> str:
     ad_account_id = params.get("ad_account_id")
@@ -111,16 +112,52 @@ def metaads_list_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any
         return _handle_meta_ads_api_error(e, action_name)
 
 def metaads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Crea una nueva campaña en Meta Ads
+    """
     action_name = "metaads_create_campaign"
     try:
-        _get_meta_ads_api_client(params)
-        ad_account_id = params.get("ad_account_id")
-        campaign_payload = params.get("campaign_payload")
-        if not ad_account_id or not campaign_payload:
-            raise ValueError("'ad_account_id' y 'campaign_payload' son requeridos.")
-        ad_account = AdAccount(f"act_{str(ad_account_id).replace('act_', '')}")
-        campaign = ad_account.create_campaign(params=campaign_payload)
-        return {"status": "success", "data": campaign.export_all_data()}
+        # Extraer parámetros correctamente
+        account_id = params.get('account_id') or settings.META_ADS.BUSINESS_ACCOUNT_ID
+        name = params.get('name', f'Campaign_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
+        objective = params.get('objective', 'OUTCOME_TRAFFIC')
+        status = params.get('status', 'PAUSED')
+        special_ad_categories = params.get('special_ad_categories', [])
+        
+        if not account_id:
+            return {
+                "status": "error",
+                "message": "account_id es requerido"
+            }
+        
+        # Configurar parámetros de la campaña
+        campaign_params = {
+            'name': name,
+            'objective': objective,
+            'status': status,
+            'special_ad_categories': special_ad_categories
+        }
+        
+        # Crear la campaña usando el SDK de Facebook
+        ad_account = AdAccount(f'act_{account_id}')
+        campaign = ad_account.create_campaign(params=campaign_params)
+        
+        # Obtener los datos de la campaña creada
+        campaign_data = campaign.export_all_data()
+        
+        return {
+            "status": "success",
+            "message": f"Campaña '{name}' creada exitosamente",
+            "data": {
+                "id": campaign_data.get('id'),
+                "name": campaign_data.get('name'),
+                "status": campaign_data.get('status'),
+                "objective": campaign_data.get('objective'),
+                "account_id": account_id,
+                "created_time": campaign_data.get('created_time')
+            }
+        }
+        
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 

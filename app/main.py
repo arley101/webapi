@@ -1,5 +1,5 @@
 # app/main.py
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request 
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
@@ -22,17 +22,18 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Iniciando EliteDynamicsAPI-Local v1.1-localdev...")
+    logger.info("Iniciando EliteDynamicsAPI v1.1...")
     logger.info(f"Nivel de Logging configurado: {settings.LOG_LEVEL.upper()}")
+    logger.info(f"Entorno: {settings.ENVIRONMENT}")
     yield
     # Shutdown
-    logger.info("Apagando EliteDynamicsAPI-Local...")
+    logger.info("Apagando EliteDynamicsAPI...")
 
 # Crear la instancia de la aplicación FastAPI con lifespan
 app = FastAPI(
-    title="EliteDynamicsAPI-Local",
-    description="API Local de Elite Dynamics para acciones empresariales",
-    version="1.1-localdev",
+    title="EliteDynamicsAPI",
+    description="API de Elite Dynamics para acciones empresariales",
+    version="1.1",
     docs_url="/api/v1/docs",
     redoc_url="/api/v1/redoc",
     openapi_url="/api/v1/openapi.json",
@@ -51,35 +52,42 @@ logger.info("Documentación ReDoc disponible en: /api/v1/redoc")
 @app.get("/")
 async def root():
     return {
-        "message": "EliteDynamicsAPI-Local está funcionando",
-        "version": "1.1-localdev",
-        "docs": "/api/v1/docs"
+        "message": "EliteDynamicsAPI está funcionando",
+        "version": "1.1",
+        "docs": "/api/v1/docs",
+        "environment": settings.ENVIRONMENT
     }
 
 @app.get("/health")
 async def health_check():
+    """Health check endpoint básico"""
     return {
         "status": "healthy",
-        "version": "1.1-localdev",
-        "environment": settings.ENVIRONMENT
+        "version": "1.1",
+        "environment": settings.ENVIRONMENT,
+        "timestamp": datetime.now().isoformat()
     }
 
 @app.get("/api/v1/health")
-async def health_check():
-    """Health check endpoint para verificar estado del sistema."""
+async def api_health_check():
+    """Health check endpoint detallado para verificar estado del sistema."""
     from app.core.action_mapper import ACTION_MAP
-    from app.core.config import settings
     
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
-        "version": settings.APP_VERSION,
+        "version": getattr(settings, 'APP_VERSION', '1.1'),
         "environment": settings.ENVIRONMENT,
         "total_actions": len(ACTION_MAP),
         "backend_features": {
+            "microsoft_graph": bool(settings.AZURE_CLIENT_ID),
             "google_ads": bool(settings.GOOGLE_ADS_CLIENT_ID),
             "youtube": bool(settings.YOUTUBE_CLIENT_ID or settings.GOOGLE_ADS_CLIENT_ID),
+            "meta_ads": bool(settings.META_APP_ID),
             "gemini": bool(settings.GEMINI_API_KEY),
+            "wordpress": bool(settings.WP_SITE_URL),
+            "notion": bool(settings.NOTION_API_KEY),
+            "hubspot": bool(settings.HUBSPOT_PRIVATE_APP_KEY),
             "auth_manager": True
         }
     }
