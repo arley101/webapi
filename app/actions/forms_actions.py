@@ -1,24 +1,26 @@
 # app/actions/forms_actions.py
-import logging
-import requests # Para requests.exceptions.HTTPError
-import json # Para el helper de error
+import requests
+import json
 from typing import Dict, List, Optional, Any
-import urllib.parse # Para URL encoding en la búsqueda
+import urllib.parse
+import logging
+from datetime import datetime
 
 from app.core.config import settings
 from app.shared.helpers.http_client import AuthenticatedHttpClient
-# Importar helpers de sharepoint_actions si se van a buscar Forms en sitios de SharePoint
-try:
-    from app.actions.sharepoint_actions import _obtener_site_id_sp, _get_drive_id
-except ImportError:
-    logger.error("Error al importar helpers de sharepoint_actions.py. La búsqueda de Forms en SharePoint podría fallar.")
+
+logger = logging.getLogger(__name__)
+
+def _handle_forms_api_error(e: Exception, action_name: str, params_for_log: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    log_message = f"Error en Forms Action '{action_name}'"
+    if params_for_log:
+        log_message += f" con params: {params_for_log}"
+    
     # Definir placeholders para que el módulo cargue, pero las funciones fallarán si se llaman.
     def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> str:
         raise NotImplementedError("Helper _obtener_site_id_sp no disponible desde forms_actions.")
     def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_name_input: Optional[str] = None) -> str:
         raise NotImplementedError("Helper _get_drive_id no disponible desde forms_actions.")
-
-logger = logging.getLogger(__name__)
 
 def _handle_forms_api_error(e: Exception, action_name: str, params_for_log: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     log_message = f"Error en Forms Action '{action_name}'"
@@ -238,5 +240,27 @@ def get_form_responses(client: AuthenticatedHttpClient, params: Dict[str, Any]) 
         "details": details,
         "http_status": 501 # Not Implemented
     }
+
+def _obtener_site_id_sp(graph_client) -> str:
+    """Obtiene el site ID de SharePoint"""
+    try:
+        site_url = "https://graph.microsoft.com/v1.0/sites/root"
+        response = graph_client.get(site_url)
+        response.raise_for_status()
+        return response.json().get('id')
+    except Exception as e:
+        logger.error(f"Error obteniendo site ID: {str(e)}")
+        return None
+
+def _get_drive_id(graph_client, site_id: str) -> str:
+    """Obtiene el drive ID del sitio"""
+    try:
+        drive_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive"
+        response = graph_client.get(drive_url)
+        response.raise_for_status()
+        return response.json().get('id')
+    except Exception as e:
+        logger.error(f"Error obteniendo drive ID: {str(e)}")
+        return None
 
 # --- FIN DEL MÓDULO actions/forms_actions.py ---

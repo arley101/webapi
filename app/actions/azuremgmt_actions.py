@@ -1,14 +1,26 @@
-# app/actions/azuremgmt_actions.py
-# -*- coding: utf-8 -*-
+"""
+Azure Management Actions
+Acciones para gestionar recursos de Azure
+"""
+
 import logging
-import requests # Para requests.exceptions.HTTPError
-import json # Para el helper de error
-from typing import Dict, List, Optional, Any
+from typing import Dict, Any, List, Optional
+from datetime import datetime
+import json
+import requests
 
 from app.core.config import settings # Para acceder a AZURE_MGMT_DEFAULT_SCOPE, AZURE_MGMT_API_BASE_URL
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)
+
+# Simulación de cliente Azure (en producción usar azure-mgmt-*)
+class AzureManagementClient:
+    def __init__(self):
+        self.subscription_id = "mock-subscription-id"
+
+# Cliente mock para desarrollo
+azure_client = AzureManagementClient()
 
 # Helper para manejar errores de ARM API de forma centralizada
 def _handle_azure_mgmt_api_error(e: Exception, action_name: str, params_for_log: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -47,12 +59,12 @@ def _handle_azure_mgmt_api_error(e: Exception, action_name: str, params_for_log:
 
 # --- Implementación de Acciones de Azure Management ---
 
-def list_resource_groups(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
-    params = params or {}
+def list_resource_groups(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Lista todos los grupos de recursos de Azure"""
     action_name = "azure_list_resource_groups"
     logger.info(f"Ejecutando {action_name} con params: {params}")
     
-    subscription_id = params.get("subscription_id", settings.AZURE_SUBSCRIPTION_ID)
+    subscription_id = params.get("subscription_id", azure_client.subscription_id)
     if not subscription_id:
         return {"status": "error", "action": action_name, "message": "'subscription_id' (en params o settings) es requerido.", "http_status": 400}
 
@@ -72,12 +84,13 @@ def list_resource_groups(client: AuthenticatedHttpClient, params: Dict[str, Any]
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-def list_resources_in_rg(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def list_resources_in_rg(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Lista recursos dentro de un grupo de recursos específico"""
     params = params or {}
     action_name = "azure_list_resources_in_rg"
     logger.info(f"Ejecutando {action_name} con params: {params}")
     
-    subscription_id = params.get("subscription_id", settings.AZURE_SUBSCRIPTION_ID)
+    subscription_id = params.get("subscription_id", azure_client.subscription_id)
     resource_group_name = params.get("resource_group_name", settings.AZURE_RESOURCE_GROUP)
 
     if not subscription_id:
@@ -101,7 +114,8 @@ def list_resources_in_rg(client: AuthenticatedHttpClient, params: Dict[str, Any]
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-def get_resource(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def get_resource(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene detalles de un recurso específico"""
     params = params or {}
     action_name = "azure_get_resource"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -129,40 +143,42 @@ def get_resource(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-def restart_function_app(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def create_deployment(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea un nuevo deployment en Azure"""
     params = params or {}
-    action_name = "azure_restart_function_app"
-    logger.info(f"Ejecutando {action_name} con params: {params}")
+    action_name = "azure_create_deployment"
+    logger.info(f"Ejecutando {action_name} con params (template/parameters omitidos del log): %s", {k:v for k,v in params.items() if k not in ['template', 'parameters', 'deployment_properties']})
     
+    # Esta función es compleja y requiere muchos parámetros específicos.
+    # Se mantiene como no implementada por ahora.
     subscription_id = params.get("subscription_id", settings.AZURE_SUBSCRIPTION_ID)
     resource_group_name = params.get("resource_group_name", settings.AZURE_RESOURCE_GROUP)
-    function_app_name = params.get("function_app_name")
+    deployment_name = params.get("deployment_name")
+    deployment_properties = params.get("deployment_properties") # Esto debería contener 'template', 'parameters', 'mode'
 
-    if not subscription_id: 
-        return {"status": "error", "action": action_name, "message": "'subscription_id' es requerido.", "http_status": 400}
-    if not resource_group_name: 
-        return {"status": "error", "action": action_name, "message": "'resource_group_name' es requerido.", "http_status": 400}
-    if not function_app_name: 
-        return {"status": "error", "action": action_name, "message": "'function_app_name' es requerido.", "http_status": 400}
+    if not all([subscription_id, resource_group_name, deployment_name, deployment_properties]):
+         return {"status": "error", "action": action_name, "message": "Faltan parámetros requeridos: 'subscription_id', 'resource_group_name', 'deployment_name', 'deployment_properties'.", "http_status": 400}
+    if not isinstance(deployment_properties, dict) or "template" not in deployment_properties:
+        return {"status": "error", "action": action_name, "message": "'deployment_properties' debe ser un dict y contener al menos 'template'.", "http_status": 400}
 
-    api_version = params.get("api_version", "2022-03-01") # API version para Microsoft.Web/sites
-    url = f"{settings.AZURE_MGMT_API_BASE_URL}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Web/sites/{function_app_name}/restart?api-version={api_version}"
+    api_version = params.get("api_version", "2021-04-01") # API para deployments
+    url = f"{settings.AZURE_MGMT_API_BASE_URL}/subscriptions/{subscription_id}/resourcegroups/{resource_group_name}/providers/Microsoft.Resources/deployments/{deployment_name}?api-version={api_version}"
     
-    logger.info(f"Reiniciando Function App '{function_app_name}' en RG '{resource_group_name}'")
+    payload = {"properties": deployment_properties} # El cuerpo de la solicitud PUT
+    
+    logger.warning(f"Acción '{action_name}' está siendo llamada. Esta es una operación compleja y potencialmente destructiva.")
+    logger.info(f"Creando/Actualizando despliegue ARM '{deployment_name}' en RG '{resource_group_name}'. Modo: {deployment_properties.get('mode', 'Incremental')}")
     try:
-        response = client.post(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE) # No necesita json_data
-        if response.status_code == 204:
-             return {"status": "success", "message": f"Function App '{function_app_name}' reiniciada exitosamente (204 No Content).", "http_status": response.status_code}
-        elif response.status_code == 200: # A veces devuelve 200 OK
-             return {"status": "success", "message": f"Solicitud de reinicio para Function App '{function_app_name}' enviada (200 OK).", "data": response.json() if response.content else None, "http_status": response.status_code}
-        else: # Respuesta inesperada pero no error HTTP
-            logger.warning(f"Respuesta inesperada {response.status_code} al reiniciar Function App: {response.text[:200]}")
-            response.raise_for_status() # Forzar error si no fue 200 o 204
-            return {} # No debería llegar aquí
+        # create_deployment es una operación PUT
+        response = client.put(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, json_data=payload)
+        # Puede devolver 200 OK o 201 Created. La respuesta contiene el estado del despliegue.
+        return {"status": "success", "data": response.json(), "message": f"Despliegue ARM '{deployment_name}' iniciado/actualizado."}
     except Exception as e:
+        # Los params pasados a _handle_azure_mgmt_api_error son los originales, no el payload.
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-def list_functions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def list_functions(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Lista todas las Azure Functions"""
     params = params or {}
     action_name = "azure_list_functions"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -186,7 +202,8 @@ def list_functions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> D
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-def get_function_status(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def get_function_status(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene el estado de una Function App específica"""
     params = params or {}
     action_name = "azure_get_function_status"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -226,41 +243,42 @@ def get_function_status(client: AuthenticatedHttpClient, params: Dict[str, Any])
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-def create_deployment(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
+def restart_function_app(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Reinicia una Function App"""
     params = params or {}
-    action_name = "azure_create_deployment"
-    logger.info(f"Ejecutando {action_name} con params (template/parameters omitidos del log): %s", {k:v for k,v in params.items() if k not in ['template', 'parameters', 'deployment_properties']})
+    action_name = "azure_restart_function_app"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
     
-    # Esta función es compleja y requiere muchos parámetros específicos.
-    # Se mantiene como no implementada por ahora.
     subscription_id = params.get("subscription_id", settings.AZURE_SUBSCRIPTION_ID)
     resource_group_name = params.get("resource_group_name", settings.AZURE_RESOURCE_GROUP)
-    deployment_name = params.get("deployment_name")
-    deployment_properties = params.get("deployment_properties") # Esto debería contener 'template', 'parameters', 'mode'
+    function_app_name = params.get("function_app_name")
 
-    if not all([subscription_id, resource_group_name, deployment_name, deployment_properties]):
-         return {"status": "error", "action": action_name, "message": "Faltan parámetros requeridos: 'subscription_id', 'resource_group_name', 'deployment_name', 'deployment_properties'.", "http_status": 400}
-    if not isinstance(deployment_properties, dict) or "template" not in deployment_properties:
-        return {"status": "error", "action": action_name, "message": "'deployment_properties' debe ser un dict y contener al menos 'template'.", "http_status": 400}
+    if not subscription_id: 
+        return {"status": "error", "action": action_name, "message": "'subscription_id' es requerido.", "http_status": 400}
+    if not resource_group_name: 
+        return {"status": "error", "action": action_name, "message": "'resource_group_name' es requerido.", "http_status": 400}
+    if not function_app_name: 
+        return {"status": "error", "action": action_name, "message": "'function_app_name' es requerido.", "http_status": 400}
 
-    api_version = params.get("api_version", "2021-04-01") # API para deployments
-    url = f"{settings.AZURE_MGMT_API_BASE_URL}/subscriptions/{subscription_id}/resourcegroups/{resource_group_name}/providers/Microsoft.Resources/deployments/{deployment_name}?api-version={api_version}"
+    api_version = params.get("api_version", "2022-03-01") # API version para Microsoft.Web/sites
+    url = f"{settings.AZURE_MGMT_API_BASE_URL}/subscriptions/{subscription_id}/resourceGroups/{resource_group_name}/providers/Microsoft.Web/sites/{function_app_name}/restart?api-version={api_version}"
     
-    payload = {"properties": deployment_properties} # El cuerpo de la solicitud PUT
-    
-    logger.warning(f"Acción '{action_name}' está siendo llamada. Esta es una operación compleja y potencialmente destructiva.")
-    logger.info(f"Creando/Actualizando despliegue ARM '{deployment_name}' en RG '{resource_group_name}'. Modo: {deployment_properties.get('mode', 'Incremental')}")
+    logger.info(f"Reiniciando Function App '{function_app_name}' en RG '{resource_group_name}'")
     try:
-        # create_deployment es una operación PUT
-        response = client.put(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE, json_data=payload)
-        # Puede devolver 200 OK o 201 Created. La respuesta contiene el estado del despliegue.
-        return {"status": "success", "data": response.json(), "message": f"Despliegue ARM '{deployment_name}' iniciado/actualizado."}
+        response = client.post(url, scope=settings.AZURE_MGMT_DEFAULT_SCOPE) # No necesita json_data
+        if response.status_code == 204:
+             return {"status": "success", "message": f"Function App '{function_app_name}' reiniciada exitosamente (204 No Content).", "http_status": response.status_code}
+        elif response.status_code == 200: # A veces devuelve 200 OK
+             return {"status": "success", "message": f"Solicitud de reinicio para Function App '{function_app_name}' enviada (200 OK).", "data": response.json() if response.content else None, "http_status": response.status_code}
+        else: # Respuesta inesperada pero no error HTTP
+            logger.warning(f"Respuesta inesperada {response.status_code} al reiniciar Function App: {response.text[:200]}")
+            response.raise_for_status() # Forzar error si no fue 200 o 204
+            return {} # No debería llegar aquí
     except Exception as e:
-        # Los params pasados a _handle_azure_mgmt_api_error son los originales, no el payload.
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-
-def list_logic_apps(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
+def list_logic_apps(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Lista todas las Logic Apps"""
     params = params or {}
     action_name = "azure_list_logic_apps"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -297,8 +315,8 @@ def list_logic_apps(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
 
-
-def trigger_logic_app(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
+def trigger_logic_app(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Dispara una Logic App manualmente"""
     params = params or {}
     action_name = "azure_trigger_logic_app"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -319,7 +337,8 @@ def trigger_logic_app(client: AuthenticatedHttpClient, params: Dict[str, Any]) -
         "http_status": 501
     }
 
-def get_logic_app_run_history(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> dict:
+def get_logic_app_run_history(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtiene el historial de ejecuciones de una Logic App"""
     params = params or {}
     action_name = "azure_get_logic_app_run_history"
     logger.info(f"Ejecutando {action_name} con params: {params}")
@@ -346,3 +365,15 @@ def get_logic_app_run_history(client: AuthenticatedHttpClient, params: Dict[str,
         return {"status": "success", "data": response.get("value", [])}
     except Exception as e:
         return _handle_azure_mgmt_api_error(e, action_name, params)
+
+# Alias para mantener compatibilidad
+azure_list_resource_groups = list_resource_groups
+azure_list_resources_in_rg = list_resources_in_rg
+azure_get_resource = get_resource
+azure_create_deployment = create_deployment
+azure_list_functions = list_functions
+azure_get_function_status = get_function_status
+azure_restart_function_app = restart_function_app
+azure_list_logic_apps = list_logic_apps
+azure_trigger_logic_app = trigger_logic_app
+azure_get_logic_app_run_history = get_logic_app_run_history

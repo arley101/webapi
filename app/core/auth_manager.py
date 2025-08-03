@@ -13,6 +13,7 @@ class TokenManager:
     def __init__(self):
         self._cached_tokens = {}
         self._token_expiry = {}
+        self._refresh_in_progress = {}  # Evitar múltiples refresh simultáneos
     
     def get_google_access_token(self, service: str = "google_ads") -> str:
         """Genera automáticamente access token desde refresh token"""
@@ -185,6 +186,109 @@ class TokenManager:
                 "Content-Type": "application/json"
             }
         }
+    
+    def get_meta_access_token(self) -> str:
+        """Genera automáticamente access token para Meta desde refresh token"""
+        cache_key = "meta_access_token"
+        
+        # Verificar si ya tenemos un token válido
+        if cache_key in self._cached_tokens:
+            expiry = self._token_expiry.get(cache_key, datetime.now())
+            if datetime.now() < expiry:
+                return self._cached_tokens[cache_key]
+        
+        # Evitar múltiples refresh simultáneos
+        if self._refresh_in_progress.get(cache_key, False):
+            # Esperar un momento y reintentar
+            import time
+            time.sleep(2)
+            return self.get_meta_access_token()
+        
+        self._refresh_in_progress[cache_key] = True
+        
+        try:
+            # Para Meta, el access token de larga duración se obtiene diferente
+            response = requests.get(
+                "https://graph.facebook.com/v18.0/oauth/access_token",
+                params={
+                    "grant_type": "fb_exchange_token",
+                    "client_id": settings.META_ADS.APP_ID,
+                    "client_secret": settings.META_ADS.APP_SECRET,
+                    "fb_exchange_token": settings.META_ADS.ACCESS_TOKEN
+                },
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                token_data = response.json()
+                access_token = token_data["access_token"]
+                expires_in = token_data.get("expires_in", 5184000)  # 60 días default
+                
+                # Cachear token
+                self._cached_tokens[cache_key] = access_token
+                self._token_expiry[cache_key] = datetime.now() + timedelta(seconds=expires_in - 3600)
+                
+                logger.info("✅ Meta token renovado automáticamente")
+                return access_token
+            else:
+                logger.error(f"❌ Error renovando token Meta: {response.text}")
+                # Retornar el token existente como fallback
+                return settings.META_ADS.ACCESS_TOKEN
+                
+        except Exception as e:
+            logger.error(f"💥 Fallo renovando token Meta: {str(e)}")
+            return settings.META_ADS.ACCESS_TOKEN
+        finally:
+            self._refresh_in_progress[cache_key] = False
+    
+    def get_linkedin_access_token(self) -> str:
+        """Obtiene access token para LinkedIn (por ahora usa el token fijo)"""
+        # LinkedIn requiere un flujo OAuth más complejo
+        # Por ahora retornamos el token configurado
+        return settings.LINKEDIN_ACCESS_TOKEN
+    
+    def get_tiktok_access_token(self) -> str:
+        """Obtiene access token para TikTok"""
+        # TikTok también usa tokens de larga duración
+        return settings.TIKTOK_ADS.ACCESS_TOKEN
+    
+    def refresh_all_tokens(self) -> Dict[str, bool]:
+        """Refresca todos los tokens disponibles"""
+        results = {}
+        
+        # Google (ya implementado)
+        try:
+            self.get_google_access_token()
+            results["google"] = True
+        except:
+            results["google"] = False
+        
+        # YouTube
+        try:
+            self.get_google_access_token("youtube")
+            results["youtube"] = True
+        except:
+            results["youtube"] = False
+        
+        # Meta
+        try:
+            self.get_meta_access_token()
+            results["meta"] = True
+        except:
+            results["meta"] = False
+        
+        # WordPress
+        try:
+            self.get_wordpress_jwt_token()
+            results["wordpress"] = True
+        except:
+            results["wordpress"] = False
+        
+        return results
 
 # Instancia global
 token_manager = TokenManager()
+
+def get_auth_client():
+    """Función helper para compatibilidad con action_mapper"""
+    return token_manager

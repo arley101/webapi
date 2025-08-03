@@ -139,6 +139,43 @@ def _get_currency_config(currency_code: str = "COP") -> Dict[str, int]:
     }
     return currency_configs.get(currency_code, currency_configs["USD"])
 
+def _create_campaign_budget(client, customer_id, name, amount_micros, is_shared=False):
+    """
+    Crea un presupuesto de campaña en Google Ads.
+    
+    Args:
+        client: Cliente de Google Ads
+        customer_id: ID del cliente
+        name: Nombre del presupuesto
+        amount_micros: Monto en micros (1,000,000 = 1 unidad de moneda)
+        is_shared: Si el presupuesto puede ser compartido entre campañas
+        
+    Returns:
+        Resource name del presupuesto creado
+    """
+    campaign_budget_service = client.get_service("CampaignBudgetService")
+    campaign_budget_operation = client.get_type("CampaignBudgetOperation")
+    
+    campaign_budget = campaign_budget_operation.create
+    campaign_budget.name = name
+    campaign_budget.delivery_method = client.enums.BudgetDeliveryMethodEnum.STANDARD
+    campaign_budget.amount_micros = amount_micros
+    campaign_budget.explicitly_shared = is_shared
+    
+    try:
+        response = campaign_budget_service.mutate_campaign_budgets(
+            customer_id=customer_id,
+            operations=[campaign_budget_operation]
+        )
+        
+        budget_resource_name = response.results[0].resource_name
+        logger.info(f"Created campaign budget: {budget_resource_name}")
+        return budget_resource_name
+        
+    except GoogleAdsException as e:
+        logger.error(f"Error creating campaign budget: {e}")
+        raise
+
 # --- ACCIONES COMPLETAS Y FUNCIONALES ---
 
 def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -149,112 +186,69 @@ def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, An
     return _execute_search_query(customer_id, query, "googleads_get_campaigns")
 
 def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Crea una campaña de Google Ads con validación de presupuesto por moneda."""
-    customer_id = _get_customer_id(params)
-    campaign_name = params.get("name")
-    if not campaign_name: 
-        raise ValueError("Se requiere el parámetro 'name' para la campaña.")
-    
-    # CORRECCIÓN CRÍTICA: Validar presupuesto por moneda
-    currency_code = params.get("currency_code", "COP")  # Default a peso colombiano
-    raw_budget = params.get("budget_micros", 500000)  # Budget base
-    validated_budget = _validate_budget_for_currency(raw_budget, currency_code)
-    
-    gads_client = get_google_ads_client()
-    
+    """
+    Crea una nueva campaña en Google Ads
+    """
+    action_name = "googleads_create_campaign"
     try:
-        # Crear presupuesto con validación de moneda
-        budget_operation = gads_client.get_type("CampaignBudgetOperation")
-        budget = budget_operation.create
-        budget.name = f"Budget for {campaign_name} - {datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        budget.amount_micros = validated_budget
-        budget.delivery_method = gads_client.enums.BudgetDeliveryMethodEnum.STANDARD
+        # Obtener token manager del cliente
+        token_manager = client
+        access_token = token_manager.get_google_access_token("google_ads")
         
-        budget_service = gads_client.get_service("CampaignBudgetService")
-        budget_response = budget_service.mutate_campaign_budgets(
-            customer_id=customer_id, 
-            operations=[budget_operation]
-        )
-        budget_resource_name = budget_response.results[0].resource_name
-
-        # Crear campaña con configuración mejorada
-        operation = gads_client.get_type("CampaignOperation")
-        campaign = operation.create
+        # Configurar cliente de Google Ads
+        google_ads_client = GoogleAdsClient.load_from_dict({
+            "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
+            "use_proto_plus": True,
+            "access_token": access_token,
+            "login_customer_id": settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID
+        })
+        
+        # Extraer parámetros
+        customer_id = params.get('customer_id', settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID)
+        campaign_name = params.get('name', f'Campaign_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
+        budget_amount = params.get('budget_amount_micros', 1000000)  # Default $1
+        
+        # Crear servicio de campaña
+        campaign_service = google_ads_client.get_service("CampaignService")
+        campaign_operation = google_ads_client.get_type("CampaignOperation")
+        
+        campaign = campaign_operation.create
         campaign.name = campaign_name
-        campaign.campaign_budget = budget_resource_name
-        campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
+        campaign.advertising_channel_type = google_ads_client.enums.AdvertisingChannelTypeEnum.SEARCH
         
-        # CORRECCIÓN: Alinear nombres de parámetros con la API
-        campaign_type = params.get("advertising_channel_type", "SEARCH").upper()
-        
-        if campaign_type == "PERFORMANCE_MAX":
-            campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.PERFORMANCE_MAX
-            campaign.bidding_strategy_type = gads_client.enums.BiddingStrategyTypeEnum.MAXIMIZE_CONVERSION_VALUE
-            
-            # Configurar target ROAS si se proporciona
-            target_roas = params.get("target_roas", 0.0)
-            if target_roas > 0:
-                campaign.maximize_conversion_value.target_roas = target_roas
-        else:
-            # Default a Search con configuración robusta
-            campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum.SEARCH
-            campaign.bidding_strategy_type = gads_client.enums.BiddingStrategyTypeEnum.MANUAL_CPC
-            campaign.network_settings.target_google_search = True
-            campaign.network_settings.target_search_network = params.get("target_search_network", False)
-            
-            # Configurar CPC manual si se proporciona
-            manual_cpc_bid = params.get("manual_cpc_enhanced_cpc_enabled", True)
-            campaign.manual_cpc.enhanced_cpc_enabled = manual_cpc_bid
-        
-        # Configuraciones adicionales
-        if params.get("start_date"):
-            campaign.start_date = params["start_date"]
-        if params.get("end_date"):
-            campaign.end_date = params["end_date"]
-            
-        response = _execute_mutate_operations(
+        # Configurar presupuesto
+        campaign.campaign_budget = campaign_service.campaign_budget_path(
             customer_id, 
-            [operation], 
-            "CampaignService", 
-            "googleads_create_campaign"
+            _create_campaign_budget(google_ads_client, customer_id, budget_amount)
         )
         
-        # Agregar información del presupuesto a la respuesta
-        if response["success"]:
-            response["budget_info"] = {
-                "original_budget_micros": raw_budget,
-                "validated_budget_micros": validated_budget,
-                "currency_code": currency_code,
-                "budget_resource_name": budget_resource_name
-            }
+        campaign.status = google_ads_client.enums.CampaignStatusEnum.PAUSED
         
-        return response
+        # Crear la campaña
+        response = campaign_service.mutate_campaigns(
+            customer_id=customer_id,
+            operations=[campaign_operation]
+        )
         
-    except GoogleAdsException as ex:
-        # Manejo específico de errores de presupuesto
-        for error in ex.failure.errors:
-            if "NON_MULTIPLE_OF_MINIMUM_CURRENCY_UNIT" in str(error.error_code):
-                logger.error(f"Error de múltiplo de moneda: {error.message}")
-                # CORRECCIÓN: Usar la función helper
-                currency_config = _get_currency_config(currency_code)
-                return {
-                    "success": False,
-                    "error": f"Presupuesto inválido para {currency_code}. Debe ser múltiplo de {currency_config.get('multiple_of', 10000)} micros.",
-                    "details": {
-                        "suggested_budget": validated_budget,
-                        "currency_code": currency_code,
-                        "original_error": error.message
-                    },
-                    "timestamp": datetime.now().isoformat()
-                }
-        return _handle_google_ads_api_error(ex, "googleads_create_campaign")
-    
-    except Exception as e:
-        logger.error(f"Error inesperado creando campaña: {str(e)}")
+        created_campaign = response.results[0]
+        
         return {
-            "success": False,
-            "error": str(e),
-            "timestamp": datetime.now().isoformat()
+            "status": "success",
+            "message": f"Campaña '{campaign_name}' creada exitosamente",
+            "data": {
+                "id": created_campaign.resource_name.split('/')[-1],
+                "resource_name": created_campaign.resource_name,
+                "name": campaign_name,
+                "status": "PAUSED"
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error en {action_name}: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Error al crear campaña: {str(e)}",
+            "action": action_name
         }
 
 def googleads_get_ad_groups(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:

@@ -195,3 +195,10 @@ def get_environment() -> str:
 
 # Settings instance with environment detection
 settings = Settings(ENVIRONMENT=get_environment())
+
+# Logging de configuración cargada
+logger = logging.getLogger(__name__)
+logger.info(f"Configuración cargada para {settings.APP_NAME} v{settings.APP_VERSION}")
+logger.info(f"SharePoint Site ID: {'Configurado' if settings.SHAREPOINT_DEFAULT_SITE_ID else 'No configurado'}")
+logger.info(f"Notion configurado: {'Sí' if settings.NOTION_API_TOKEN else 'No'}")
+logger.info(f"Gemini configurado: {'Sí' if settings.GEMINI_API_KEY else 'No'}")

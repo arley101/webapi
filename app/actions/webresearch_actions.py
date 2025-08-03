@@ -3,11 +3,19 @@ import re
 import json
 import time
 import hashlib
-from datetime import datetime
+import logging
+from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional
 from urllib.parse import urlparse, quote_plus
 import requests
 from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
+
+# Cache simple para evitar requests repetitivas
+_cache = {}
+_cache_expiry = {}
+CACHE_DURATION = timedelta(minutes=15)
 
 # Cache simple en memoria
 _url_cache = {}
@@ -26,15 +34,14 @@ def _get_headers() -> Dict[str, str]:
     }
 
 def _rate_limit():
-    """Implementa rate limiting básico."""
+    """Implementa rate limiting simple"""
     global _last_request_time
-    current_time = time.time()
-    time_since_last = current_time - _last_request_time
-    
-    if time_since_last < REQUEST_DELAY:
-        time.sleep(REQUEST_DELAY - time_since_last)
-    
+    if _last_request_time:
+        elapsed = time.time() - _last_request_time
+        if elapsed < 1:  # Esperar al menos 1 segundo entre requests
+            time.sleep(1 - elapsed)
     _last_request_time = time.time()
+    return True  # AGREGAR RETURN
 
 def _get_cached_result(cache_key: str) -> Optional[Dict[str, Any]]:
     """Obtiene resultado del cache si existe y no ha expirado."""
@@ -47,12 +54,13 @@ def _get_cached_result(cache_key: str) -> Optional[Dict[str, Any]]:
             del _url_cache[cache_key]
     return None
 
-def _cache_result(cache_key: str, data: Dict[str, Any]):
-    """Guarda resultado en cache."""
-    _url_cache[cache_key] = {
-        'data': data,
-        'timestamp': time.time()
+def _cache_result(key: str, value: Any, ttl: int = 3600):
+    """Cachea un resultado con TTL"""
+    _cache[key] = {
+        'value': value,
+        'expires': time.time() + ttl
     }
+    return True  # AGREGAR RETURN
 
 def _handle_web_error(error: Exception, action_name: str) -> Dict[str, Any]:
     """Maneja errores de forma consistente."""
@@ -137,37 +145,87 @@ def fetch_url(client, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_web_error(e, action_name)
 
-def search_web(client, params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Realiza búsquedas web usando múltiples motores de búsqueda
-    """
-    action_name = "search_web"
-    
+def search_web(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Búsqueda web inteligente con auto-guardado de resultados relevantes"""
     try:
-        query = params.get('query')
-        if not query:
-            return {
-                "success": False,
-                "error": "Query de búsqueda es requerida",
-                "timestamp": datetime.now().isoformat()
-            }
+        query = params.get("query", "")
+        limit = params.get("limit", 10)
+        auto_save = params.get("auto_save", True)
         
-        max_results = params.get('max_results', 10)
-        search_engine = params.get('search_engine', 'duckduckgo')
-        
-        if search_engine == 'duckduckgo':
-            return _search_duckduckgo(query, max_results)
-        elif search_engine == 'google':
-            return _search_google_custom(query, max_results)
-        else:
-            return {
-                "success": False,
-                "error": f"Motor de búsqueda no soportado: {search_engine}",
-                "timestamp": datetime.now().isoformat()
-            }
+        # NUEVO: Análisis inteligente de resultados
+        if search_results and auto_save:
+            # Usar Gemini para analizar relevancia
+            from app.actions import gemini_actions
             
+            relevance_analysis = gemini_actions.analyze_conversation_context(client, {
+                "conversation_data": {
+                    "task": "analyze_search_relevance",
+                    "query": query,
+                    "results": search_results[:5],  # Primeros 5 resultados
+                    "instructions": """
+                    Analiza estos resultados de búsqueda y determina:
+                    1. Cuáles son altamente relevantes (score > 0.8)
+                    2. Si contienen información crítica que debe guardarse
+                    3. Si requieren análisis adicional o scraping
+                    4. Tags para categorizar la información
+                    
+                    Responde en JSON con estructura:
+                    {
+                        "relevant_results": [{"url": "...", "relevance": 0.9, "reason": "..."}],
+                        "should_save": true/false,
+                        "requires_scraping": ["url1", "url2"],
+                        "tags": ["tag1", "tag2"],
+                        "summary": "..."
+                    }
+                    """
+                }
+            })
+            
+            if relevance_analysis.get('success'):
+                analysis_data = relevance_analysis.get('data', {}).get('response', {})
+                
+                # Auto-guardar si es relevante
+                if analysis_data.get('should_save', False):
+                    from app.actions import resolver_actions
+                    
+                    save_result = resolver_actions.smart_save_resource(client, {
+                        'resource_type': 'web_research',
+                        'resource_data': {
+                            'query': query,
+                            'results': search_results,
+                            'analysis': analysis_data,
+                            'timestamp': datetime.now().isoformat()
+                        },
+                        'action_name': 'search_web',
+                        'metadata': {
+                            'tags': analysis_data.get('tags', []),
+                            'relevance_summary': analysis_data.get('summary', '')
+                        }
+                    })
+                    
+                    # Agregar info de guardado a la respuesta
+                    response['auto_saved'] = save_result
+                
+                # Ejecutar scraping adicional si es necesario
+                scraping_results = []
+                for url in analysis_data.get('requires_scraping', [])[:3]:  # Máx 3
+                    scrape_result = webresearch_scrape_url(client, {'url': url})
+                    if scrape_result.get('success'):
+                        scraping_results.append({
+                            'url': url,
+                            'content': scrape_result.get('data', {}).get('text', '')[:1000]
+                        })
+                
+                if scraping_results:
+                    response['additional_scraping'] = scraping_results
+                
+                response['relevance_analysis'] = analysis_data
+        
+        return response
+        
     except Exception as e:
-        return _handle_web_error(e, action_name)
+        logger.error(f"Error in search_web: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 def _search_duckduckgo(query: str, max_results: int) -> Dict[str, Any]:
     """Búsqueda usando DuckDuckGo."""
@@ -433,80 +491,104 @@ def batch_url_analysis(client, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_web_error(e, action_name)
 
-def monitor_website_changes(client, params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Monitorea cambios en un sitio web
-    """
-    action_name = "monitor_website_changes"
-    
+def monitor_website_changes(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Monitoreo inteligente de cambios en sitios web"""
     try:
-        url = params.get('url')
-        if not url:
-            return {
-                "success": False,
-                "error": "URL es requerida",
-                "timestamp": datetime.now().isoformat()
-            }
+        urls = params.get("urls", [])
+        check_interval = params.get("check_interval", "daily")
         
-        # Obtener contenido actual
-        current_result = fetch_url(client, {'url': url, 'use_cache': False})
-        if not current_result.get('success'):
-            return current_result
+        results = []
+        significant_changes = []
         
-        current_content = current_result.get('content', '')
-        current_hash = hashlib.md5(current_content.encode()).hexdigest()
-        
-        # Obtener hash anterior del cache (si existe)
-        cache_key = f"monitor_{url}"
-        previous_data = _get_cached_result(cache_key)
-        
-        if previous_data:
-            previous_hash = previous_data.get('content_hash')
-            has_changed = current_hash != previous_hash
+        for url in urls:
+            # Obtener contenido actual
+            current_content = fetch_url(client, {"url": url})
             
-            # Análisis básico de cambios
-            if has_changed:
-                current_text = _extract_text_from_html(current_content)
-                previous_text = previous_data.get('text', '')
+            if current_content.get('success'):
+                content_hash = hashlib.md5(
+                    current_content.get('data', '').encode()
+                ).hexdigest()
                 
-                # Calcular diferencias simples
-                current_words = set(current_text.split())
-                previous_words = set(previous_text.split())
+                # Comparar con versión anterior (desde SharePoint)
+                from app.actions import sharepoint_actions
                 
-                added_words = current_words - previous_words
-                removed_words = previous_words - current_words
+                previous_result = sharepoint_actions.sp_memory_get(client, {
+                    'key': f'web_monitor_{url}'
+                })
                 
-                change_analysis = {
-                    'words_added': len(added_words),
-                    'words_removed': len(removed_words),
-                    'total_change_percentage': (len(added_words) + len(removed_words)) / max(len(previous_words), 1) * 100
-                }
-            else:
-                change_analysis = {}
-        else:
-            has_changed = True  # Primera vez monitoreando
-            change_analysis = {"note": "Primera vez monitoreando esta URL"}
+                if previous_result.get('success'):
+                    previous_hash = previous_result.get('data', {}).get('hash')
+                    
+                    if previous_hash != content_hash:
+                        # Cambio detectado - analizar con Gemini
+                        from app.actions import gemini_actions
+                        
+                        change_analysis = gemini_actions.analyze_conversation_context(client, {
+                            "conversation_data": {
+                                "task": "analyze_web_changes",
+                                "url": url,
+                                "previous_content": previous_result.get('data', {}).get('content', '')[:1000],
+                                "current_content": current_content.get('data', '')[:1000],
+                                "instructions": "Identifica los cambios principales y su importancia"
+                            }
+                        })
+                        
+                        if change_analysis.get('success'):
+                            change_data = {
+                                'url': url,
+                                'changed': True,
+                                'change_analysis': change_analysis.get('data', {}),
+                                'timestamp': datetime.now().isoformat()
+                            }
+                            
+                            significant_changes.append(change_data)
+                            
+                            # Auto-guardar cambio significativo
+                            from app.actions import resolver_actions
+                            resolver_actions.smart_save_resource(client, {
+                                'resource_type': 'web_change_alert',
+                                'resource_data': change_data,
+                                'action_name': 'monitor_website_changes'
+                            })
+                
+                # Actualizar registro
+                sharepoint_actions.sp_memory_save(client, {
+                    'key': f'web_monitor_{url}',
+                    'value': {
+                        'url': url,
+                        'hash': content_hash,
+                        'content': current_content.get('data', '')[:5000],
+                        'last_checked': datetime.now().isoformat()
+                    }
+                })
+                
+                results.append({
+                    'url': url,
+                    'status': 'monitored',
+                    'hash': content_hash
+                })
         
-        # Guardar estado actual
-        current_text = _extract_text_from_html(current_content)
-        monitor_data = {
-            'content_hash': current_hash,
-            'text': current_text,
-            'last_check': datetime.now().isoformat()
-        }
-        _cache_result(cache_key, monitor_data)
+        # Si hay cambios significativos, notificar
+        if significant_changes:
+            from app.actions import teams_actions
+            teams_actions.teams_send_channel_message(client, {
+                'team_name': 'EliteDynamics',
+                'channel_name': 'alerts',
+                'message': f"🚨 Detectados {len(significant_changes)} cambios en sitios web monitoreados",
+                'content_type': 'text'
+            })
         
         return {
-            "success": True,
-            "url": url,
-            "has_changed": has_changed,
-            "current_hash": current_hash,
-            "change_analysis": change_analysis,
-            "timestamp": datetime.now().isoformat()
+            'success': True,
+            'monitored_urls': len(urls),
+            'changes_detected': len(significant_changes),
+            'results': results,
+            'significant_changes': significant_changes
         }
         
     except Exception as e:
-        return _handle_web_error(e, action_name)
+        logger.error(f"Error in monitor_website_changes: {str(e)}")
+        return {"success": False, "error": str(e)}
 
 def _extract_text_from_html(html: str) -> str:
     """Extrae texto limpio de HTML."""
@@ -724,7 +806,7 @@ def webresearch_scrape_url(client, params: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return _handle_web_error(e, action_name)
 
-def webresearch_extract_emails(client, params: Dict[str, Any]) -> Dict[str, Any]:
+def webresearch_extract_emails(client: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extrae direcciones de email de una URL o texto
     
@@ -772,7 +854,7 @@ def webresearch_extract_emails(client, params: Dict[str, Any]) -> Dict[str, Any]
     except Exception as e:
         return _handle_web_error(e, action_name)
 
-def webresearch_extract_phone_numbers(client, params: Dict[str, Any]) -> Dict[str, Any]:
+def webresearch_extract_phone_numbers(client: Dict[str, Any], params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Extrae números de teléfono de una URL o texto
     

@@ -1,351 +1,316 @@
-import google.generativeai as genai
-import json
 import logging
-from typing import Dict, Any, Optional, List
+import json
+from typing import Dict, Any, List, Optional
 from datetime import datetime
+import google.generativeai as genai
+from app.core.config import settings
 
-# Configurar logging
 logger = logging.getLogger(__name__)
 
-def _get_gemini_model(model_name: str = 'gemini-1.5-pro-latest') -> genai.GenerativeModel:
-    """Inicializa y devuelve el modelo generativo de Gemini."""
-    from app.core.config import settings
-    if not settings.GEMINI_API_KEY:
-        raise ValueError("GEMINI_API_KEY no está configurada")
-    genai.configure(api_key=settings.GEMINI_API_KEY)
-    return genai.GenerativeModel(model_name)
+# Configurar Gemini
+genai.configure(api_key=settings.GEMINI_API_KEY)
 
-def _handle_gemini_api_error(error: Exception, action_name: str) -> Dict[str, Any]:
-    """Maneja errores de la API de Gemini de forma centralizada."""
-    error_message = f"Error en {action_name}: {str(error)}"
-    logger.error(error_message, exc_info=True)
-    
-    return {
-        "success": False,
-        "error": error_message,
-        "timestamp": datetime.now().isoformat()
-    }
-
-def _validate_gemini_response(response: Any, action_name: str) -> bool:
-    """Valida que la respuesta de Gemini sea válida."""
-    try:
-        if not response or not hasattr(response, 'text'):
-            logger.warning(f"Respuesta vacía o inválida en {action_name}")
-            return False
-        
-        if not response.text or response.text.strip() == "":
-            logger.warning(f"Texto de respuesta vacío en {action_name}")
-            return False
-            
-        return True
-    except Exception as e:
-        logger.error(f"Error validando respuesta en {action_name}: {str(e)}")
-        return False
+# Actualizar el modelo a usar
+GEMINI_MODEL = "gemini-1.5-flash"  # Cambiar de gemini-pro a gemini-1.5-flash
 
 def analyze_conversation_context(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Analiza el contexto de una conversación usando Gemini."""
-    action_name = "analyze_conversation_context"
-    conversation_data = params.get("conversation_data", {})
-    
+    """Versión mejorada con capacidad de decisión autónoma"""
     try:
-        if not conversation_data:
-            return {
-                "success": False,
-                "error": "Datos de conversación requeridos",
-                "timestamp": datetime.now().isoformat()
-            }
+        conversation_data = params.get("conversation_data", {})
         
-        model = _get_gemini_model()
+        # Detectar el tipo de análisis requerido
+        task_type = conversation_data.get('task', 'general_analysis')
         
-        prompt = f"""
-        Analiza el siguiente contexto de conversación y proporciona insights:
-        
-        Datos de conversación: {json.dumps(conversation_data, indent=2)}
-        
-        Por favor, proporciona tu análisis en formato JSON con las siguientes claves:
-        - sentiment: sentimiento general (positive, negative, neutral)
-        - key_topics: lista de temas principales
-        - urgency_level: nivel de urgencia (low, medium, high)
-        - suggested_actions: acciones recomendadas
-        - confidence_score: puntuación de confianza (0-100)
-        """
-        
-        response = model.generate_content(prompt)
-        
-        if not _validate_gemini_response(response, action_name):
-            return _handle_gemini_api_error(
-                Exception("Respuesta inválida de Gemini"), 
-                action_name
-            )
-        
-        try:
-            analysis_json = json.loads(response.text)
-        except json.JSONDecodeError:
-            analysis_json = {
-                "sentiment": "neutral",
-                "key_topics": ["general"],
-                "urgency_level": "medium",
-                "suggested_actions": ["follow_up"],
-                "confidence_score": 50,
-                "raw_response": response.text
-            }
-        
-        return {
-            "success": True,
-            "data": analysis_json,
-            "timestamp": datetime.now().isoformat()
+        # Prompts especializados según la tarea
+        specialized_prompts = {
+            'analyze_and_decide_storage': """
+            Eres un experto en arquitectura de información. Analiza el contenido y decide:
+            1. La mejor plataforma de almacenamiento principal
+            2. Plataformas secundarias para redundancia o acceso
+            3. Metadata relevante a agregar
+            4. Acciones adicionales necesarias (resúmenes, notificaciones, etc.)
+            5. Tags inteligentes para clasificación
+            
+            Considera:
+            - SharePoint: Mejor para documentos estructurados, listas, registros
+            - OneDrive: Ideal para multimedia (videos, imágenes, audio)
+            - Notion: Perfecto para bases de datos, dashboards, wikis
+            - Teams: Para notificaciones y colaboración
+            
+            Responde SOLO en formato JSON válido.
+            """,
+            
+            'optimize_workflow': """
+            Eres un experto en optimización de procesos. Analiza el workflow y:
+            1. Identifica pasos que pueden ejecutarse en paralelo
+            2. Detecta redundancias o pasos innecesarios
+            3. Sugiere pasos adicionales que faltan
+            4. Propón el orden óptimo de ejecución
+            5. Identifica puntos de falla potenciales
+            
+            Responde con un plan de ejecución optimizado en JSON.
+            """,
+            
+            'extract_search_terms': """
+            Extrae 3-5 términos de búsqueda clave del contenido.
+            Prioriza:
+            1. Nombres de productos o servicios
+            2. Tecnologías mencionadas
+            3. Problemas o necesidades
+            4. Competidores o alternativas
+            
+            Responde con los términos separados por espacios.
+            """,
+            
+            'general_analysis': """
+            Analiza el contexto completo y proporciona:
+            1. Resumen ejecutivo
+            2. Puntos clave identificados
+            3. Acciones recomendadas
+            4. Riesgos o consideraciones
+            5. Siguiente mejor paso
+            """
         }
         
+        # Seleccionar el prompt adecuado
+        system_prompt = specialized_prompts.get(task_type, specialized_prompts['general_analysis'])
+        
+        # Agregar contexto adicional si está disponible
+        if 'instructions' in conversation_data:
+            system_prompt += f"\n\nInstrucciones adicionales:\n{conversation_data['instructions']}"
+        
+        # Construir el mensaje para Gemini
+        user_message = json.dumps(conversation_data, ensure_ascii=False)
+        
+        # Llamar a Gemini
+        response = client.post(
+            f"{settings.GEMINI_API_URL}/models/gemini-pro:generateContent",
+            headers={
+                "Content-Type": "application/json",
+            },
+            params={
+                "key": settings.GEMINI_API_KEY
+            },
+            json={
+                "contents": [{
+                    "parts": [{
+                        "text": f"{system_prompt}\n\nDatos a analizar:\n{user_message}"
+                    }]
+                }],
+                "generationConfig": {
+                    "temperature": 0.3,  # Más determinista para decisiones
+                    "topK": 40,
+                    "topP": 0.95,
+                    "maxOutputTokens": 2048,
+                }
+            }
+        )
+        
+        if response.status_code == 200:
+            result = response.json()
+            generated_text = result['candidates'][0]['content']['parts'][0]['text']
+            
+            # Intentar parsear como JSON si es posible
+            parsed_response = generated_text
+            try:
+                parsed_response = json.loads(generated_text)
+            except:
+                # Si no es JSON válido, intentar extraer JSON del texto
+                import re
+                json_match = re.search(r'\{.*\}', generated_text, re.DOTALL)
+                if json_match:
+                    try:
+                        parsed_response = json.loads(json_match.group())
+                    except:
+                        pass
+            
+            return {
+                "success": True,
+                "data": {
+                    "response": parsed_response,
+                    "raw_response": generated_text,
+                    "task_type": task_type,
+                    "model": "gemini-pro"
+                }
+            }
+        else:
+            return {
+                "success": False,
+                "error": f"Gemini API error: {response.status_code}",
+                "details": response.text
+            }
+            
     except Exception as e:
-        return _handle_gemini_api_error(e, action_name)
+        logger.error(f"Error in analyze_conversation_context: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 def generate_response_suggestions(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Genera sugerencias de respuesta basadas en el contexto."""
-    action_name = "generate_response_suggestions"
-    context = params.get("context", "")
-    user_message = params.get("user_message", "")
-    
+    """
+    Genera sugerencias de respuesta basadas en el contexto
+    """
     try:
-        if not context or not user_message:
-            return {
-                "success": False,
-                "error": "Contexto y mensaje de usuario requeridos",
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        model = _get_gemini_model()
+        query = params.get("query", "")
+        context = params.get("context", "")
         
         prompt = f"""
-        Basándote en el siguiente contexto y mensaje del usuario, genera 3 sugerencias de respuesta profesionales:
+        Genera 3 sugerencias de respuesta para esta situación:
         
+        Query: {query}
         Contexto: {context}
-        Mensaje del usuario: {user_message}
         
-        Proporciona las sugerencias en formato JSON con esta estructura:
-        {{
-            "suggestions": [
-                {{
-                    "text": "texto de la sugerencia",
-                    "tone": "professional/friendly/formal",
-                    "priority": "high/medium/low"
-                }}
-            ]
-        }}
+        Formato: Lista de sugerencias profesionales y útiles
         """
         
+        model = genai.GenerativeModel('gemini-pro')
         response = model.generate_content(prompt)
         
-        if not _validate_gemini_response(response, action_name):
-            return _handle_gemini_api_error(
-                Exception("Respuesta inválida de Gemini"), 
-                action_name
-            )
-        
-        try:
-            suggestion_json = json.loads(response.text)
-        except json.JSONDecodeError:
-            suggestion_json = {
-                "suggestions": [
-                    {
-                        "text": "Gracias por tu mensaje. Te ayudaré con tu consulta.",
-                        "tone": "professional",
-                        "priority": "medium"
-                    }
-                ]
-            }
+        suggestions = response.text.split('\n')
+        suggestions = [s.strip() for s in suggestions if s.strip()]
         
         return {
             "success": True,
-            "data": suggestion_json,
-            "timestamp": datetime.now().isoformat()
+            "data": {
+                "suggestions": suggestions[:3],
+                "generated_at": datetime.now().isoformat()
+            }
         }
         
     except Exception as e:
-        return _handle_gemini_api_error(e, action_name)
+        logger.error(f"Error generating suggestions: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 def extract_key_information(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Extrae información clave de un texto usando Gemini."""
-    action_name = "extract_key_information"
-    text = params.get("text", "")
-    extraction_type = params.get("extraction_type", "general")
-    
+    """
+    Extrae información clave de un texto o conversación
+    """
     try:
-        if not text:
-            return {
-                "success": False,
-                "error": "Texto requerido para extracción",
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        model = _get_gemini_model()
-        
-        extraction_prompts = {
-            "general": "Extrae información clave general",
-            "contact": "Extrae información de contacto (nombres, emails, teléfonos)",
-            "business": "Extrae información comercial (productos, servicios, precios)",
-            "technical": "Extrae información técnica (especificaciones, requisitos)"
-        }
-        
-        prompt_instruction = extraction_prompts.get(extraction_type, extraction_prompts["general"])
+        text = params.get("text", params.get("query", ""))
         
         prompt = f"""
-        {prompt_instruction} del siguiente texto:
+        Extrae la información clave de este texto:
         
-        Texto: {text}
+        {text}
         
-        Proporciona la información extraída en formato JSON con claves descriptivas.
+        Identifica:
+        - Entidades mencionadas (personas, empresas, lugares)
+        - Fechas y tiempos
+        - Acciones solicitadas
+        - Datos numéricos importantes
         """
         
+        model = genai.GenerativeModel('gemini-pro')
         response = model.generate_content(prompt)
-        
-        if not _validate_gemini_response(response, action_name):
-            return _handle_gemini_api_error(
-                Exception("Respuesta inválida de Gemini"), 
-                action_name
-            )
-        
-        try:
-            extracted_info = json.loads(response.text)
-        except json.JSONDecodeError:
-            extracted_info = {
-                "extraction_type": extraction_type,
-                "raw_response": response.text,
-                "confidence": "low"
-            }
         
         return {
             "success": True,
-            "data": extracted_info,
-            "extraction_type": extraction_type,
-            "timestamp": datetime.now().isoformat()
+            "data": {
+                "extracted_info": response.text,
+                "timestamp": datetime.now().isoformat()
+            }
         }
         
     except Exception as e:
-        return _handle_gemini_api_error(e, action_name)
+        logger.error(f"Error extracting information: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
 
 def summarize_conversation(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Crea un resumen de una conversación."""
-    action_name = "summarize_conversation"
-    messages = params.get("messages", [])
-    max_length = params.get("max_length", 500)
-    
+    """
+    Resume una conversación o texto largo
+    """
     try:
-        if not messages:
-            return {
-                "success": False,
-                "error": "Lista de mensajes requerida",
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        model = _get_gemini_model()
-        
-        conversation_text = "\n".join([
-            f"{msg.get('sender', 'Unknown')}: {msg.get('content', '')}"
-            for msg in messages
-        ])
+        conversation = params.get("conversation", params.get("text", ""))
         
         prompt = f"""
-        Crea un resumen conciso de la siguiente conversación (máximo {max_length} caracteres):
+        Resume esta conversación/texto de manera concisa:
         
-        Conversación:
-        {conversation_text}
+        {conversation}
         
-        El resumen debe incluir:
-        - Puntos principales discutidos
+        Incluye:
+        - Puntos principales
         - Decisiones tomadas
         - Acciones pendientes
-        
-        Formato JSON:
-        {{
-            "summary": "resumen de la conversación",
-            "key_points": ["punto1", "punto2"],
-            "action_items": ["acción1", "acción2"],
-            "participants": ["participante1", "participante2"]
-        }}
         """
         
+        model = genai.GenerativeModel(GEMINI_MODEL)  # Usar el modelo actualizado
         response = model.generate_content(prompt)
-        
-        if not _validate_gemini_response(response, action_name):
-            return _handle_gemini_api_error(
-                Exception("Respuesta inválida de Gemini"), 
-                action_name
-            )
-        
-        try:
-            summary_json = json.loads(response.text)
-        except json.JSONDecodeError:
-            summary_json = {
-                "summary": "Resumen no disponible",
-                "key_points": [],
-                "action_items": [],
-                "participants": []
-            }
         
         return {
             "success": True,
-            "data": summary_json,
-            "message_count": len(messages),
-            "timestamp": datetime.now().isoformat()
-        }
-        
-    except Exception as e:
-        return _handle_gemini_api_error(e, action_name)
-
-def classify_message_intent(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """Clasifica la intención de un mensaje."""
-    action_name = "classify_message_intent"
-    message = params.get("message", "")
-    
-    try:
-        if not message:
-            return {
-                "success": False,
-                "error": "Mensaje requerido para clasificación",
+            "data": {
+                "summary": response.text,
                 "timestamp": datetime.now().isoformat()
             }
-        
-        model = _get_gemini_model()
-        
-        prompt = f"""
-        Clasifica la intención del siguiente mensaje:
-        
-        Mensaje: {message}
-        
-        Proporciona la clasificación en formato JSON:
-        {{
-            "primary_intent": "question/request/complaint/compliment/information",
-            "confidence": 0.0-1.0,
-            "categories": ["category1", "category2"],
-            "urgency": "low/medium/high",
-            "requires_response": true/false
-        }}
-        """
-        
-        response = model.generate_content(prompt)
-        
-        if not _validate_gemini_response(response, action_name):
-            return _handle_gemini_api_error(
-                Exception("Respuesta inválida de Gemini"), 
-                action_name
-            )
-        
-        try:
-            classification_json = json.loads(response.text)
-        except json.JSONDecodeError:
-            classification_json = {
-                "primary_intent": "information",
-                "confidence": 0.5,
-                "categories": ["general"],
-                "urgency": "medium",
-                "requires_response": True
-            }
-        
-        return {
-            "success": True,
-            "data": classification_json,
-            "timestamp": datetime.now().isoformat()
         }
         
     except Exception as e:
-        return _handle_gemini_api_error(e, action_name)
+        logger.error(f"Error summarizing: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+def classify_message_intent(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Clasifica la intención de un mensaje
+    """
+    try:
+        message = params.get("message", params.get("query", ""))
+        
+        prompt = f"""
+        Clasifica la intención de este mensaje:
+        
+        "{message}"
+        
+        Categorías posibles:
+        - solicitud_información
+        - ejecutar_acción
+        - crear_contenido
+        - modificar_existente
+        - eliminar_contenido
+        - consulta_estado
+        - otro
+        
+        Responde con la categoría y un confidence score (0-1)
+        """
+        
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content(prompt)
+        
+        return {
+            "success": True,
+            "data": {
+                "intent": response.text.strip(),
+                "message": message,
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Error classifying intent: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+def generate_execution_plan(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Genera un plan de ejecución optimizado para workflows"""
+    
+    # Usar analyze_conversation_context con task específico
+    return analyze_conversation_context(client, {
+        "conversation_data": {
+            **params.get("conversation_data", {}),
+            "task": "optimize_workflow"
+        }
+    })
+
+# Función adicional detectada en el proxy
+gemini_suggest_action = generate_response_suggestions  # Alias para compatibilidad

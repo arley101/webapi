@@ -1,7 +1,19 @@
-import logging
-from typing import Dict, Any, Callable
-from datetime import datetime
+import os
+import sys
 
+# AGREGAR ESTA LÍNEA AL INICIO
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+# Ahora los imports funcionarán
+import json
+import logging
+import re
+from typing import Dict, Callable, Any, Optional, List
+from datetime import datetime
+from app.core.auth_manager import get_auth_client
+from app.actions import resolver_actions
+from app.actions import sharepoint_actions
+from app.actions import azuremgmt_actions
 # Configurar logging
 logger = logging.getLogger(__name__)
 
@@ -141,6 +153,8 @@ GEMINI_ACTIONS: Dict[str, Callable] = {
     "summarize_conversation": gemini_actions.summarize_conversation,
     "classify_message_intent": gemini_actions.classify_message_intent,
     "gemini_suggest_action": gemini_actions.generate_response_suggestions,  # RESTAURADO
+    # NUEVA ACCIÓN
+    "generate_execution_plan": gemini_actions.generate_execution_plan,
 }
 
 # ============================================================================
@@ -392,7 +406,7 @@ POWERBI_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
-# MAPEO DE ACCIONES - RESOLVER INTELIGENTE (10 acciones)
+# MAPEO DE ACCIONES - RESOLVER INTELIGENTE (14 acciones)
 # ============================================================================
 
 RESOLVER_ACTIONS: Dict[str, Callable] = {
@@ -401,12 +415,16 @@ RESOLVER_ACTIONS: Dict[str, Callable] = {
     "get_resolution_analytics": resolver_actions.get_resolution_analytics,
     "clear_resolution_cache": resolver_actions.clear_resolution_cache,
     "resolve_smart_workflow": resolver_actions.resolve_smart_workflow,
-    # Agregar las funciones adicionales del archivo
     "resolve_resource": resolver_actions.resolve_resource,
     "list_available_resources": resolver_actions.list_available_resources,
     "validate_resource_id": resolver_actions.validate_resource_id,
     "get_resource_config": resolver_actions.get_resource_config,
     "search_resources": resolver_actions.search_resources,
+    # NUEVAS ACCIONES DEL SISTEMA MEJORADO
+    "smart_save_resource": resolver_actions.smart_save_resource,
+    "get_credentials_from_vault": resolver_actions.get_credentials_from_vault,
+    "execute_workflow": resolver_actions.execute_workflow,
+    "save_to_notion_registry": resolver_actions.save_to_notion_registry,
 }
 
 # ============================================================================
@@ -763,3 +781,691 @@ for i, (category, count) in enumerate(top_categories, 1):
 
 logger.info("🎉 ACTION_MAP CARGADO EXITOSAMENTE Y LISTO PARA USAR!")
 logger.info("=" * 80)
+
+# NUEVO: Sistema de Workflow Manager
+class WorkflowManager:
+    """Gestor de workflows con ejecución en cascada"""
+    
+    def __init__(self):
+        self.workflow_templates = {
+            "audit_complete": [
+                {"action": "metaads_get_account_insights", "params": {"date_range": "last_30_days"}},
+                {"action": "googleads_get_campaign_performance", "params": {"date_range": "last_30_days"}},
+                {"action": "linkedin_get_basic_report", "params": {"date_range": "last_30_days"}},
+                {"action": "smart_save_resource", "params": {"resource_type": "audit_report"}}
+            ],
+            "create_and_publish": [
+                {"action": "sp_create_list", "params": {"name": "{{input.name}}"}},
+                {"action": "sp_add_list_item", "params": {"list_id": "{{step1.data.id}}"}},
+                {"action": "teams_send_channel_message", "params": {"message": "Lista creada: {{step1.data.webUrl}}"}},
+                {"action": "smart_save_resource", "params": {"resource_type": "workflow_result"}}
+            ]
+        }
+    
+    def detect_workflow_intent(self, query: str) -> Optional[str]:
+        """Detecta si el query requiere un workflow"""
+        workflow_patterns = {
+            "audit_complete": r"auditor[íi]a completa|reporte completo|an[áa]lisis de todas",
+            "create_and_publish": r"crea.*y.*publica|crea.*y.*notifica|crea.*y.*comparte",
+            "backup_all": r"respalda todo|backup completo|guarda todo",
+            "migrate_data": r"migra.*datos|transfiere.*todo|mueve.*informaci[óo]n"
+        }
+        
+        for workflow_name, pattern in workflow_patterns.items():
+            if re.search(pattern, query, re.IGNORECASE):
+                return workflow_name
+        
+        return None
+    
+    def build_custom_workflow(self, query: str, detected_actions: List[str]) -> List[Dict[str, Any]]:
+        """Construye un workflow personalizado basado en acciones detectadas"""
+        workflow_steps = []
+        
+        # Agregar acciones detectadas
+        for action in detected_actions:
+            workflow_steps.append({
+                "action": action,
+                "params": {},  # Se llenarán con parámetros extraídos
+                "save_result": True
+            })
+        
+        # Siempre agregar guardado al final
+        workflow_steps.append({
+            "action": "smart_save_resource",
+            "params": {
+                "resource_type": "custom_workflow",
+                "tags": ["auto_generated", "from_query"]
+            }
+        })
+        
+        return workflow_steps
+
+workflow_manager = WorkflowManager()
+
+def main():
+    if len(sys.argv) < 3:
+        error_result = {
+            "status": "error",
+            "message": "Se requieren al menos 2 argumentos: nombre_accion y params (JSON)",
+            "http_status": 400
+        }
+        print(json.dumps(error_result))
+        sys.exit(1)
+    
+    action_name = sys.argv[1]
+    params_json = sys.argv[2]
+    
+    try:
+        params_req = json.loads(params_json)
+    except json.JSONDecodeError as e:
+        error_result = {
+            "status": "error",
+            "message": f"Error al parsear parámetros JSON: {str(e)}",
+            "http_status": 400
+        }
+        print(json.dumps(error_result))
+        sys.exit(1)
+    
+    if action_name not in ACTION_MAP:
+        error_result = {
+            "status": "error",
+            "message": f"Acción '{action_name}' no encontrada",
+            "available_actions": list(ACTION_MAP.keys())[:10],
+            "total_actions": len(ACTION_MAP),
+            "http_status": 404
+        }
+        print(json.dumps(error_result))
+        sys.exit(1)
+    
+    action_function = ACTION_MAP[action_name]
+    
+    try:
+        auth_http_client = get_auth_client()
+    except Exception as e:
+        error_result = {
+            "status": "error",
+            "message": f"Error de autenticación: {str(e)}",
+            "http_status": 401
+        }
+        print(json.dumps(error_result))
+        sys.exit(1)
+    
+    # NUEVO: Detectar si es un workflow
+    workflow_template = workflow_manager.detect_workflow_intent(' '.join(sys.argv[1:]))
+    
+    if workflow_template:
+        logger.info(f"Workflow detected: {workflow_template}")
+        
+        # Ejecutar workflow completo
+        workflow_result = resolver_actions.execute_workflow(auth_http_client, {
+            "steps": workflow_manager.workflow_templates[workflow_template],
+            "context": {
+                "original_query": ' '.join(sys.argv[1:]),
+                "template": workflow_template
+            }
+        })
+        
+        print(json.dumps(workflow_result))
+        return
+    
+    # Ejecutar la acción
+    try:
+        result = action_function(auth_http_client, params_req)
+        
+        # NUEVO: Asegurar respuesta estructurada completa
+        if result is None:
+            result = {
+                "status": "success",
+                "message": f"Action {action_name} executed successfully",
+                "data": {},
+                "http_status": 200
+            }
+        elif not isinstance(result, dict):
+            result = {
+                "status": "success",
+                "data": result,
+                "http_status": 200
+            }
+        
+        # Asegurar http_status
+        if "http_status" not in result:
+            result["http_status"] = 200 if result.get("status") == "success" else 500
+        
+        # NUEVO: Extraer URLs e IDs importantes
+        if isinstance(result.get('data'), dict):
+            data = result['data']
+            
+            # Extraer URLs comunes
+            urls = []
+            url_keys = ['url', 'webUrl', 'web_url', 'shareUrl', 'share_url', 'downloadUrl', 
+                       'download_url', 'publicUrl', 'public_url', 'permalink']
+            for key in url_keys:
+                if key in data and data[key]:
+                    urls.append(data[key])
+            
+            # Extraer IDs comunes
+            ids = {}
+            id_keys = ['id', 'Id', 'ID', 'resource_id', 'file_id', 'item_id', 'campaign_id', 
+                      'list_id', 'page_id', 'database_id']
+            for key in id_keys:
+                if key in data and data[key]:
+                    ids[key] = data[key]
+            
+            # Agregar información de acceso rápido
+            if urls or ids:
+                result['quick_access'] = {
+                    'urls': list(set(urls)),  # Eliminar duplicados
+                    'ids': ids,
+                    'primary_url': urls[0] if urls else None,
+                    'primary_id': ids.get('id') or ids.get('Id') or next(iter(ids.values())) if ids else None
+                }
+        
+        # NUEVO: Auto-guardado inteligente para respuestas grandes
+        json_size = len(json.dumps(result))
+        if json_size > 150000:  # 150KB
+            logger.info(f"Large response detected ({json_size} bytes), initiating smart save")
+            
+            # Determinar tipo de contenido
+            content_type = "large_json"
+            if "campaign" in action_name:
+                content_type = "campaign_data"
+            elif "report" in action_name or "analytics" in action_name:
+                content_type = "report"
+            elif "video" in action_name:
+                content_type = "video"
+            elif "image" in action_name or "photo" in action_name:
+                content_type = "image"
+            
+            # Guardar usando el resolver inteligente
+            save_params = {
+                "resource_type": content_type,
+                "resource_name": f"{action_name}_response_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
+                "resource_data": result,
+                "file_extension": ".json"
+            }
+            
+            save_result = resolver_actions.smart_save_resource(auth_http_client, save_params)
+            
+            if save_result.get("status") == "success":
+                # Reemplazar respuesta grande con referencia
+                result = {
+                    "status": "success_auto_saved",
+                    "message": f"Large response auto-saved ({json_size} bytes)",
+                    "data": {
+                        "summary": {
+                            "action": action_name,
+                            "original_size": json_size,
+                            "saved_to": save_result["data"]["platform"],
+                            "storage_path": save_result["data"]["storage_path"]
+                        },
+                        "access": save_result["data"]["access_links"],
+                        "resource_id": save_result["data"]["resource_id"],
+                        "registry_id": save_result["data"]["registry_id"]
+                    },
+                    "quick_access": {
+                        "urls": [save_result["data"]["resource_url"]],
+                        "primary_url": save_result["data"]["resource_url"]
+                    },
+                    "http_status": 200
+                }
+        
+        # NUEVO: Auto-guardar TODOS los recursos creados
+        if result.get("success"):
+            # Detectar si debe auto-guardarse
+            should_save = False
+            save_metadata = {
+                "action": action_name,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+            # Criterios para auto-guardado
+            if any(word in action_name for word in ["create", "upload", "add", "new", "generate"]):
+                should_save = True
+                save_metadata["reason"] = "creation_action"
+            
+            # Guardar respuestas grandes
+            response_size = len(json.dumps(result)) / 1024
+            if response_size > 50:  # 50KB
+                should_save = True
+                save_metadata["reason"] = "large_response"
+                save_metadata["size_kb"] = response_size
+            
+            # Guardar si tiene URLs o IDs importantes
+            if result.get("data", {}).get("url") or result.get("data", {}).get("webUrl"):
+                should_save = True
+                save_metadata["reason"] = "contains_urls"
+            
+            if should_save:
+                try:
+                    # Preparar datos para guardado
+                    resource_data = {
+                        "action_result": result,
+                        "action_name": action_name,
+                        "parameters_used": params_req,
+                        "execution_time": datetime.now().isoformat()
+                    }
+                    
+                    # Guardar usando el sistema inteligente
+                    save_result = resolver_actions.smart_save_resource(auth_http_client, {
+                        "resource_type": action_name.split('_')[0],
+                        "resource_data": resource_data,
+                        "action_name": action_name,
+                        "tags": [action_name, "auto_saved"],
+                        "source": "action_mapper"
+                    })
+                    
+                    if save_result.get("success"):
+                        # Agregar información de guardado al resultado
+                        result["auto_saved"] = {
+                            "success": True,
+                            "resource_id": save_result["resource_id"],
+                            "registry_id": save_result["registry_id"],
+                            "storage_locations": save_result["storage_locations"],
+                            "primary_url": save_result["primary_url"],
+                            "access_urls": save_result["access_urls"]
+                        }
+                        
+                        logger.info(f"Resource auto-saved: {save_result['resource_id']}")
+                    
+                except Exception as e:
+                    logger.warning(f"Auto-save failed but action succeeded: {str(e)}")
+                    result["auto_saved"] = {
+                        "success": False,
+                        "error": str(e)
+                    }
+        
+        # Imprimir resultado final
+        print(json.dumps(result))
+        
+    except Exception as e:
+        logger.error(f"Error ejecutando la acción {action_name}: {str(e)}")
+        error_result = {
+            "status": "error",
+            "message": f"Error ejecutando la acción: {str(e)}",
+            "action": action_name,
+            "http_status": 500
+        }
+        print(json.dumps(error_result))
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+
+# ============================================================================
+# SISTEMA DE WORKFLOWS INTELIGENTES
+# ============================================================================
+
+class WorkflowExecutor:
+    """Ejecutor de workflows complejos con múltiples acciones"""
+    
+    def __init__(self):
+        self.action_map = self._build_complete_action_map()
+        self.execution_history = []
+    
+    def _build_complete_action_map(self) -> Dict[str, Callable]:
+        """Construye el mapa completo de acciones combinando todas las categorías"""
+        complete_map = {}
+        
+        # Combinar todos los mapas de acciones
+        for action_category in [
+            AZURE_MGMT_ACTIONS, BOOKINGS_ACTIONS, CALENDAR_ACTIONS, EMAIL_ACTIONS,
+            FORMS_ACTIONS, GEMINI_ACTIONS, GITHUB_ACTIONS, GOOGLEADS_ACTIONS,
+            GRAPH_ACTIONS, HUBSPOT_ACTIONS, LINKEDIN_ADS_ACTIONS, METAADS_ACTIONS,
+            NOTION_ACTIONS, OFFICE_ACTIONS, ONEDRIVE_ACTIONS, OPENAI_ACTIONS,
+            PLANNER_ACTIONS, POWER_AUTOMATE_ACTIONS, POWERBI_ACTIONS, RESOLVER_ACTIONS,
+            SHAREPOINT_ACTIONS, STREAM_ACTIONS, TEAMS_ACTIONS, TIKTOK_ADS_ACTIONS,
+            TODO_ACTIONS, USER_PROFILE_ACTIONS, USERS_ACTIONS, VIVA_INSIGHTS_ACTIONS,
+            YOUTUBE_CHANNEL_ACTIONS, X_ADS_ACTIONS, WEBRESEARCH_ACTIONS, WORDPRESS_ACTIONS
+        ]:
+            complete_map.update(action_category)
+        
+        return complete_map
+    
+    def execute_workflow(self, client: Any, workflow_definition: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Ejecuta un workflow complejo con múltiples pasos
+        
+        workflow_definition = {
+            "name": "workflow_name",
+            "steps": [
+                {
+                    "action": "action_name",
+                    "params": {...},
+                    "on_success": "next_step_id",
+                    "on_failure": "error_handler_id",
+                    "store_result_as": "variable_name"
+                }
+            ]
+        }
+        """
+        logger.info(f"Ejecutando workflow: {workflow_definition.get('name', 'unnamed')}")
+        
+        workflow_context = {
+            "variables": {},
+            "results": [],
+            "status": "running",
+            "start_time": datetime.now()
+        }
+        
+        steps = workflow_definition.get("steps", [])
+        current_step_index = 0
+        
+        try:
+            while current_step_index < len(steps):
+                step = steps[current_step_index]
+                logger.info(f"Ejecutando paso {current_step_index + 1}/{len(steps)}: {step.get('action')}")
+                
+                # Resolver variables en los parámetros
+                resolved_params = self._resolve_variables(step.get("params", {}), workflow_context["variables"])
+                
+                # Ejecutar la acción
+                action_name = step.get("action")
+                if action_name not in self.action_map:
+                    raise ValueError(f"Acción no encontrada: {action_name}")
+                
+                action_func = self.action_map[action_name]
+                result = action_func(client, resolved_params)
+                
+                # Almacenar resultado
+                step_result = {
+                    "step_index": current_step_index,
+                    "action": action_name,
+                    "params": resolved_params,
+                    "result": result,
+                    "timestamp": datetime.now().isoformat()
+                }
+                workflow_context["results"].append(step_result)
+                
+                # Almacenar en variable si se especifica
+                if step.get("store_result_as"):
+                    workflow_context["variables"][step["store_result_as"]] = result
+                
+                # Determinar siguiente paso
+                if result.get("success") or result.get("status") == "success":
+                    if step.get("on_success") == "end":
+                        break
+                    elif step.get("on_success"):
+                        # Buscar el índice del paso con ese ID
+                        next_step_id = step["on_success"]
+                        current_step_index = self._find_step_index(steps, next_step_id)
+                    else:
+                        current_step_index += 1
+                else:
+                    # Error handling
+                    if step.get("on_failure") == "continue":
+                        current_step_index += 1
+                    elif step.get("on_failure") == "end":
+                        workflow_context["status"] = "failed"
+                        break
+                    elif step.get("on_failure"):
+                        # Ir a un paso específico de manejo de error
+                        error_step_id = step["on_failure"]
+                        current_step_index = self._find_step_index(steps, error_step_id)
+                    else:
+                        # Por defecto, detener en error
+                        workflow_context["status"] = "failed"
+                        break
+            
+            if workflow_context["status"] == "running":
+                workflow_context["status"] = "completed"
+            
+        except Exception as e:
+            logger.error(f"Error en workflow: {str(e)}")
+            workflow_context["status"] = "error"
+            workflow_context["error"] = str(e)
+        
+        workflow_context["end_time"] = datetime.now()
+        workflow_context["duration"] = (workflow_context["end_time"] - workflow_context["start_time"]).total_seconds()
+        
+        return workflow_context
+    
+    def _resolve_variables(self, params: Dict[str, Any], variables: Dict[str, Any]) -> Dict[str, Any]:
+        """Resuelve variables en los parámetros usando el contexto del workflow"""
+        resolved = {}
+        
+        for key, value in params.items():
+            if isinstance(value, str) and value.startswith("{{") and value.endswith("}}"):
+                # Es una variable
+                var_name = value[2:-2].strip()
+                if "." in var_name:
+                    # Acceso a propiedades anidadas
+                    parts = var_name.split(".")
+                    resolved_value = variables
+                    for part in parts:
+                        if isinstance(resolved_value, dict):
+                            resolved_value = resolved_value.get(part)
+                        else:
+                            resolved_value = None
+                            break
+                    resolved[key] = resolved_value
+                else:
+                    resolved[key] = variables.get(var_name)
+            elif isinstance(value, dict):
+                # Recursión para objetos anidados
+                resolved[key] = self._resolve_variables(value, variables)
+            elif isinstance(value, list):
+                # Recursión para listas
+                resolved[key] = [
+                    self._resolve_variables(item, variables) if isinstance(item, dict) else item
+                    for item in value
+                ]
+            else:
+                resolved[key] = value
+        
+        return resolved
+    
+    def _find_step_index(self, steps: List[Dict[str, Any]], step_id: str) -> int:
+        """Encuentra el índice de un paso por su ID"""
+        for i, step in enumerate(steps):
+            if step.get("id") == step_id:
+                return i
+        raise ValueError(f"No se encontró el paso con ID: {step_id}")
+
+# ============================================================================
+# WORKFLOWS PREDEFINIDOS
+# ============================================================================
+
+PREDEFINED_WORKFLOWS = {
+    "audit_complete": {
+        "name": "Auditoría Completa del Sistema",
+        "description": "Recopila información de todos los servicios y genera un informe",
+        "steps": [
+            {
+                "id": "get_sites",
+                "action": "sp_get_site_info",
+                "params": {},
+                "store_result_as": "sharepoint_info"
+            },
+            {
+                "id": "get_teams",
+                "action": "teams_list_joined_teams",
+                "params": {"top": 10},
+                "store_result_as": "teams_info"
+            },
+            {
+                "id": "get_calendar",
+                "action": "calendar_list_events",
+                "params": {"top": 20},
+                "store_result_as": "calendar_info"
+            },
+            {
+                "id": "create_report",
+                "action": "notion_create_page_in_database",
+                "params": {
+                    "database_name": "Elite Dynamics - Audit Reports",
+                    "properties": {
+                        "Title": {"title": [{"text": {"content": "System Audit Report"}}]},
+                        "Date": {"date": {"start": "{{current_date}}"}},
+                        "SharePoint Status": {"rich_text": [{"text": {"content": "{{sharepoint_info.status}}"}}]},
+                        "Teams Count": {"number": "{{teams_info.data.length}}"},
+                        "Calendar Events": {"number": "{{calendar_info.data.length}}"}
+                    }
+                },
+                "on_failure": "end"
+            }
+        ]
+    },
+    
+    "content_sync": {
+        "name": "Sincronización de Contenido Multi-Plataforma",
+        "description": "Sincroniza contenido entre SharePoint, OneDrive y Notion",
+        "steps": [
+            {
+                "id": "list_sp_files",
+                "action": "sp_list_folder_contents",
+                "params": {
+                    "folder_path": "/Elite Documents",
+                    "top": 50
+                },
+                "store_result_as": "sp_files"
+            },
+            {
+                "id": "check_onedrive",
+                "action": "onedrive_list_items",
+                "params": {
+                    "path": "/EliteDynamics/Sync",
+                    "top": 50
+                },
+                "store_result_as": "od_files"
+            },
+            {
+                "id": "sync_to_notion",
+                "action": "notion_create_page_in_database",
+                "params": {
+                    "database_name": "Elite Dynamics - File Registry",
+                    "properties": {
+                        "File Count SP": {"number": "{{sp_files.data.length}}"},
+                        "File Count OD": {"number": "{{od_files.data.length}}"},
+                        "Sync Date": {"date": {"start": "{{current_date}}"}}
+                    }
+                }
+            }
+        ]
+    }
+}
+
+# ============================================================================
+# INTEGRACION CON GEMINI PARA WORKFLOWS DINAMICOS
+# ============================================================================
+
+def create_dynamic_workflow(client: Any, natural_language_request: str) -> Dict[str, Any]:
+    """
+    Usa Gemini para crear un workflow dinámico basado en lenguaje natural
+    """
+    try:
+        # Usar Gemini para interpretar la solicitud
+        gemini_result = gemini_actions.analyze_conversation_context(client, {
+            "conversation_data": {
+                "request": natural_language_request,
+                "context": "Create a workflow definition",
+                "available_actions": list(get_all_actions().keys()),
+                "output_format": "workflow_json"
+            }
+        })
+        
+        if gemini_result.get("success"):
+            workflow_def = gemini_result.get("data", {}).get("workflow")
+            if workflow_def:
+                # Ejecutar el workflow generado
+                executor = WorkflowExecutor()
+                return executor.execute_workflow(client, workflow_def)
+        
+        return {
+            "success": False,
+            "error": "No se pudo generar el workflow",
+            "gemini_response": gemini_result
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creando workflow dinámico: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+# ============================================================================
+# FUNCIONES DE UTILIDAD PARA WORKFLOWS
+# ============================================================================
+
+def execute_predefined_workflow(client: Any, workflow_name: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
+    """Ejecuta un workflow predefinido por nombre"""
+    if workflow_name not in PREDEFINED_WORKFLOWS:
+        return {
+            "success": False,
+            "error": f"Workflow '{workflow_name}' no encontrado",
+            "available_workflows": list(PREDEFINED_WORKFLOWS.keys())
+        }
+    
+    workflow_def = PREDEFINED_WORKFLOWS[workflow_name].copy()
+    
+    # Aplicar parámetros personalizados si se proporcionan
+    if params:
+        workflow_def["custom_params"] = params
+    
+    executor = WorkflowExecutor()
+    return executor.execute_workflow(client, workflow_def)
+
+def list_available_workflows() -> Dict[str, Any]:
+    """Lista todos los workflows disponibles"""
+    workflows = []
+    for name, definition in PREDEFINED_WORKFLOWS.items():
+        workflows.append({
+            "name": name,
+            "description": definition.get("description", ""),
+            "steps_count": len(definition.get("steps", [])),
+            "actions": [step.get("action") for step in definition.get("steps", [])]
+        })
+    
+    return {
+        "success": True,
+        "workflows": workflows,
+        "total": len(workflows)
+    }
+
+# ============================================================================
+# ACTUALIZACION DEL MAPEO COMPLETO - CORREGIR GEMINI
+# ============================================================================
+
+# Actualizar el mapeo de Gemini para incluir la nueva función
+GEMINI_ACTIONS["generate_execution_plan"] = gemini_actions.generate_execution_plan
+
+# ============================================================================
+# ============================================================================
+# MAPEO COMPLETO DE TODAS LAS ACCIONES (352 acciones) - ACTUALIZADO
+# ============================================================================
+
+def get_all_actions() -> Dict[str, Callable]:
+    """
+    Retorna el mapeo completo de todas las acciones disponibles.
+    Total: 352 acciones
+    """
+    all_actions = {}
+    
+    # Combinar todos los mapas de acciones
+    for action_category in [
+        AZURE_MGMT_ACTIONS, BOOKINGS_ACTIONS, CALENDAR_ACTIONS, EMAIL_ACTIONS,
+        FORMS_ACTIONS, GEMINI_ACTIONS, GITHUB_ACTIONS, GOOGLEADS_ACTIONS,
+        GRAPH_ACTIONS, HUBSPOT_ACTIONS, LINKEDIN_ADS_ACTIONS, METAADS_ACTIONS,
+        NOTION_ACTIONS, OFFICE_ACTIONS, ONEDRIVE_ACTIONS, OPENAI_ACTIONS,
+        PLANNER_ACTIONS, POWER_AUTOMATE_ACTIONS, POWERBI_ACTIONS, RESOLVER_ACTIONS,
+        SHAREPOINT_ACTIONS, STREAM_ACTIONS, TEAMS_ACTIONS, TIKTOK_ADS_ACTIONS,
+        TODO_ACTIONS, USER_PROFILE_ACTIONS, USERS_ACTIONS, VIVA_INSIGHTS_ACTIONS,
+        YOUTUBE_CHANNEL_ACTIONS, X_ADS_ACTIONS, WEBRESEARCH_ACTIONS, WORDPRESS_ACTIONS
+    ]:
+        all_actions.update(action_category)
+    # Agregar acciones de workflow
+    all_actions.update({
+        "execute_workflow": lambda client, params: WorkflowExecutor().execute_workflow(client, params.get("workflow", {})),
+        "execute_predefined_workflow": lambda client, params: execute_predefined_workflow(client, params.get("workflow_name"), params.get("params")),
+        "create_dynamic_workflow": lambda client, params: create_dynamic_workflow(client, params.get("request", "")),
+        "list_workflows": lambda client, params: list_available_workflows()
+    })
+    
+    return all_actions
+
+# Total de acciones disponibles
+ACTION_COUNT = len(get_all_actions())
+
+# Logging de inicialización
+logger.info(f"Action mapper inicializado con {ACTION_COUNT} acciones disponibles")
+logger.info(f"Workflows predefinidos disponibles: {len(PREDEFINED_WORKFLOWS)}")

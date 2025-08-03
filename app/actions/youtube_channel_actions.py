@@ -105,10 +105,16 @@ SOLUCIÓN:
 Regenerar refresh_token con scope: 'https://www.googleapis.com/auth/yt-analytics.readonly'
 """)
 
-def _validate_privacy_status(privacy_status: str) -> None:
-    """Valida el estado de privacidad."""
-    if privacy_status not in VALID_PRIVACY_STATUSES:
-        raise ValueError(f"privacy_status debe ser uno de: {', '.join(VALID_PRIVACY_STATUSES)}")
+def _validate_privacy_status(privacy_status: str) -> str:
+    """Valida y normaliza el estado de privacidad"""
+    valid_statuses = ['private', 'unlisted', 'public']
+    status_lower = privacy_status.lower()
+    
+    if status_lower not in valid_statuses:
+        logger.warning(f"Invalid privacy status '{privacy_status}', defaulting to 'private'")
+        return 'private'  # CAMBIAR A RETURN
+    
+    return status_lower  # AGREGAR RETURN
 
 def _handle_youtube_api_error(e: Exception, action_name: str) -> Dict[str, Any]:
     """Maneja errores de la API de Google de forma estandarizada."""
