@@ -94,10 +94,10 @@ class Settings(BaseSettings):
     DEFAULT_LINKEDIN_AD_ACCOUNT_ID: Optional[str] = None 
 
     # Third Party APIs
-    NOTION_API_TOKEN: Optional[str] = None 
+    NOTION_API_TOKEN: Optional[str] = Field(None, env="NOTION_API_TOKEN")
     NOTION_API_VERSION: str = "2022-06-28" 
     
-    HUBSPOT_PRIVATE_APP_TOKEN: Optional[str] = None
+    HUBSPOT_PRIVATE_APP_TOKEN: Optional[str] = Field(None, env="HUBSPOT_PRIVATE_APP_TOKEN")
     
     YOUTUBE_API_KEY: Optional[str] = None 
     YOUTUBE_ACCESS_TOKEN: Optional[str] = None
@@ -129,9 +129,9 @@ class Settings(BaseSettings):
     WP_AUTH_MODE: Optional[str] = Field(default="jwt", description="WordPress auth mode: jwt|app_password|woocommerce")
     
     # WordPress JWT Configuration (método preferido y que funciona)
-    WP_SITE_URL: Optional[str] = Field(default="https://elitecosmeticdental.com")
-    WP_JWT_USERNAME: Optional[str] = Field(default="Arleyadmin")
-    WP_JWT_PASSWORD: Optional[str] = Field(default="U7M0$f34@Ju@N90|2=2=*|")
+    WP_SITE_URL: Optional[str] = Field(default=None, env="WP_SITE_URL")
+    WP_JWT_USERNAME: Optional[str] = Field(default=None, env="WP_JWT_USERNAME")
+    WP_JWT_PASSWORD: Optional[str] = Field(default=None, env="WP_JWT_PASSWORD")
     
     # WordPress App Password (fallback)
     WP_USERNAME: Optional[str] = None
@@ -180,7 +180,7 @@ class Settings(BaseSettings):
     @field_validator("ENVIRONMENT")
     @classmethod
     def environment_must_be_valid(cls, value: str) -> str:
-        valid_envs = ["development", "staging", "production"]
+        valid_envs = ["development", "staging", "production", "testing"]
         if value.lower() not in valid_envs:
             raise ValueError(f"Invalid ENVIRONMENT: '{value}'. Must be one of {valid_envs}.")
         return value.lower()
@@ -195,7 +195,12 @@ class Settings(BaseSettings):
 # ⬅️ NUEVO: Environment detection helper
 def get_environment() -> str:
     """Detect current environment based on Azure App Service environment variables"""
-    if os.getenv('WEBSITE_SITE_NAME'):  # Azure App Service
+    # Check for explicit test environment
+    if os.getenv('ENVIRONMENT') == 'testing':
+        return "testing"
+    elif os.getenv('PYTEST_CURRENT_TEST'):  # Running under pytest
+        return "testing"
+    elif os.getenv('WEBSITE_SITE_NAME'):  # Azure App Service
         return "production"
     elif os.getenv('GITHUB_ACTIONS'):   # GitHub Actions
         return "staging"
