@@ -6,6 +6,7 @@ from datetime import datetime
 
 # Importar el router de acciones
 from app.api.routes.dynamics_actions import router as dynamics_router
+from app.api.routes.ai_workflows import router as ai_workflows_router
 
 # Importar la configuración de la aplicación
 from app.core.config import settings
@@ -80,9 +81,11 @@ app.add_middleware(AuditMiddleware)
 
 # Incluir el router con prefijo
 app.include_router(dynamics_router, prefix="/api/v1")
+app.include_router(ai_workflows_router, prefix="/api/v1", tags=["AI Workflows"])
 
 # Log de confirmación después de incluir routers
 logger.info("Router de acciones dinámicas incluido bajo el prefijo: /api/v1")
+logger.info("Router de AI Workflows incluido bajo el prefijo: /api/v1")
 logger.info("Documentación OpenAPI (Swagger UI) disponible en: /api/v1/docs")
 logger.info("Documentación ReDoc disponible en: /api/v1/redoc")
 

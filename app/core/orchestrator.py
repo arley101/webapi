@@ -22,6 +22,8 @@ from app.core.config import settings
 from app.core.state_manager import state_manager
 from app.core.event_bus import event_bus, EventType
 from app.core.action_mapper import ACTION_MAP
+from app.core.gemini_planner import gemini_planner, WorkflowDAG, DAGNode
+from app.core.learning_system import learning_system
 
 logger = logging.getLogger(__name__)
 
@@ -80,51 +82,76 @@ class WorkflowOrchestrator:
     def __init__(self):
         self.running_workflows: Dict[str, str] = {}  # workflow_id -> status
         
-    async def create_workflow_from_plan(self, plan: List[Dict[str, Any]], 
-                                       workflow_name: str = "Generated Workflow",
-                                       created_by: Optional[str] = None) -> WorkflowDefinition:
-        """Create a workflow definition from a Gemini-generated plan"""
+    async def create_workflow_from_request(self, user_request: str, 
+                                         workflow_name: str = "Generated Workflow",
+                                         created_by: Optional[str] = None,
+                                         use_learning: bool = True) -> WorkflowDefinition:
+        """Create a workflow definition from a user request using Gemini DAG planner"""
         
-        workflow_id = f"wf_{uuid.uuid4().hex[:8]}"
-        steps = []
+        logger.info(f"🎯 Creating workflow from request: {user_request[:100]}...")
         
-        for i, step_data in enumerate(plan):
-            step_id = f"step_{i+1}"
+        try:
+            # Phase 3: Task 3.1 - Use Gemini DAG planner
+            dag = await gemini_planner.generate_dag_workflow(user_request)
             
-            # Extract action and parameters
-            action = step_data.get("action", "unknown")
-            params = step_data.get("params", {})
+            # Phase 3: Task 3.2 - Apply learning improvements
+            if use_learning:
+                improved_dag, improvements = await learning_system.improve_workflow_with_learning(
+                    dag, user_request
+                )
+                if improvements:
+                    logger.info(f"✨ Applied {len(improvements)} learning improvements")
+                    dag = improved_dag
             
-            # Handle dependencies (for now, sequential execution)
-            depends_on = [f"step_{i}"] if i > 0 else []
+            # Convert DAG to WorkflowDefinition
+            workflow = await self._convert_dag_to_workflow(dag, workflow_name, created_by)
             
-            step = WorkflowStep(
-                step_id=step_id,
-                action=action,
-                params=params,
-                depends_on=depends_on,
-                max_retries=step_data.get("max_retries", 3),
-                timeout_seconds=step_data.get("timeout", 300)
+            # Store workflow definition
+            await self._store_workflow_definition(workflow)
+            
+            logger.info(f"✅ Created workflow {workflow.workflow_id} with {len(workflow.steps)} steps")
+            return workflow
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to create workflow from request: {e}")
+            # Fallback to simple plan
+            return await self.create_workflow_from_plan(
+                [{"action": "gemini_generate_response", "params": {"prompt": user_request}}],
+                workflow_name,
+                created_by
             )
-            
+    
+    async def _convert_dag_to_workflow(self, dag: WorkflowDAG, workflow_name: str,
+                                     created_by: Optional[str]) -> WorkflowDefinition:
+        """Convert a WorkflowDAG to WorkflowDefinition"""
+        
+        steps = []
+        for node in dag.nodes:
+            step = WorkflowStep(
+                step_id=node.node_id,
+                action=node.action,
+                params=node.params,
+                depends_on=node.dependencies,
+                max_retries=3,
+                timeout_seconds=node.estimated_duration_seconds + 60  # Add buffer
+            )
             steps.append(step)
         
         workflow = WorkflowDefinition(
-            workflow_id=workflow_id,
-            name=workflow_name,
-            description=f"Auto-generated workflow with {len(steps)} steps",
+            workflow_id=dag.dag_id,
+            name=workflow_name or dag.name,
+            description=dag.description,
             steps=steps,
-            created_by=created_by
+            created_by=created_by,
+            timeout_minutes=int(dag.estimated_total_duration_seconds / 60) + 10  # Add buffer
         )
-        
-        # Store workflow definition in state
-        await self._store_workflow_definition(workflow)
         
         return workflow
     
     async def execute_workflow(self, workflow: WorkflowDefinition, 
                               auth_client: Any, 
-                              execution_mode: bool = True) -> Dict[str, Any]:
+                              execution_mode: bool = True,
+                              original_request: str = "") -> Dict[str, Any]:
         """Execute a complete workflow"""
         
         workflow_id = workflow.workflow_id
@@ -138,6 +165,7 @@ class WorkflowOrchestrator:
             "status": WorkflowStatus.RUNNING,
             "started_at": datetime.now().isoformat(),
             "execution_mode": execution_mode,
+            "original_request": original_request,
             "total_steps": len(workflow.steps),
             "completed_steps": 0,
             "failed_steps": 0,
@@ -254,6 +282,36 @@ class WorkflowOrchestrator:
             )
             
             logger.info(f"✅ Workflow {workflow_id} completed with status: {final_status}")
+            
+            # Phase 3: Task 3.2 - Record learning feedback
+            try:
+                if final_status == WorkflowStatus.COMPLETED:
+                    # Record successful workflow execution for learning
+                    await learning_system.record_success_feedback(
+                        workflow_id=workflow_id,
+                        original_request=execution_state.get("original_request", ""),
+                        execution_result=execution_state,
+                        performance_metrics={
+                            "total_duration_seconds": (datetime.now() - datetime.fromisoformat(execution_state["started_at"])).total_seconds(),
+                            "completed_steps": execution_state["completed_steps"],
+                            "total_steps": execution_state["total_steps"],
+                            "success_rate": execution_state["completed_steps"] / execution_state["total_steps"] if execution_state["total_steps"] > 0 else 0
+                        }
+                    )
+                else:
+                    # Record failed workflow execution for learning
+                    await learning_system.record_failure_feedback(
+                        workflow_id=workflow_id,
+                        original_request=execution_state.get("original_request", ""),
+                        error_details={
+                            "final_status": final_status,
+                            "errors": execution_state.get("errors", []),
+                            "failed_steps": execution_state.get("failed_steps", 0)
+                        },
+                        execution_result=execution_state
+                    )
+            except Exception as learning_error:
+                logger.warning(f"Failed to record learning feedback: {learning_error}")
             
             return execution_state
             
@@ -511,3 +569,45 @@ async def create_simple_workflow(actions: List[Tuple[str, Dict[str, Any]]],
     
     await orchestrator._store_workflow_definition(workflow)
     return workflow
+
+# Phase 3: Enhanced convenience functions
+async def create_intelligent_workflow(user_request: str, auth_client: Any,
+                                     execution_mode: bool = True,
+                                     workflow_name: str = "AI Generated Workflow") -> Dict[str, Any]:
+    """Create and execute an intelligent workflow from user request using Gemini and learning"""
+    
+    workflow = await orchestrator.create_workflow_from_request(user_request, workflow_name)
+    return await orchestrator.execute_workflow(workflow, auth_client, execution_mode, user_request)
+
+async def get_workflow_suggestions(user_request: str) -> Dict[str, Any]:
+    """Get intelligent suggestions for a user request"""
+    
+    try:
+        # Get learning suggestions
+        learning_suggestions = await learning_system.get_learning_suggestions(user_request)
+        
+        # Generate new DAG suggestion
+        dag = await gemini_planner.generate_dag_workflow(user_request)
+        
+        return {
+            "status": "success",
+            "user_request": user_request,
+            "learning_suggestions": learning_suggestions,
+            "suggested_workflow": {
+                "dag_id": dag.dag_id,
+                "name": dag.name,
+                "description": dag.description,
+                "estimated_duration_seconds": dag.estimated_total_duration_seconds,
+                "total_steps": len(dag.nodes),
+                "parallel_groups": len(dag.parallel_groups),
+                "actions_involved": [node.action for node in dag.nodes]
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Failed to get workflow suggestions: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "user_request": user_request
+        }
