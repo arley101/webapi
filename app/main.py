@@ -24,11 +24,13 @@ log_handlers = [
     logging.StreamHandler(sys.stdout)
 ]
 
-# Add file logging in production
+# Add file logging in production, configurable via environment variable
 if settings.ENVIRONMENT == "production":
-    log_handlers.append(
-        logging.FileHandler("/var/log/elitedynamics/app.log")
-    )
+    log_file_path = os.getenv("LOG_FILE_PATH")
+    if log_file_path:
+        log_handlers.append(
+            logging.FileHandler(log_file_path)
+        )
 
 logging.basicConfig(
     level=settings.LOG_LEVEL.upper(),
