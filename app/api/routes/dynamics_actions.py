@@ -10,7 +10,10 @@ from typing import Any, Optional, Union
 from app.api.schemas import ActionRequest, ErrorResponse 
 from app.core.action_mapper import ACTION_MAP 
 from app.core.config import settings 
-from app.shared.helpers.http_client import AuthenticatedHttpClient # <--- LÍNEA CONFIRMADA Y NECESARIA
+from app.shared.helpers.http_client import AuthenticatedHttpClient
+from app.core.orchestrator import orchestrator, execute_plan_as_workflow
+from app.core.state_manager import state_manager
+from app.core.event_bus import event_bus, EventType
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -37,7 +40,8 @@ def create_error_response(
     "/dynamics", 
     summary="Procesa una acción dinámica basada en la solicitud.",
     description="Recibe un nombre de acción y sus parámetros, y ejecuta la lógica de negocio correspondiente. "
-                "Este es el punto de entrada principal para todas las operaciones del backend.",
+                "Este es el punto de entrada principal para todas las operaciones del backend. "
+                "Soporta mode=execution para ejecución automática sin confirmación.",
     response_description="El resultado de la acción ejecutada (JSON, archivo binario, CSV) o un mensaje de error estandarizado.",
     responses={ 
         200: {"description": "Acción completada exitosamente (respuesta JSON o archivo)."},
@@ -58,14 +62,33 @@ async def process_dynamic_action(
     action_name = action_request.action
     params_req = action_request.params 
     
+    # Phase 2: Task 2.2 - Extract execution mode
+    mode = action_request.mode or "suggestion"
+    execution_mode = action_request.execution
+    if execution_mode is None:
+        execution_mode = (mode == "execution") or settings.EXECUTION_MODE_DEFAULT
+    
+    # Extract session and workflow IDs for orchestration
+    session_id = action_request.session_id
+    workflow_id = action_request.workflow_id
+    
     invocation_id = request.headers.get("x-ms-invocation-id") or \
                     request.headers.get("x-request-id") or \
                     request.headers.get("traceparent") or \
                     "local-dev" 
                     
-    logging_prefix = f"[InvId: {invocation_id.split('-')[0] if invocation_id else 'N/A'}] [Action: {action_name}]"
+    logging_prefix = f"[InvId: {invocation_id.split('-')[0] if invocation_id else 'N/A'}] [Action: {action_name}] [Mode: {mode}]"
 
-    logger.info(f"{logging_prefix} Petición recibida. Claves de parámetros: {list(params_req.keys())}")
+    logger.info(f"{logging_prefix} Petición recibida. Execution mode: {execution_mode}. Claves de parámetros: {list(params_req.keys())}")
+
+    # Store request context in state manager if session_id provided
+    if session_id:
+        await state_manager.set_conversation_context(session_id, {
+            "last_action": action_name,
+            "last_params": params_req,
+            "execution_mode": execution_mode,
+            "invocation_id": invocation_id
+        })
 
     try:
         credential = DefaultAzureCredential()
@@ -113,6 +136,41 @@ async def process_dynamic_action(
             details=str(auth_setup_ex)
         )
 
+    # Check if this is a workflow action or single action
+    if action_name == "execute_workflow" and "workflow" in params_req:
+        # Execute workflow through orchestrator
+        logger.info(f"{logging_prefix} Executing workflow through orchestrator")
+        try:
+            workflow_plan = params_req["workflow"]
+            workflow_name = params_req.get("workflow_name", "API Generated Workflow")
+            
+            result = await execute_plan_as_workflow(
+                workflow_plan, 
+                auth_http_client, 
+                execution_mode=execution_mode,
+                workflow_name=workflow_name
+            )
+            
+            # Add metadata to response
+            result["execution_metadata"] = {
+                "mode": mode,
+                "execution_mode": execution_mode,
+                "session_id": session_id,
+                "invocation_id": invocation_id
+            }
+            
+            return JSONResponse(content=result, status_code=200)
+            
+        except Exception as workflow_ex:
+            logger.error(f"{logging_prefix} Workflow execution failed: {workflow_ex}")
+            return create_error_response(
+                status_code=http_status_codes.HTTP_500_INTERNAL_SERVER_ERROR,
+                action=action_name,
+                message="Workflow execution failed",
+                details=str(workflow_ex)
+            )
+
+    # Single action execution
     action_function = ACTION_MAP.get(action_name)
     if not action_function:
         logger.warning(f"{logging_prefix} Acción '{action_name}' no encontrada en ACTION_MAP.")
@@ -124,8 +182,49 @@ async def process_dynamic_action(
 
     logger.info(f"{logging_prefix} Ejecutando función mapeada '{action_function.__name__}' del módulo '{action_function.__module__}'")
     
+    # Emit action started event
+    await event_bus.emit(
+        EventType.ACTION_STARTED,
+        "dynamics_api",
+        {
+            "action": action_name,
+            "params": params_req,
+            "execution_mode": execution_mode,
+            "session_id": session_id
+        },
+        session_id=session_id
+    )
+    
     try:
+        # Phase 2: In suggestion mode, return the action plan without execution
+        if not execution_mode:
+            suggestion_response = {
+                "status": "suggestion",
+                "action": action_name,
+                "params": params_req,
+                "message": f"Acción '{action_name}' preparada para ejecución. Para ejecutar, envía la misma solicitud con mode='execution' o execution=true.",
+                "execution_metadata": {
+                    "mode": mode,
+                    "execution_mode": execution_mode,
+                    "session_id": session_id,
+                    "invocation_id": invocation_id
+                }
+            }
+            
+            logger.info(f"{logging_prefix} Returning suggestion (execution mode disabled)")
+            return JSONResponse(content=suggestion_response, status_code=200)
+        
+        # Execute the action
         result = action_function(auth_http_client, params_req)
+
+        # Emit action completed event
+        await event_bus.emit_action_completed(
+            "dynamics_api",
+            action_name,
+            params_req,
+            result,
+            session_id=session_id
+        )
 
         if isinstance(result, bytes):
             logger.info(f"{logging_prefix} Acción devolvió datos binarios ({len(result)} bytes).")

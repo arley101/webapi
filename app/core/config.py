@@ -67,7 +67,24 @@ class Settings(BaseSettings):
 
     # API Configuration
     DEFAULT_API_TIMEOUT: int = 90 
-    MAILBOX_USER_ID: str = "me" 
+    MAILBOX_USER_ID: str = "me"
+    
+    # State Management & Event Bus (Phase 1)
+    REDIS_URL: str = Field(default="redis://localhost:6379/0", env="REDIS_URL")
+    REDIS_HOST: str = Field(default="localhost", env="REDIS_HOST")
+    REDIS_PORT: int = Field(default=6379, env="REDIS_PORT")
+    REDIS_DB: int = Field(default=0, env="REDIS_DB")
+    REDIS_PASSWORD: Optional[str] = Field(default=None, env="REDIS_PASSWORD")
+    
+    # Audit & Response Management
+    AUDIT_ENABLED: bool = Field(default=True, env="AUDIT_ENABLED")
+    RESPONSE_SIZE_THRESHOLD_MB: float = Field(default=2.0, env="RESPONSE_SIZE_THRESHOLD_MB")
+    AUTO_SAVE_LARGE_RESPONSES: bool = Field(default=True, env="AUTO_SAVE_LARGE_RESPONSES")
+    
+    # Orchestrator Configuration  
+    EXECUTION_MODE_DEFAULT: bool = Field(default=False, env="EXECUTION_MODE_DEFAULT")
+    MAX_WORKFLOW_STEPS: int = Field(default=50, env="MAX_WORKFLOW_STEPS")
+    WORKFLOW_TIMEOUT_MINUTES: int = Field(default=60, env="WORKFLOW_TIMEOUT_MINUTES") 
 
     # GitHub
     GITHUB_PAT: Optional[str] = None 

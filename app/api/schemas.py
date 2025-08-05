@@ -10,6 +10,14 @@ class ActionRequest(BaseModel):
     """
     action: str = Field(..., example="calendar_list_events", description="Nombre de la acción a ejecutar.")
     params: Dict[str, Any] = Field(default_factory=dict, example={"start_datetime": "2025-05-20T08:00:00Z", "end_datetime": "2025-05-20T17:00:00Z"}, description="Parámetros para la acción.")
+    
+    # Phase 2: Task 2.2 - mode=execution flag
+    mode: Optional[str] = Field(default="suggestion", example="execution", description="Modo de operación: 'suggestion' para depuración, 'execution' para ejecución sin confirmación.")
+    execution: Optional[bool] = Field(default=None, example=True, description="Flag booleano para mode=execution. Si es true, ejecuta sin confirmación.")
+    
+    # Additional orchestration parameters
+    session_id: Optional[str] = Field(default=None, example="session_123", description="ID de sesión para tracking de workflow.")
+    workflow_id: Optional[str] = Field(default=None, example="workflow_456", description="ID de workflow si es parte de una secuencia.")
 
 class ErrorDetail(BaseModel):
     """
