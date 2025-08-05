@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     WP_AUTH_MODE: Optional[str] = Field(default="jwt", description="WordPress auth mode: jwt|app_password|woocommerce")
     
     # WordPress JWT Configuration (método preferido y que funciona)
-    WP_SITE_URL: Optional[str] = Field(default=None, env="WP_SITE_URL")
+    WP_SITE_URL: Optional[HttpUrl] = Field(default=None, env="WP_SITE_URL")
     WP_JWT_USERNAME: Optional[str] = Field(default=None, env="WP_JWT_USERNAME")
     WP_JWT_PASSWORD: Optional[str] = Field(default=None, env="WP_JWT_PASSWORD")
     
