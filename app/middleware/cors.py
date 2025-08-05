@@ -84,7 +84,14 @@ class CORSMiddleware:
         
         else:  # development
             return {
-                "allow_origins": ["*"],  # Allow all origins in development
+                "allow_origins": [
+                    "http://localhost",
+                    "http://localhost:3000",
+                    "http://localhost:8000",
+                    "http://127.0.0.1",
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:8000"
+                ],  # Explicit origins for development
                 "allow_credentials": True,
                 "allow_methods": ["*"],  # Allow all methods
                 "allow_headers": ["*"],  # Allow all headers
