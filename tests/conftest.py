@@ -10,9 +10,7 @@ from typing import Generator, AsyncGenerator
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
-# Set test environment
-os.environ["ENVIRONMENT"] = "testing"
-
+# Set test environment in pytest_configure hook (see below)
 # Import after setting environment
 from app.main import app
 from app.core.config import settings
