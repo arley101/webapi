@@ -61,9 +61,15 @@ app = FastAPI(
 )
 
 # Configuración de CORS
+allowed_origins = getattr(settings, "ALLOWED_ORIGINS", None)
+if not allowed_origins or allowed_origins == ["*"]:
+    raise RuntimeError(
+        "ALLOWED_ORIGINS must be set to a list of specific domains in production. "
+        "Current value: {}".format(allowed_origins)
+    )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=getattr(settings, "ALLOWED_ORIGINS", ["*"]),  # Cambiar a dominios específicos en producción
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
