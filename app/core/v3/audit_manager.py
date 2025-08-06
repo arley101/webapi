@@ -13,7 +13,7 @@ class AuditManager:
     
     def __init__(self):
         self.audit_db = getattr(settings, "NOTION_REGISTRY_DB_ID", None)
-        self.enabled = bool(settings.NOTION_API_KEY)
+        self.enabled = bool(getattr(settings, "NOTION_API_KEY", None))
         
     async def log_execution_start(self, execution_id: str, prompt: str, user_id: str, metadata: Optional[Dict] = None):
         """Registra el inicio de una ejecución"""
