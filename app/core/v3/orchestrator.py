@@ -12,7 +12,9 @@ try:
     from app.core.action_mapper import ACTION_MAP
 except ImportError as e:
     ACTION_MAP = None
-    logging.getLogger(__name__).error(f"Failed to import ACTION_MAP: {e}")
+    logging.getLogger(__name__).error(
+        f"Failed to import ACTION_MAP: {e}. Action execution will be disabled as a result."
+    )
 from app.core.auth_manager import get_auth_client
 
 logger = logging.getLogger(__name__)
