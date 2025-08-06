@@ -178,16 +178,12 @@ class AutonomousOrchestrator:
                 "summary": "Resumen del plan"
             }}
             """
-            
-            if hasattr(gemini_actions, "generate_execution_plan"):
-                result = await gemini_actions.generate_execution_plan(self.auth_client, {
-                    "prompt": gemini_prompt,
-                    "temperature": 0.2,
-                    "max_tokens": 2000
-                })
-            else:
-                logger.error("gemini_actions does not have method 'generate_execution_plan'. Using fallback plan.")
-                result = {"status": "error", "data": {}}
+
+            result = await gemini_actions.generate_execution_plan(self.auth_client, {
+                "prompt": gemini_prompt,
+                "temperature": 0.2,
+                "max_tokens": 2000
+            })
             
             if result.get("status") == "success":
                 return result.get("data", {}).get("plan", {})
