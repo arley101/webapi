@@ -83,7 +83,10 @@ async def setup_cascade_events():
         from app.actions import notion_actions
         try:
             # Crear registro en Notion automáticamente
-            await notion_actions.notion_create_page(None, {
+            from notion_client import Client
+            from app.core.settings import settings
+            notion_client = Client(auth=settings.NOTION_API_TOKEN)
+            await notion_actions.notion_create_page(notion_client, {
                 "database_id": settings.NOTION_REGISTRY_DB,
                 "properties": {
                     "Nombre": {"title": [{"text": {"content": event["data"].get("file_name", "Archivo")}}]},
