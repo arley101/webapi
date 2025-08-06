@@ -45,11 +45,12 @@ class EventBus:
         
         # Ejecutar suscriptores
         if event_name in self.subscribers:
-            for callback in self.subscribers[event_name]:
-                try:
-                    asyncio.create_task(callback(event))
-                except Exception as e:
-                    logger.error(f"Error en callback para {event_name}: {e}")
+            try:
+                async with asyncio.TaskGroup() as tg:
+                    for callback in self.subscribers[event_name]:
+                        tg.create_task(callback(event))
+            except Exception as e:
+                logger.error(f"Error en callback para {event_name}: {e}")
     
     def subscribe(self, event_name: str, callback: Callable):
         """Suscribe una función a un evento"""
