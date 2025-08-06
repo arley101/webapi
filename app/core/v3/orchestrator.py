@@ -292,7 +292,7 @@ class AutonomousOrchestrator:
                 result = await action_func(self.auth_client, params)
             else:
                 # Si es síncrona, ejecutar en thread pool
-                result = await asyncio.get_event_loop().run_in_executor(
+                result = await asyncio.get_running_loop().run_in_executor(
                     None, action_func, self.auth_client, params
                 )
             
