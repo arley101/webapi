@@ -20,10 +20,7 @@ class StateManager:
     def __init__(self):
         self.memory = {}  # HOT storage
         # Use a designated data directory for state backup
-        data_dir = getattr(settings, "DATA_DIR", None)
-        if not data_dir:
-            # Fallback to ~/.app_state if DATA_DIR is not set
-            data_dir = os.path.expanduser("~/.app_state")
+        data_dir = getattr(settings, "DATA_DIR", os.path.expanduser("~/.app_state"))
         os.makedirs(data_dir, exist_ok=True)
         self.persistence_file = os.path.join(data_dir, "state_backup.json")  # WARM storage
         self._load_state()
