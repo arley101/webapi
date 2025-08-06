@@ -45,7 +45,7 @@ class AutonomousOrchestrator:
     async def execute_natural_language(
         self, 
         prompt: str, 
-        mode: str = "execution",  # "execution" o "suggestion"
+        mode: str = "suggestion",  # "execution" o "suggestion"
         user_id: str = "system",
         context: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
