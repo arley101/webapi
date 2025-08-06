@@ -1,5 +1,4 @@
 # 1. Crear un archivo con todas las instrucciones
-cat > copilot_v3_instructions.md << 'EOF'
 @github-copilot Por favor implementa COMPLETAMENTE el sistema EliteDynamics V3 con TODAS estas funcionalidades:
 
 ## IMPLEMENTACIÓN COMPLETA V3 - SISTEMA AUTÓNOMO TOTAL
