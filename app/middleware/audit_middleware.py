@@ -136,7 +136,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
                 file_name = f"large_response_{request_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
                 
                 try:
-                    upload_result = await sharepoint_actions.upload_document(None, {
+                    auth_client = get_sharepoint_auth_client()
+                    upload_result = await sharepoint_actions.upload_document(auth_client, {
                         "file_content": body,
                         "file_name": file_name,
                         "folder_path": settings.SHAREPOINT_ELITE_GENERAL_PATH,
