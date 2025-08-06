@@ -172,7 +172,7 @@ async def get_system_stats() -> Dict[str, Any]:
             "state_manager": state_stats,
             "event_bus": {
                 "subscribers": len(event_bus.subscribers),
-                "recent_events": len(event_bus.event_history)
+                "recent_events": event_bus.event_count
             }
         }
         
