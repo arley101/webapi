@@ -185,28 +185,16 @@ class AutonomousOrchestrator:
             }}
             """
 
-            if hasattr(gemini_actions, "generate_execution_plan"):
-                result = await gemini_actions.generate_execution_plan(self.auth_client, {
-                    "prompt": gemini_prompt,
-                    "temperature": 0.2,
-                    "max_tokens": 2000
-                })
-                
-                if result.get("status") == "success":
-                    return result.get("data", {}).get("plan", {})
-                else:
-                    # Plan de fallback simple
-                    return {
-                        "steps": [{
-                            "step_id": "1",
-                            "action": "gemini_suggest_action",
-                            "params": {"query": prompt},
-                            "description": "Analizar solicitud con Gemini"
-                        }],
-                        "summary": "Plan de fallback"
-                    }
+            result = await gemini_actions.generate_execution_plan(self.auth_client, {
+                "prompt": gemini_prompt,
+                "temperature": 0.2,
+                "max_tokens": 2000
+            })
+            
+            if result.get("status") == "success":
+                return result.get("data", {}).get("plan", {})
             else:
-                logger.error("gemini_actions does not have method 'generate_execution_plan'. Using fallback plan.")
+                # Plan de fallback simple
                 return {
                     "steps": [{
                         "step_id": "1",
