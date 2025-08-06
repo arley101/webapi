@@ -84,7 +84,7 @@ async def setup_cascade_events():
         from app.actions import notion_actions
         try:
             # Crear registro en Notion automáticamente
-            from app.core.settings import settings
+            from app.core.config import settings
             await notion_actions.notion_create_page({
                 "api_token": settings.NOTION_API_TOKEN,
                 "database_id": settings.NOTION_REGISTRY_DB,
