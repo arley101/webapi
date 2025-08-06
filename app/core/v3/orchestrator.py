@@ -278,7 +278,7 @@ class AutonomousOrchestrator:
                 }
                 
                 # Decidir si continuar o abortar
-                if step.get("critical", True):
+                if step.get("critical", False):
                     break
         
         return {
