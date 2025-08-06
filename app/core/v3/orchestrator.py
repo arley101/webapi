@@ -8,7 +8,11 @@ from app.core.config import settings
 from app.core.v3.state_manager import state_manager
 from app.core.v3.event_bus import event_bus
 from app.core.v3.audit_manager import audit_manager
-from app.core.action_mapper import ACTION_MAP
+try:
+    from app.core.action_mapper import ACTION_MAP
+except ImportError as e:
+    ACTION_MAP = None
+    logging.getLogger(__name__).error(f"Failed to import ACTION_MAP: {e}")
 from app.core.auth_manager import get_auth_client
 
 logger = logging.getLogger(__name__)
