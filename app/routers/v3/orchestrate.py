@@ -8,7 +8,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1", tags=["orchestration"])
+router = APIRouter(prefix="/api/v3", tags=["orchestration"])
 
 class OrchestrationRequest(BaseModel):
     """Modelo de request para orquestación"""
