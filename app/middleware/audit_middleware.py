@@ -140,7 +140,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     upload_result = await sharepoint_actions.upload_document(auth_client, {
                         "file_content": body,
                         "file_name": file_name,
-                        "folder_path": settings.SHAREPOINT_ELITE_GENERAL_PATH,
+                        "folder_path": getattr(settings, "SHAREPOINT_ELITE_GENERAL_PATH", "/General"),
                         "content_type": "application/json"
                     })
                     
