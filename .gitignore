@@ -54,4 +54,4 @@ deployment_logs/
 # Project specific
 untitled*
 Untitled*
-*.backup
+*.backup.env
