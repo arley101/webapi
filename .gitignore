@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+ENV/
+env.bak/
+venv.bak/
+*.egg
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+.tox/
+.mypy_cache/
+.ruff_cache/
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+temp/
+tmp/
+
+# Environment
+.env.*
+!.env.example
+
+# Local scripts
+scripts/test_*.py
+scripts/prueba_*.py
+scripts/*_reports/
+test_*.py
+
+# Deployment
+DEPLOYMENT_CHECKLIST.md
+deployment_logs/
+
+# Project specific
+untitled*
+Untitled*
+*.backup
