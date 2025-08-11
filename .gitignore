@@ -55,3 +55,4 @@ deployment_logs/
 untitled*
 Untitled*
 *.backup.env
+.env
