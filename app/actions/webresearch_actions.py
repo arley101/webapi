@@ -12,13 +12,11 @@ from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
 
-# Cache simple para evitar requests repetitivas
+# Cache unificado
 _cache = {}
-_cache_expiry = {}
 CACHE_DURATION = timedelta(minutes=15)
 
-# Cache simple en memoria
-_url_cache = {}
+# Configuración de rate limiting
 _last_request_time = 0
 REQUEST_DELAY = 1  # Delay entre requests en segundos
 
@@ -38,29 +36,30 @@ def _rate_limit():
     global _last_request_time
     if _last_request_time:
         elapsed = time.time() - _last_request_time
-        if elapsed < 1:  # Esperar al menos 1 segundo entre requests
-            time.sleep(1 - elapsed)
+        if elapsed < REQUEST_DELAY:  # Usar REQUEST_DELAY en lugar de hardcodear 1
+            time.sleep(REQUEST_DELAY - elapsed)
     _last_request_time = time.time()
-    return True  # AGREGAR RETURN
+    return True
 
 def _get_cached_result(cache_key: str) -> Optional[Dict[str, Any]]:
     """Obtiene resultado del cache si existe y no ha expirado."""
-    if cache_key in _url_cache:
-        cached = _url_cache[cache_key]
-        # Cache válido por 1 hora
-        if time.time() - cached['timestamp'] < 3600:
+    if cache_key in _cache:
+        cached = _cache[cache_key]
+        # Verificar si ha expirado
+        if time.time() < cached['expires']:
             return cached['data']
         else:
-            del _url_cache[cache_key]
+            del _cache[cache_key]
     return None
 
 def _cache_result(key: str, value: Any, ttl: int = 3600):
     """Cachea un resultado con TTL"""
     _cache[key] = {
-        'value': value,
+        'data': value,
+        'timestamp': time.time(),
         'expires': time.time() + ttl
     }
-    return True  # AGREGAR RETURN
+    return True
 
 def _handle_web_error(error: Exception, action_name: str) -> Dict[str, Any]:
     """Maneja errores de forma consistente."""
@@ -147,85 +146,114 @@ def fetch_url(client, params: Dict[str, Any]) -> Dict[str, Any]:
 
 def search_web(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Búsqueda web inteligente con auto-guardado de resultados relevantes"""
+    action_name = "search_web"
+    
     try:
         query = params.get("query", "")
         limit = params.get("limit", 10)
         auto_save = params.get("auto_save", True)
+        search_engine = params.get("search_engine", "duckduckgo")
+        
+        if not query:
+            return {
+                "success": False,
+                "error": "Se requiere una consulta de búsqueda",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Realizar búsqueda
+        if search_engine == "google" and os.getenv('GOOGLE_SEARCH_API_KEY') and os.getenv('GOOGLE_SEARCH_ENGINE_ID'):
+            search_results = _search_google_custom(query, limit)
+        else:
+            search_results = _search_duckduckgo(query, limit)
+        
+        # Construir respuesta básica
+        response = {
+            "success": True,
+            "query": query,
+            "results": search_results.get("results", []),
+            "count": len(search_results.get("results", [])),
+            "search_engine": search_results.get("search_engine", search_engine),
+            "timestamp": datetime.now().isoformat()
+        }
         
         # NUEVO: Análisis inteligente de resultados
-        if search_results and auto_save:
-            # Usar Gemini para analizar relevancia
-            from app.actions import gemini_actions
-            
-            relevance_analysis = gemini_actions.analyze_conversation_context(client, {
-                "conversation_data": {
-                    "task": "analyze_search_relevance",
-                    "query": query,
-                    "results": search_results[:5],  # Primeros 5 resultados
-                    "instructions": """
-                    Analiza estos resultados de búsqueda y determina:
-                    1. Cuáles son altamente relevantes (score > 0.8)
-                    2. Si contienen información crítica que debe guardarse
-                    3. Si requieren análisis adicional o scraping
-                    4. Tags para categorizar la información
-                    
-                    Responde en JSON con estructura:
-                    {
-                        "relevant_results": [{"url": "...", "relevance": 0.9, "reason": "..."}],
-                        "should_save": true/false,
-                        "requires_scraping": ["url1", "url2"],
-                        "tags": ["tag1", "tag2"],
-                        "summary": "..."
-                    }
-                    """
-                }
-            })
-            
-            if relevance_analysis.get('success'):
-                analysis_data = relevance_analysis.get('data', {}).get('response', {})
+        if search_results.get("results") and auto_save:
+            try:
+                # Usar Gemini para analizar relevancia
+                from app.actions import gemini_actions
                 
-                # Auto-guardar si es relevante
-                if analysis_data.get('should_save', False):
-                    from app.actions import resolver_actions
-                    
-                    save_result = resolver_actions.smart_save_resource(client, {
-                        'resource_type': 'web_research',
-                        'resource_data': {
-                            'query': query,
-                            'results': search_results,
-                            'analysis': analysis_data,
-                            'timestamp': datetime.now().isoformat()
-                        },
-                        'action_name': 'search_web',
-                        'metadata': {
-                            'tags': analysis_data.get('tags', []),
-                            'relevance_summary': analysis_data.get('summary', '')
+                relevance_analysis = gemini_actions.analyze_conversation_context(client, {
+                    "conversation_data": {
+                        "task": "analyze_search_relevance",
+                        "query": query,
+                        "results": search_results.get("results", [])[:5],  # Primeros 5 resultados
+                        "instructions": """
+                        Analiza estos resultados de búsqueda y determina:
+                        1. Cuáles son altamente relevantes (score > 0.8)
+                        2. Si contienen información crítica que debe guardarse
+                        3. Si requieren análisis adicional o scraping
+                        4. Tags para categorizar la información
+                        
+                        Responde en JSON con estructura:
+                        {
+                            "relevant_results": [{"url": "...", "relevance": 0.9, "reason": "..."}],
+                            "should_save": true/false,
+                            "requires_scraping": ["url1", "url2"],
+                            "tags": ["tag1", "tag2"],
+                            "summary": "..."
                         }
-                    })
+                        """
+                    }
+                })
+                
+                if relevance_analysis.get('success'):
+                    analysis_data = relevance_analysis.get('data', {}).get('response', {})
                     
-                    # Agregar info de guardado a la respuesta
-                    response['auto_saved'] = save_result
-                
-                # Ejecutar scraping adicional si es necesario
-                scraping_results = []
-                for url in analysis_data.get('requires_scraping', [])[:3]:  # Máx 3
-                    scrape_result = webresearch_scrape_url(client, {'url': url})
-                    if scrape_result.get('success'):
-                        scraping_results.append({
-                            'url': url,
-                            'content': scrape_result.get('data', {}).get('text', '')[:1000]
+                    # Auto-guardar si es relevante
+                    if analysis_data.get('should_save', False):
+                        from app.actions import resolver_actions
+                        
+                        save_result = resolver_actions.smart_save_resource(client, {
+                            'resource_type': 'web_research',
+                            'resource_data': {
+                                'query': query,
+                                'results': search_results.get("results", []),
+                                'analysis': analysis_data,
+                                'timestamp': datetime.now().isoformat()
+                            },
+                            'metadata': {
+                                'tags': analysis_data.get('tags', []),
+                                'relevance_summary': analysis_data.get('summary', '')
+                            }
                         })
-                
-                if scraping_results:
-                    response['additional_scraping'] = scraping_results
-                
-                response['relevance_analysis'] = analysis_data
+                        
+                        # Agregar info de guardado a la respuesta
+                        response['auto_saved'] = save_result
+                    
+                    # Ejecutar scraping adicional si es necesario
+                    scraping_results = []
+                    for url in analysis_data.get('requires_scraping', [])[:3]:  # Máx 3
+                        scrape_result = webresearch_scrape_url(client, {'url': url})
+                        if scrape_result.get('success'):
+                            scraping_results.append({
+                                'url': url,
+                                'content': scrape_result.get('text', '')[:1000]
+                            })
+                    
+                    if scraping_results:
+                        response['additional_scraping'] = scraping_results
+                    
+                    response['relevance_analysis'] = analysis_data
+            except Exception as analysis_error:
+                logger.warning(f"Error en análisis de resultados: {str(analysis_error)}")
+                response['analysis_error'] = str(analysis_error)
         
         return response
         
     except Exception as e:
         logger.error(f"Error in search_web: {str(e)}")
-        return {"success": False, "error": str(e)}
+        return {"success": False, "error": str(e), "action": action_name}
 
 def _search_duckduckgo(query: str, max_results: int) -> Dict[str, Any]:
     """Búsqueda usando DuckDuckGo."""
@@ -493,6 +521,8 @@ def batch_url_analysis(client, params: Dict[str, Any]) -> Dict[str, Any]:
 
 def monitor_website_changes(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Monitoreo inteligente de cambios en sitios web"""
+    action_name = "monitor_website_changes"
+    
     try:
         urls = params.get("urls", [])
         check_interval = params.get("check_interval", "daily")
@@ -505,9 +535,9 @@ def monitor_website_changes(client: Any, params: Dict[str, Any]) -> Dict[str, An
             current_content = fetch_url(client, {"url": url})
             
             if current_content.get('success'):
-                content_hash = hashlib.md5(
-                    current_content.get('data', '').encode()
-                ).hexdigest()
+                # Usar el campo content (HTML) no data
+                raw_html = current_content.get('content', '')
+                content_hash = hashlib.md5(raw_html.encode()).hexdigest()
                 
                 # Comparar con versión anterior (desde SharePoint)
                 from app.actions import sharepoint_actions
@@ -528,7 +558,7 @@ def monitor_website_changes(client: Any, params: Dict[str, Any]) -> Dict[str, An
                                 "task": "analyze_web_changes",
                                 "url": url,
                                 "previous_content": previous_result.get('data', {}).get('content', '')[:1000],
-                                "current_content": current_content.get('data', '')[:1000],
+                                "current_content": raw_html[:1000],  # Usar raw_html en lugar de data
                                 "instructions": "Identifica los cambios principales y su importancia"
                             }
                         })
@@ -551,13 +581,13 @@ def monitor_website_changes(client: Any, params: Dict[str, Any]) -> Dict[str, An
                                 'action_name': 'monitor_website_changes'
                             })
                 
-                # Actualizar registro
+                # Actualizar registro con HTML crudo
                 sharepoint_actions.sp_memory_save(client, {
                     'key': f'web_monitor_{url}',
                     'value': {
                         'url': url,
                         'hash': content_hash,
-                        'content': current_content.get('data', '')[:5000],
+                        'content': raw_html[:5000],  # Guardar HTML, no 'data'
                         'last_checked': datetime.now().isoformat()
                     }
                 })
@@ -681,16 +711,20 @@ def webresearch_search_web(client, params: Dict[str, Any]) -> Dict[str, Any]:
             soup = BeautifulSoup(response.text, 'html.parser')
             results = []
             
-            # Extraer resultados de DuckDuckGo
-            for result_div in soup.find_all('div', class_='web-result')[:num_results]:
-                title_elem = result_div.find('h2')
-                link_elem = result_div.find('a')
+            # Extraer resultados de DuckDuckGo con selector consistente
+            for result_div in soup.find_all('div', class_='result')[:num_results]:
+                # Primer intento: estilo original
+                title_elem = result_div.find('a', class_='result__a')
                 snippet_elem = result_div.find('div', class_='result__snippet')
                 
-                if title_elem and link_elem:
+                # Fallback si no encuentra
+                if not title_elem:
+                    title_elem = result_div.find('h2')
+                    
+                if title_elem and title_elem.get('href'):
                     results.append({
                         'title': title_elem.get_text().strip(),
-                        'url': link_elem.get('href', ''),
+                        'url': title_elem.get('href', ''),
                         'snippet': snippet_elem.get_text().strip() if snippet_elem else ''
                     })
             
@@ -732,8 +766,15 @@ def webresearch_scrape_url(client, params: Dict[str, Any]) -> Dict[str, Any]:
         if not url:
             raise ValueError("El parámetro 'url' es requerido")
         
+        # Generar clave de caché consistente
+        cache_params = {
+            'extract_images': extract_images,
+            'extract_links': extract_links
+        }
+        cache_key = _get_cache_key(url, cache_params)
+        
         # Verificar cache
-        cached_result = _get_cached_result(url)
+        cached_result = _get_cached_result(cache_key)
         if cached_result:
             return cached_result
         
@@ -798,8 +839,8 @@ def webresearch_scrape_url(client, params: Dict[str, Any]) -> Dict[str, Any]:
                 })
             result['links'] = links
         
-        # Guardar en cache
-        _cache_result(url, result)
+        # Guardar en cache con la misma clave usada para buscar
+        _cache_result(cache_key, result)
         
         return result
         

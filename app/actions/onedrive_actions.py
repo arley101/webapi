@@ -761,4 +761,226 @@ def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
+
+# ============================================================================
+# FUNCIONES ADICIONALES RESTAURADAS
+# ============================================================================
+
+def onedrive_create_folder_structure(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear una estructura de carpetas completa en OneDrive."""
+    params = params or {}
+    logger.info("Ejecutando onedrive_create_folder_structure con params: %s", params)
+    action_name = "onedrive_create_folder_structure"
+
+    user_identifier: Optional[str] = params.get("user_id")
+    if not user_identifier:
+        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
+
+    folder_structure: Optional[List[str]] = params.get("folder_structure")
+    if not folder_structure or not isinstance(folder_structure, list):
+        logger.error(f"{action_name}: El parámetro 'folder_structure' debe ser una lista de rutas.")
+        return {"status": "error", "action": action_name, "message": "'folder_structure' debe ser una lista de rutas.", "http_status": 400}
+
+    base_path: str = params.get("base_path", "/")
+    created_folders = []
+    errors = []
+
+    try:
+        for folder_path in folder_structure:
+            full_path = f"{base_path.rstrip('/')}/{folder_path.strip('/')}"
+            
+            # Dividir la ruta en partes y crear cada carpeta padre si no existe
+            path_parts = [part for part in full_path.split('/') if part]
+            current_path = ""
+            
+            for part in path_parts:
+                current_path = f"{current_path}/{part}"
+                
+                try:
+                    # Verificar si la carpeta ya existe
+                    check_endpoint = _get_od_user_item_by_path_endpoint(user_identifier, current_path)
+                    files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+                    
+                    try:
+                        existing_item = client.get(check_endpoint, scope=files_read_scope)
+                        if existing_item.get("folder"):
+                            continue  # La carpeta ya existe
+                    except:
+                        # La carpeta no existe, la creamos
+                        pass
+                    
+                    # Crear la carpeta
+                    parent_path = "/".join(current_path.split("/")[:-1]) or "/"
+                    parent_endpoint = _get_od_user_item_by_path_endpoint(user_identifier, parent_path)
+                    create_url = f"{parent_endpoint}/children"
+                    
+                    folder_data = {
+                        "name": part,
+                        "folder": {},
+                        "@microsoft.graph.conflictBehavior": "rename"
+                    }
+                    
+                    files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+                    created_folder = client.post(create_url, scope=files_rw_scope, json_data=folder_data)
+                    created_folders.append({
+                        "path": current_path,
+                        "id": created_folder.get("id"),
+                        "name": created_folder.get("name")
+                    })
+                    
+                except Exception as folder_error:
+                    errors.append({
+                        "path": current_path,
+                        "error": str(folder_error)
+                    })
+                    logger.warning(f"Error creando carpeta '{current_path}': {folder_error}")
+
+        logger.info(f"{action_name}: Estructura de carpetas creada. {len(created_folders)} carpetas exitosas, {len(errors)} errores.")
+        return {
+            "status": "success" if not errors else "partial_success",
+            "data": {
+                "created_folders": created_folders,
+                "errors": errors,
+                "total_attempted": len(folder_structure),
+                "successful": len(created_folders),
+                "failed": len(errors)
+            }
+        }
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
+
+def onedrive_get_file_versions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener versiones de un archivo en OneDrive."""
+    params = params or {}
+    logger.info("Ejecutando onedrive_get_file_versions con params: %s", params)
+    action_name = "onedrive_get_file_versions"
+
+    user_identifier: Optional[str] = params.get("user_id")
+    if not user_identifier:
+        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
+
+    item_id_or_path_param: Optional[str] = params.get("item_id") or params.get("file_path")
+    if not item_id_or_path_param:
+        logger.error(f"{action_name}: Se requiere 'item_id' o 'file_path'.")
+        return {"status": "error", "action": action_name, "message": "Se requiere 'item_id' o 'file_path'.", "http_status": 400}
+
+    try:
+        resolved_item_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_param)
+        if isinstance(resolved_item_id, dict) and resolved_item_id.get("status") == "error":
+            return resolved_item_id
+
+        item_endpoint = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
+        versions_url = f"{item_endpoint}/versions"
+
+        logger.info(f"{action_name}: Obteniendo versiones del archivo OneDrive item ID '{resolved_item_id}' (user '{user_identifier}')")
+        files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.get(versions_url, scope=files_read_scope)
+        
+        return {"status": "success", "data": response}
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
+
+def onedrive_set_file_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Establecer permisos específicos para un archivo en OneDrive."""
+    params = params or {}
+    logger.info("Ejecutando onedrive_set_file_permissions con params: %s", params)
+    action_name = "onedrive_set_file_permissions"
+
+    user_identifier: Optional[str] = params.get("user_id")
+    if not user_identifier:
+        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
+
+    item_id_or_path_param: Optional[str] = params.get("item_id") or params.get("file_path")
+    if not item_id_or_path_param:
+        logger.error(f"{action_name}: Se requiere 'item_id' o 'file_path'.")
+        return {"status": "error", "action": action_name, "message": "Se requiere 'item_id' o 'file_path'.", "http_status": 400}
+
+    permission_data: Optional[Dict[str, Any]] = params.get("permission_data")
+    if not permission_data or not isinstance(permission_data, dict):
+        logger.error(f"{action_name}: El parámetro 'permission_data' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'permission_data' (dict) es requerido.", "http_status": 400}
+
+    # Validar campos requeridos en permission_data
+    required_fields = ["recipients", "roles"]
+    if not all(field in permission_data for field in required_fields):
+        missing = [field for field in required_fields if field not in permission_data]
+        return {"status": "error", "action": action_name, "message": f"Faltan campos requeridos en 'permission_data': {missing}.", "http_status": 400}
+
+    try:
+        resolved_item_id = _get_item_id_from_path_if_needed_onedrive(client, user_identifier, item_id_or_path_param)
+        if isinstance(resolved_item_id, dict) and resolved_item_id.get("status") == "error":
+            return resolved_item_id
+
+        item_endpoint = _get_od_user_item_by_id_endpoint(user_identifier, str(resolved_item_id))
+        permissions_url = f"{item_endpoint}/invite"
+
+        # Preparar payload para invitación/permisos
+        invite_payload = {
+            "recipients": permission_data["recipients"],
+            "roles": permission_data["roles"],
+            "sendInvitation": permission_data.get("send_invitation", True),
+            "message": permission_data.get("message", ""),
+            "requireSignIn": permission_data.get("require_sign_in", True)
+        }
+
+        logger.info(f"{action_name}: Estableciendo permisos para OneDrive item ID '{resolved_item_id}' (user '{user_identifier}')")
+        files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.post(permissions_url, scope=files_rw_scope, json_data=invite_payload)
+        
+        return {"status": "success", "data": response}
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
+
+def onedrive_get_storage_quota(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener información de cuota de almacenamiento de OneDrive."""
+    params = params or {}
+    logger.info("Ejecutando onedrive_get_storage_quota con params: %s", params)
+    action_name = "onedrive_get_storage_quota"
+
+    user_identifier: Optional[str] = params.get("user_id")
+    if not user_identifier:
+        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
+
+    try:
+        drive_endpoint = _get_od_user_drive_base_endpoint(user_identifier)
+        quota_url = f"{drive_endpoint}?$select=quota"
+
+        logger.info(f"{action_name}: Obteniendo cuota de almacenamiento OneDrive para user '{user_identifier}'")
+        files_read_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.get(quota_url, scope=files_read_scope)
+        
+        # Extraer información de cuota y calcular valores útiles
+        quota_info = response.get("quota", {})
+        if quota_info:
+            total = quota_info.get("total", 0)
+            used = quota_info.get("used", 0)
+            remaining = quota_info.get("remaining", 0)
+            deleted = quota_info.get("deleted", 0)
+            
+            # Calcular porcentajes
+            usage_percentage = (used / total * 100) if total > 0 else 0
+            
+            enhanced_quota = {
+                **quota_info,
+                "usage_percentage": round(usage_percentage, 2),
+                "total_gb": round(total / (1024**3), 2) if total else 0,
+                "used_gb": round(used / (1024**3), 2) if used else 0,
+                "remaining_gb": round(remaining / (1024**3), 2) if remaining else 0,
+                "deleted_gb": round(deleted / (1024**3), 2) if deleted else 0
+            }
+            
+            return {"status": "success", "data": enhanced_quota}
+        else:
+            return {"status": "success", "data": response}
+            
+    except Exception as e:
+        return _handle_onedrive_api_error(e, action_name, params)
+
 # --- FIN DEL MÓDULO actions/onedrive_actions.py ---

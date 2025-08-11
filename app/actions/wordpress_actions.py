@@ -1,10 +1,14 @@
 import requests, json, base64, logging
 from typing import Dict, Any, Optional, List  # ✅ Any disponible
 from datetime import datetime, timedelta
-import hashlib, time, os
+import hashlib, time, os, random
 from urllib.parse import urljoin, quote
 from app.core.auth_manager import token_manager
 from app.core.config import settings  # ✅ IMPORT FALTANTE AGREGADO
+# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
+def _get_resolver():
+    from app.actions.resolver_actions import Resolver
+    return Resolver()
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -12,6 +16,36 @@ logger = logging.getLogger(__name__)
 # Cache para sesiones de WordPress
 _wp_sessions = {}
 _wp_cache = {}
+
+# Helper: HTTP request with retries (429/5xx)
+def _request_with_retries(method: str, url: str, request_params: Dict[str, Any], retries: int = 3, backoff_base: float = 0.5):
+    """Performs an HTTP request with exponential backoff on 429/5xx."""
+    attempt = 0
+    while True:
+        try:
+            resp = requests.request(method, url, **request_params)
+            # Raise for HTTP errors
+            resp.raise_for_status()
+            return resp
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else None
+            if status in (429, 500, 502, 503, 504) and attempt < retries:
+                # Retry with exponential backoff and a little jitter
+                sleep_s = backoff_base * (2 ** attempt) + random.uniform(0, 0.25)
+                logger.warning(f"HTTP {status} en {url}. Reintentando en {sleep_s:.2f}s (intento {attempt+1}/{retries})")
+                time.sleep(sleep_s)
+                attempt += 1
+                continue
+            # If not retryable or retries exhausted, re-raise
+            raise
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            if attempt < retries:
+                sleep_s = backoff_base * (2 ** attempt) + random.uniform(0, 0.25)
+                logger.warning(f"Error de red en {url}: {str(e)}. Reintentando en {sleep_s:.2f}s (intento {attempt+1}/{retries})")
+                time.sleep(sleep_s)
+                attempt += 1
+                continue
+            raise
 
 def _get_wp_credentials(params: Dict[str, Any]) -> Dict[str, str]:
     """Obtiene credenciales de WordPress desde parámetros o variables de entorno."""
@@ -56,6 +90,8 @@ def _validate_wp_credentials(credentials: Dict[str, str]) -> bool:
         return bool(site_url)
     elif auth_mode == 'app_password':
         return bool(credentials.get('app_password') and credentials.get('username'))
+    elif auth_mode == 'basic':
+        return bool(credentials.get('username') and credentials.get('password'))
     elif auth_mode == 'woocommerce':
         return bool(credentials.get('consumer_key') and credentials.get('consumer_secret'))
     else:
@@ -150,13 +186,14 @@ def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any],
     
     try:
         logger.info(f"WordPress API Request: {method} {full_url}")
-        response = requests.request(method, full_url, **request_params)
-        response.raise_for_status()
+        response = _request_with_retries(method, full_url, request_params)
         
         return response.json() if response.content else {}
         
     except requests.exceptions.HTTPError as e:
-        if response.status_code == 401:
+        resp = e.response
+        status_code = resp.status_code if resp is not None else None
+        if status_code == 401:
             # Fallback automático inteligente
             if auth_type == 'auto':
                 logger.warning("Autenticación principal falló, intentando métodos alternativos...")
@@ -168,12 +205,12 @@ def _make_wp_rest_request(method: str, endpoint: str, params: Dict[str, Any],
                     return _make_wp_rest_request(method, endpoint, {**params, 'auth_mode': 'basic'}, data, query_params, 'basic')
             
             raise ValueError(f"Error de autenticación WordPress (401): Verificar credenciales y plugins JWT")
-        elif response.status_code == 403:
+        elif status_code == 403:
             raise ValueError(f"Sin permisos para esta operación WordPress (403)")
-        elif response.status_code == 404:
+        elif status_code == 404:
             raise ValueError(f"Endpoint no encontrado WordPress (404): {endpoint}")
         else:
-            raise ValueError(f"Error HTTP WordPress ({response.status_code}): {str(e)}")
+            raise ValueError(f"Error HTTP WordPress ({status_code}): {str(e)}")
     
     except requests.exceptions.ConnectionError:
         raise ValueError(f"No se puede conectar al sitio WordPress: {site_url}")
@@ -209,8 +246,7 @@ def _make_wc_request(method: str, endpoint: str, params: Dict[str, Any],
             request_params['params'] = query_params
         
         logger.info(f"WooCommerce API Request: {method} {full_url}")
-        response = requests.request(method, full_url, **request_params)
-        response.raise_for_status()
+        response = _request_with_retries(method, full_url, request_params)
         
         return response.json() if response.content else {}
         
@@ -246,7 +282,7 @@ def wordpress_create_post(client, params: Dict[str, Any]) -> Dict[str, Any]:
         
         response = _make_wp_rest_request('POST', 'posts', params, data=post_data)
         
-        return {
+        result = {
             "status": "success",
             "data": response,
             "action": action_name,
@@ -254,6 +290,11 @@ def wordpress_create_post(client, params: Dict[str, Any]) -> Dict[str, Any]:
             "site_url": credentials.get('site_url'),
             "timestamp": datetime.now().isoformat()
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
@@ -279,7 +320,7 @@ def wordpress_update_post(client, params: Dict[str, Any]) -> Dict[str, Any]:
         
         response = _make_wp_rest_request('POST', f'posts/{post_id}', params, data=update_data)
         
-        return {
+        result = {
             "status": "success",
             "data": response,
             "action": action_name,
@@ -287,6 +328,11 @@ def wordpress_update_post(client, params: Dict[str, Any]) -> Dict[str, Any]:
             "updated_fields": list(update_data.keys()),
             "timestamp": datetime.now().isoformat()
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE MODIFICACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
@@ -401,13 +447,18 @@ def wordpress_create_page(client, params: Dict[str, Any]) -> Dict[str, Any]:
         
         response = _make_wp_rest_request('POST', 'pages', params, data=page_data)
         
-        return {
+        result = {
             "status": "success",
             "data": response,
             "action": action_name,
             "page_id": response.get('id'),
             "timestamp": datetime.now().isoformat()
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
@@ -472,13 +523,18 @@ def wordpress_create_user(client, params: Dict[str, Any]) -> Dict[str, Any]:
         
         response = _make_wp_rest_request('POST', 'users', params, data=user_data)
         
-        return {
+        result = {
             "status": "success",
             "data": response,
             "action": action_name,
             "user_id": response.get('id'),
             "timestamp": datetime.now().isoformat()
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
@@ -608,13 +664,18 @@ def wordpress_create_category(client, params: Dict[str, Any]) -> Dict[str, Any]:
         
         response = _make_wp_rest_request('POST', 'categories', params, data=category_data)
         
-        return {
+        result = {
             "status": "success",
             "data": response,
             "action": action_name,
             "category_id": response.get('id'),
             "timestamp": datetime.now().isoformat()
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
@@ -735,13 +796,18 @@ def woocommerce_create_product(client, params: Dict[str, Any]) -> Dict[str, Any]
         
         response = _make_wc_request('POST', 'products', params, data=product_data)
         
-        return {
+        result = {
             "status": "success",
             "data": response,
             "action": action_name,
             "product_id": response.get('id'),
             "timestamp": datetime.now().isoformat()
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
@@ -881,13 +947,18 @@ def woocommerce_create_order(client, params: Dict[str, Any]) -> Dict[str, Any]:
         
         response = _make_wc_request('POST', 'orders', params, data=order_data)
         
-        return {
+        result = {
             "status": "success",
             "data": response,
             "action": action_name,
             "order_id": response.get('id'),
             "timestamp": datetime.now().isoformat()
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))
@@ -983,13 +1054,18 @@ def woocommerce_create_customer(client, params: Dict[str, Any]) -> Dict[str, Any
         
         response = _make_wc_request('POST', 'customers', params, data=customer_data)
         
-        return {
+        result = {
             "status": "success",
             "data": response,
             "action": action_name,
             "customer_id": response.get('id'),
             "timestamp": datetime.now().isoformat()
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_wp_api_error(e, action_name, params.get('site_url', ''))

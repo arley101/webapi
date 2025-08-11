@@ -72,8 +72,10 @@ class TokenManager:
         
         # Usar site_url del parámetro o variable de entorno
         wp_site = site_url or settings.WP_SITE_URL or "https://elitecosmeticdental.com"
-        wp_username = settings.WP_JWT_USERNAME or settings.WP_USERNAME or "Arleyadmin"
-        wp_password = settings.WP_JWT_PASSWORD or settings.WP_PASSWORD or "U7M0$f34@Ju@N90|2=2=*|"
+        wp_username = getattr(settings, "WP_JWT_USER", None) or getattr(settings, "WP_USERNAME", None)
+        wp_password = getattr(settings, "WP_JWT_PASS", None) or getattr(settings, "WP_PASSWORD", None)
+        if not wp_username or not wp_password:
+            raise ValueError("WP_JWT_USER/WP_USERNAME y WP_JWT_PASS/WP_PASSWORD deben estar configurados en variables de entorno.")
         
         # Cache key único por sitio
         cache_key = f"wp_jwt_{wp_site.replace('https://', '').replace('http://', '').replace('/', '_')}"
@@ -153,7 +155,7 @@ class TokenManager:
     
     def _get_wordpress_app_password_auth(self) -> Dict[str, Any]:
         """Autenticación con Application Password"""
-        username = getattr(settings, 'WP_USERNAME', None) or getattr(settings, 'WP_JWT_USERNAME', None)
+        username = getattr(settings, 'WP_USERNAME', None) or getattr(settings, 'WP_JWT_USER', None)
         app_password = getattr(settings, 'WP_APP_PASSWORD', None)
         
         if not username or not app_password:
@@ -187,6 +189,19 @@ class TokenManager:
             }
         }
     
+    def get_runway_headers(self) -> Dict[str, Any]:
+        """
+        Headers para autenticación de Runway (RunwayML).
+        Requiere variable de entorno RUNWAY_API_KEY.
+        """
+        api_key = getattr(settings, "RUNWAY_API_KEY", None)
+        if not api_key:
+            raise ValueError("Falta RUNWAY_API_KEY en variables de entorno de Azure.")
+        return {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+    
     def get_meta_access_token(self) -> str:
         """Genera automáticamente access token para Meta desde refresh token"""
         cache_key = "meta_access_token"
@@ -208,13 +223,23 @@ class TokenManager:
         
         try:
             # Para Meta, el access token de larga duración se obtiene diferente
+            app_id = getattr(settings, "META_ADS_APP_ID", None) or getattr(settings, "META_APP_ID", None)
+            app_secret = getattr(settings, "META_ADS_APP_SECRET", None) or getattr(settings, "META_APP_SECRET", None)
+            base_token = getattr(settings, "META_ADS_ACCESS_TOKEN", None) or getattr(settings, "META_SYSTEM_USER_TOKEN", None) or getattr(settings, "META_ACCESS_TOKEN", None)
+            if not (app_id and app_secret and base_token):
+                logger.warning("Variables META_* incompletas. Usando token configurado como fallback.")
+                if base_token:
+                    self._cached_tokens[cache_key] = base_token
+                    self._token_expiry[cache_key] = datetime.now() + timedelta(days=30)
+                    return base_token
+                return ""
             response = requests.get(
                 "https://graph.facebook.com/v18.0/oauth/access_token",
                 params={
                     "grant_type": "fb_exchange_token",
-                    "client_id": settings.META_ADS.APP_ID,
-                    "client_secret": settings.META_ADS.APP_SECRET,
-                    "fb_exchange_token": settings.META_ADS.ACCESS_TOKEN
+                    "client_id": app_id,
+                    "client_secret": app_secret,
+                    "fb_exchange_token": base_token
                 },
                 timeout=10
             )
@@ -233,11 +258,11 @@ class TokenManager:
             else:
                 logger.error(f"❌ Error renovando token Meta: {response.text}")
                 # Retornar el token existente como fallback
-                return settings.META_ADS.ACCESS_TOKEN
+                return base_token or ""
                 
         except Exception as e:
             logger.error(f"💥 Fallo renovando token Meta: {str(e)}")
-            return settings.META_ADS.ACCESS_TOKEN
+            return base_token or ""
         finally:
             self._refresh_in_progress[cache_key] = False
     
@@ -250,7 +275,7 @@ class TokenManager:
     def get_tiktok_access_token(self) -> str:
         """Obtiene access token para TikTok"""
         # TikTok también usa tokens de larga duración
-        return settings.TIKTOK_ADS.ACCESS_TOKEN
+        return getattr(settings, "TIKTOK_ADS_ACCESS_TOKEN", None) or getattr(settings, "TIKTOK_ACCESS_TOKEN", None) or ""
     
     def refresh_all_tokens(self) -> Dict[str, bool]:
         """Refresca todos los tokens disponibles"""

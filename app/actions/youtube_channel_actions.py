@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
+import os
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build, Resource
@@ -34,9 +35,9 @@ VALID_MODERATION_STATUSES = ['heldForReview', 'published', 'rejected']
 
 def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
     """
-    Construye las credenciales de OAuth 2.0 usando configuración tradicional.
+    Construye las credenciales de OAuth 2.0 usando configuración de Azure.
     """
-    # REVERTIDO: Sin auth_manager, usar configuración directa
+    # Determinar origen de credenciales (prioridad: params > settings específicas > Azure)
     client_id = (
         params.get("client_id") or 
         settings.YOUTUBE_CLIENT_ID or 
@@ -53,17 +54,17 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
         settings.GOOGLE_ADS_REFRESH_TOKEN
     )
 
-    if not all([client_id, client_secret, refresh_token]):
-        raise ValueError("Credenciales de YouTube no configuradas")
+    # Si tenemos un token de acceso de Azure directamente, úsalo
+    access_token = params.get("access_token") or settings.YOUTUBE_ACCESS_TOKEN
 
-    try:
-        creds = Credentials.from_authorized_user_info(
-            info={
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "refresh_token": refresh_token,
-                "type": "authorized_user"
-            },
+    # Opción 1: Usar token de acceso directo de Azure si está disponible
+    if access_token:
+        logger.info("🎥 YouTube: Usando token de acceso directo de Azure")
+        return Credentials(
+            token=access_token,
+            client_id=client_id,
+            client_secret=client_secret,
+            token_uri="https://oauth2.googleapis.com/token",
             scopes=[
                 "https://www.googleapis.com/auth/youtube",
                 "https://www.googleapis.com/auth/youtube.upload",
@@ -71,18 +72,61 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
                 "https://www.googleapis.com/auth/yt-analytics.readonly"
             ]
         )
-        
-        # Refrescar token si es necesario
-        if not creds.valid:
-            from google.auth.transport.requests import Request
-            creds.refresh(Request())
+    
+    # Opción 2: Usar refresh token (auto-refresco por Google Auth Library)
+    if all([client_id, client_secret, refresh_token]):
+        try:
+            creds = Credentials.from_authorized_user_info(
+                info={
+                    "client_id": client_id,
+                    "client_secret": client_secret,
+                    "refresh_token": refresh_token,
+                    "type": "authorized_user"
+                },
+                scopes=[
+                    "https://www.googleapis.com/auth/youtube",
+                    "https://www.googleapis.com/auth/youtube.upload",
+                    "https://www.googleapis.com/auth/youtube.force-ssl",
+                    "https://www.googleapis.com/auth/yt-analytics.readonly"
+                ]
+            )
             
-        logger.info("🎥 YouTube: Credenciales tradicionales generadas")
-        return creds
-        
+            # Refrescar token si es necesario
+            if not creds.valid:
+                from google.auth.transport.requests import Request
+                creds.refresh(Request())
+                
+            logger.info("🎥 YouTube: Credenciales generadas con refresh token")
+            return creds
+        except Exception as e:
+            logger.error(f"Error generando credenciales YouTube con refresh token: {e}")
+            # Continuar a la siguiente opción si esta falla
+    
+    # Opción 3: Intento con credenciales de Azure (asumiendo que hay un sistema para obtenerlas)
+    try:
+        from app.core.azure_helpers import get_azure_credential
+        azure_credential = get_azure_credential("youtube")
+        if azure_credential and "access_token" in azure_credential:
+            logger.info("🎥 YouTube: Credenciales obtenidas de Azure Key Vault")
+            return Credentials(
+                token=azure_credential["access_token"],
+                client_id=azure_credential.get("client_id", client_id),
+                client_secret=azure_credential.get("client_secret", client_secret),
+                token_uri="https://oauth2.googleapis.com/token",
+                scopes=[
+                    "https://www.googleapis.com/auth/youtube",
+                    "https://www.googleapis.com/auth/youtube.upload",
+                    "https://www.googleapis.com/auth/youtube.force-ssl",
+                    "https://www.googleapis.com/auth/yt-analytics.readonly"
+                ]
+            )
+    except ImportError:
+        logger.warning("Módulo Azure helpers no disponible")
     except Exception as e:
-        logger.error(f"Error generando credenciales YouTube: {e}")
-        raise ValueError(f"Error en credenciales YouTube: {str(e)}")
+        logger.error(f"Error obteniendo credenciales de Azure: {e}")
+
+    # Si llegamos aquí, no hay credenciales disponibles
+    raise ValueError("Credenciales de YouTube no configuradas. Verifica Azure KeyVault o configuración en .env")
 
 def _build_youtube_service(credentials: Credentials) -> Resource:
     """Construye y retorna el servicio de YouTube."""
@@ -112,9 +156,9 @@ def _validate_privacy_status(privacy_status: str) -> str:
     
     if status_lower not in valid_statuses:
         logger.warning(f"Invalid privacy status '{privacy_status}', defaulting to 'private'")
-        return 'private'  # CAMBIAR A RETURN
+        return 'private'  # Ahora retorna correctamente
     
-    return status_lower  # AGREGAR RETURN
+    return status_lower
 
 def _handle_youtube_api_error(e: Exception, action_name: str) -> Dict[str, Any]:
     """Maneja errores de la API de Google de forma estandarizada."""
@@ -161,8 +205,13 @@ def youtube_upload_video(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         if not all(params.get(p) for p in required_params):
             raise ValueError(f"Parámetros requeridos: {', '.join(required_params)}")
         
+        # Verificar que el archivo exista (NUEVO)
+        file_path = params['file_path']
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"El archivo no existe: {file_path}")
+            
         privacy_status = params.get('privacy_status', 'private')
-        _validate_privacy_status(privacy_status)
+        privacy_status = _validate_privacy_status(privacy_status)  # Asegurar que se use el valor retornado
         
         # Inicialización
         credentials = _get_youtube_credentials(params)
@@ -181,8 +230,8 @@ def youtube_upload_video(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
 
         # Subir el video
         media = MediaFileUpload(
-            params['file_path'], 
-            chunksize=-1, 
+            file_path, 
+            chunksize=1024*1024,  # 1MB por chunk para mejor control
             resumable=True,
             mimetype='video/*'
         )
@@ -193,22 +242,39 @@ def youtube_upload_video(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             media_body=media
         )
         
-        # Procesar la subida
+        # Procesar la subida con mejor manejo de progreso
         response = None
         while response is None:
             status, response = request.next_chunk()
             if status:
                 progress = int(status.progress() * 100)
                 logger.info(f"Subida de video en progreso: {progress}%")
+                # Reportar cada 20%
+                if progress % 20 == 0:
+                    print(f"Subida en progreso: {progress}%")
+        
+        # Registrar más información sobre el video subido
+        video_id = response.get('id')
+        logger.info(f"Video subido exitosamente. ID: {video_id}")
         
         return {
             "status": "success",
             "action": action_name,
             "data": response,
-            "video_id": response.get('id'),
+            "video_id": video_id,
+            "video_url": f"https://www.youtube.com/watch?v={video_id}" if video_id else None,
             "http_status": 200
         }
         
+    except FileNotFoundError as fnf:
+        logger.error(f"Error de archivo: {fnf}")
+        return {
+            "status": "error",
+            "action": action_name,
+            "message": str(fnf),
+            "details": {"error_type": "file_not_found"},
+            "http_status": 404
+        }
     except Exception as e:
         return _handle_youtube_api_error(e, action_name)
 

@@ -587,4 +587,169 @@ def teams_get_team_by_name(client: AuthenticatedHttpClient, params: Dict[str, An
         logger.warning(error_msg)
         return _handle_teams_api_error(ValueError(error_msg), action_name, params)
 
+
+# ============================================================================
+# FUNCIONES ADICIONALES RESTAURADAS
+# ============================================================================
+
+def teams_create_team_channel(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear un nuevo canal en un equipo de Teams."""
+    params = params or {}
+    logger.info("Ejecutando teams_create_team_channel con params: %s", params)
+    action_name = "teams_create_team_channel"
+    
+    team_id: Optional[str] = params.get("team_id")
+    if not team_id:
+        logger.error(f"{action_name}: El parámetro 'team_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'team_id' es requerido.", "http_status": 400}
+
+    channel_data: Optional[Dict[str, Any]] = params.get("channel_data")
+    if not channel_data or not isinstance(channel_data, dict):
+        logger.error(f"{action_name}: El parámetro 'channel_data' (dict) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'channel_data' (dict) es requerido.", "http_status": 400}
+
+    # Validar campos requeridos
+    if not channel_data.get("displayName"):
+        return {"status": "error", "action": action_name, "message": "Campo 'displayName' es requerido en 'channel_data'.", "http_status": 400}
+
+    # Configurar valores por defecto
+    channel_payload = {
+        "displayName": channel_data["displayName"],
+        "description": channel_data.get("description", ""),
+        "membershipType": channel_data.get("membershipType", "standard")  # standard, private, shared
+    }
+
+    try:
+        url = f"{settings.GRAPH_API_BASE_URL}/teams/{team_id}/channels"
+        
+        logger.info(f"{action_name}: Creando canal '{channel_payload['displayName']}' en equipo '{team_id}'")
+        teams_scope = getattr(settings, 'GRAPH_SCOPE_TEAM_CHANNEL_CREATE', settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.post(url, scope=teams_scope, json_data=channel_payload)
+        
+        created_channel = response.json()
+        logger.info(f"Canal '{channel_payload['displayName']}' creado con ID: {created_channel.get('id')}")
+        return {"status": "success", "data": created_channel}
+    except Exception as e:
+        return _handle_teams_api_error(e, action_name, params)
+
+
+def teams_get_channel_tabs(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener las pestañas de un canal de Teams."""
+    params = params or {}
+    logger.info("Ejecutando teams_get_channel_tabs con params: %s", params)
+    action_name = "teams_get_channel_tabs"
+    
+    team_id: Optional[str] = params.get("team_id")
+    if not team_id:
+        logger.error(f"{action_name}: El parámetro 'team_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'team_id' es requerido.", "http_status": 400}
+
+    channel_id: Optional[str] = params.get("channel_id")
+    if not channel_id:
+        logger.error(f"{action_name}: El parámetro 'channel_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'channel_id' es requerido.", "http_status": 400}
+
+    expand_app: bool = params.get("expand_app", False)
+
+    try:
+        url = f"{settings.GRAPH_API_BASE_URL}/teams/{team_id}/channels/{channel_id}/tabs"
+        
+        query_params = {}
+        if expand_app:
+            query_params["$expand"] = "teamsApp"
+
+        logger.info(f"{action_name}: Obteniendo pestañas del canal '{channel_id}' en equipo '{team_id}'")
+        teams_scope = getattr(settings, 'GRAPH_SCOPE_TEAM_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.get(url, scope=teams_scope, params=query_params)
+        
+        return {"status": "success", "data": response}
+    except Exception as e:
+        return _handle_teams_api_error(e, action_name, params)
+
+
+def teams_create_team_meeting(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear una reunión de Teams asociada a un equipo."""
+    params = params or {}
+    logger.info("Ejecutando teams_create_team_meeting con params: %s", params)
+    action_name = "teams_create_team_meeting"
+    
+    user_id: Optional[str] = params.get("user_id")
+    if not user_id:
+        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
+
+    meeting_data: Optional[Dict[str, Any]] = params.get("meeting_data")
+    if not meeting_data or not isinstance(meeting_data, dict):
+        logger.error(f"{action_name}: El parámetro 'meeting_data' (dict) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'meeting_data' (dict) es requerido.", "http_status": 400}
+
+    # Validar campos requeridos
+    required_fields = ["subject", "start", "end"]
+    if not all(field in meeting_data for field in required_fields):
+        missing = [field for field in required_fields if field not in meeting_data]
+        return {"status": "error", "action": action_name, "message": f"Faltan campos requeridos en 'meeting_data': {missing}.", "http_status": 400}
+
+    # Preparar payload de reunión con configuración de Teams
+    meeting_payload = {
+        "subject": meeting_data["subject"],
+        "body": {
+            "contentType": "HTML",
+            "content": meeting_data.get("body", "")
+        },
+        "start": meeting_data["start"],
+        "end": meeting_data["end"],
+        "isOnlineMeeting": True,
+        "onlineMeetingProvider": "teamsForBusiness"
+    }
+
+    # Agregar asistentes si se proporcionan
+    if "attendees" in meeting_data:
+        meeting_payload["attendees"] = meeting_data["attendees"]
+
+    # Agregar ubicación si se proporciona
+    if "location" in meeting_data:
+        meeting_payload["location"] = meeting_data["location"]
+
+    try:
+        url = f"{settings.GRAPH_API_BASE_URL}/users/{user_id}/events"
+        
+        logger.info(f"{action_name}: Creando reunión de Teams '{meeting_payload['subject']}' para usuario '{user_id}'")
+        calendar_scope = getattr(settings, 'GRAPH_SCOPE_CALENDARS_READ_WRITE', settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.post(url, scope=calendar_scope, json_data=meeting_payload)
+        
+        created_meeting = response.json()
+        logger.info(f"Reunión de Teams '{meeting_payload['subject']}' creada con ID: {created_meeting.get('id')}")
+        return {"status": "success", "data": created_meeting}
+    except Exception as e:
+        return _handle_teams_api_error(e, action_name, params)
+
+
+def teams_get_team_apps(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener las aplicaciones instaladas en un equipo de Teams."""
+    params = params or {}
+    logger.info("Ejecutando teams_get_team_apps con params: %s", params)
+    action_name = "teams_get_team_apps"
+    
+    team_id: Optional[str] = params.get("team_id")
+    if not team_id:
+        logger.error(f"{action_name}: El parámetro 'team_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'team_id' es requerido.", "http_status": 400}
+
+    expand_details: bool = params.get("expand_details", False)
+
+    try:
+        url = f"{settings.GRAPH_API_BASE_URL}/teams/{team_id}/installedApps"
+        
+        query_params = {}
+        if expand_details:
+            query_params["$expand"] = "teamsApp,teamsAppDefinition"
+
+        logger.info(f"{action_name}: Obteniendo aplicaciones instaladas en equipo '{team_id}'")
+        teams_scope = getattr(settings, 'GRAPH_SCOPE_TEAM_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.get(url, scope=teams_scope, params=query_params)
+        
+        return {"status": "success", "data": response}
+    except Exception as e:
+        return _handle_teams_api_error(e, action_name, params)
+
 # --- FIN DEL MÓDULO actions/teams_actions.py ---

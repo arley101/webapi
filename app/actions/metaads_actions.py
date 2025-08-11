@@ -3,6 +3,10 @@ import logging
 from typing import Dict, Any
 from datetime import datetime
 from app.core.config import settings
+# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
+def _get_resolver():
+    from app.actions.resolver_actions import Resolver
+    return Resolver()
 from facebook_business.adobjects.adaccount import AdAccount
 from facebook_business.adobjects.campaign import Campaign
 from facebook_business.api import FacebookAdsApi
@@ -145,7 +149,7 @@ def metaads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, An
         # Obtener los datos de la campaña creada
         campaign_data = campaign.export_all_data()
         
-        return {
+        result = {
             "status": "success",
             "message": f"Campaña '{name}' creada exitosamente",
             "data": {
@@ -157,6 +161,11 @@ def metaads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, An
                 "created_time": campaign_data.get('created_time')
             }
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
         
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
@@ -172,7 +181,13 @@ def metaads_update_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, An
         campaign = Campaign(campaign_id)
         campaign.api_update(params=update_payload)
         updated = campaign.api_get(fields=["id", "name", "status"])
-        return {"status": "success", "data": updated.export_all_data()}
+        
+        result = {"status": "success", "data": updated.export_all_data()}
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE MODIFICACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
@@ -228,7 +243,13 @@ def metaads_create_ad_set(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
         
         ad_account = AdAccount(f"act_{str(ad_account_id).replace('act_', '')}")
         ad_set = ad_account.create_ad_set(params=ad_set_payload)
-        return {"status": "success", "data": ad_set.export_all_data()}
+        
+        result = {"status": "success", "data": ad_set.export_all_data()}
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
@@ -273,7 +294,13 @@ def metaads_create_ad(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
             raise ValueError("'ad_payload' es requerido.")
         ad_account = AdAccount(ad_account_id)
         ad = ad_account.create_ad(params=payload)
-        return {"status": "success", "data": ad.export_all_data()}
+        
+        result = {"status": "success", "data": ad.export_all_data()}
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
@@ -302,7 +329,13 @@ def metaads_update_ad(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
         ad = Ad(ad_id)
         ad.api_update(params=update_payload)
         updated = ad.api_get(fields=["id", "name", "status", "creative"])
-        return {"status": "success", "data": updated.export_all_data()}
+        
+        result = {"status": "success", "data": updated.export_all_data()}
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE MODIFICACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
@@ -329,7 +362,13 @@ def metaads_update_ad_set(client: Any, params: Dict[str, Any]) -> Dict[str, Any]
         ad_set = AdSet(ad_set_id)
         ad_set.api_update(params=update_payload)
         updated = ad_set.api_get(fields=["id", "name", "status", "targeting", "budget_remaining"])
-        return {"status": "success", "data": updated.export_all_data()}
+        
+        result = {"status": "success", "data": updated.export_all_data()}
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE MODIFICACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
@@ -370,7 +409,13 @@ def metaads_create_custom_audience(client: Any, params: Dict[str, Any]) -> Dict[
             raise ValueError("'audience_payload' es requerido.")
         ad_account = AdAccount(ad_account_id)
         audience = ad_account.create_custom_audience(params=audience_payload)
-        return {"status": "success", "data": audience.export_all_data()}
+        
+        result = {"status": "success", "data": audience.export_all_data()}
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
@@ -395,7 +440,13 @@ def metaads_create_ad_creative(client: Any, params: Dict[str, Any]) -> Dict[str,
             raise ValueError("'creative_payload' es requerido.")
         ad_account = AdAccount(ad_account_id)
         creative = ad_account.create_ad_creative(params=creative_payload)
-        return {"status": "success", "data": creative.export_all_data()}
+        
+        result = {"status": "success", "data": creative.export_all_data()}
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
 
@@ -486,3 +537,90 @@ def metaads_get_pixel_events(client: Any, params: Dict[str, Any]) -> Dict[str, A
         return {"status": "success", "data": [e.export_all_data() for e in events]}
     except Exception as e:
         return _handle_meta_ads_api_error(e, action_name)
+
+
+# ============================================================================
+# FUNCIONES ADICIONALES RESTAURADAS
+# ============================================================================
+
+def metaads_get_audience_insights(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener insights de audiencia de Meta Ads."""
+    action_name = "metaads_get_audience_insights"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+    
+    try:
+        _get_meta_ads_api_client(params)
+        
+        ad_account_id = _get_ad_account_id(params)
+        ad_account = AdAccount(ad_account_id)
+        
+        # Configurar parámetros para insights de audiencia
+        audience_params = {
+            'targeting_spec': params.get('targeting_spec', {}),
+            'optimization_goal': params.get('optimization_goal', 'REACH'),
+            'currency': params.get('currency', 'USD')
+        }
+        
+        # Campos de insights a obtener
+        fields = params.get('fields', [
+            'audience_size_lower_bound',
+            'audience_size_upper_bound',
+            'cpm',
+            'cpc',
+            'ctr'
+        ])
+        
+        # Obtener delivery estimate (estimación de entrega)
+        delivery_estimate = ad_account.get_delivery_estimate(
+            optimization_goal=audience_params['optimization_goal'],
+            targeting_spec=audience_params['targeting_spec'],
+            fields=fields
+        )
+        
+        insights_data = []
+        for estimate in delivery_estimate:
+            data = estimate.export_all_data()
+            insights_data.append(data)
+        
+        # También obtener información adicional de targeting
+        targeting_search = ad_account.get_targeting_browse(
+            type='interests',
+            limit=params.get('interest_limit', 50)
+        )
+        
+        interests_data = []
+        for interest in targeting_search:
+            interests_data.append(interest.export_all_data())
+        
+        # Obtener sugerencias de audiencia similar
+        lookalike_params = params.get('lookalike_source')
+        lookalike_data = []
+        if lookalike_params:
+            try:
+                lookalike_audiences = ad_account.get_custom_audiences(
+                    fields=['name', 'approximate_count', 'lookalike_spec'],
+                    params={'limit': 20}
+                )
+                for audience in lookalike_audiences:
+                    audience_data = audience.export_all_data()
+                    if audience_data.get('lookalike_spec'):
+                        lookalike_data.append(audience_data)
+            except Exception as lookalike_error:
+                logger.warning(f"Error obteniendo audiencias lookalike: {lookalike_error}")
+        
+        result = {
+            "delivery_estimates": insights_data,
+            "available_interests": interests_data[:10],  # Limitar a 10 primeros
+            "lookalike_audiences": lookalike_data,
+            "targeting_spec": audience_params['targeting_spec'],
+            "account_id": ad_account_id,
+            "currency": audience_params['currency']
+        }
+        
+        logger.info(f"Insights de audiencia obtenidos para cuenta {ad_account_id}")
+        return {"status": "success", "data": result}
+        
+    except Exception as e:
+        return _handle_meta_ads_api_error(e, action_name)
+
+# --- FIN DEL MÓDULO actions/metaads_actions.py ---

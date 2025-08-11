@@ -53,7 +53,7 @@ class Settings(BaseSettings):
 
     GRAPH_API_DEFAULT_SCOPE: List[str] = ["https://graph.microsoft.com/.default"]
     AZURE_MGMT_DEFAULT_SCOPE: List[str] = ["https://management.azure.com/.default"]
-    POWER_BI_DEFAULT_SCOPE: List[str] = ["https://analysis.windows.net/powerbi/api/.default"]
+    POWER_BI_DEFAULT_SCOPE: str = "https://analysis.windows.net/powerbi/api/.default"
 
     # Azure OpenAI
     AZURE_OPENAI_RESOURCE_ENDPOINT: Optional[str] = None 
@@ -77,10 +77,10 @@ class Settings(BaseSettings):
     PBI_CLIENT_ID: Optional[str] = None
     PBI_CLIENT_SECRET: Optional[str] = None
 
-    # Azure Management
-    AZURE_CLIENT_ID_MGMT: Optional[str] = Field(default=None, validation_alias='AZURE_CLIENT_ID') 
-    AZURE_CLIENT_SECRET_MGMT: Optional[str] = Field(default=None, validation_alias='AZURE_CLIENT_SECRET')
-    AZURE_TENANT_ID_MGMT: Optional[str] = Field(default=None, validation_alias='AZURE_TENANT_ID')
+    # Azure / Entra ID
+    AZURE_CLIENT_ID: Optional[str] = None
+    AZURE_CLIENT_SECRET: Optional[str] = None
+    AZURE_TENANT_ID: Optional[str] = None
     AZURE_SUBSCRIPTION_ID: Optional[str] = None 
     AZURE_RESOURCE_GROUP: Optional[str] = None  
 
@@ -94,14 +94,17 @@ class Settings(BaseSettings):
     DEFAULT_LINKEDIN_AD_ACCOUNT_ID: Optional[str] = None 
 
     # Third Party APIs
-    NOTION_API_TOKEN: Optional[str] = None 
-    NOTION_API_VERSION: str = "2022-06-28" 
-    
-    HUBSPOT_PRIVATE_APP_TOKEN: Optional[str] = None
-    
-    YOUTUBE_API_KEY: Optional[str] = None 
+    NOTION_API_KEY: Optional[str] = Field(default=None, alias="NOTION_API_TOKEN")
+    NOTION_API_VERSION: str = "2022-06-28"
+
+    HUBSPOT_PRIVATE_APP_KEY: Optional[str] = Field(default=None, alias="HUBSPOT_PRIVATE_APP_TOKEN")
+
+    YOUTUBE_API_KEY: Optional[str] = None
     YOUTUBE_ACCESS_TOKEN: Optional[str] = None
-    
+
+    # Runway (IA de video)
+    RUNWAY_API_KEY: Optional[str] = None
+
     GEMINI_API_KEY: Optional[str] = Field(None, env="GEMINI_API_KEY")
     GEMINI_API_URL: str = Field(
         "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent",
@@ -132,6 +135,11 @@ class Settings(BaseSettings):
     WP_SITE_URL: Optional[str] = Field(default="https://elitecosmeticdental.com")
     WP_JWT_USERNAME: Optional[str] = Field(default="Arleyadmin")
     WP_JWT_PASSWORD: Optional[str] = Field(default="U7M0$f34@Ju@N90|2=2=*|")
+
+    # Alternate env var names seen in Azure settings
+    WP_JWT_USER: Optional[str] = None
+    WP_JWT_PASS: Optional[str] = None
+    WP_JWT_SECRET: Optional[str] = None
     
     # WordPress App Password (fallback)
     WP_USERNAME: Optional[str] = None
@@ -209,5 +217,17 @@ settings = Settings(ENVIRONMENT=get_environment())
 logger = logging.getLogger(__name__)
 logger.info(f"Configuración cargada para {settings.APP_NAME} v{settings.APP_VERSION}")
 logger.info(f"SharePoint Site ID: {'Configurado' if settings.SHAREPOINT_DEFAULT_SITE_ID else 'No configurado'}")
-logger.info(f"Notion configurado: {'Sí' if settings.NOTION_API_TOKEN else 'No'}")
+logger.info(f"Notion configurado: {'Sí' if settings.NOTION_API_KEY else 'No'}")
 logger.info(f"Gemini configurado: {'Sí' if settings.GEMINI_API_KEY else 'No'}")
+logger.info(f"Runway configurado: {'Sí' if settings.RUNWAY_API_KEY else 'No'}")
+
+# Cargar variables desde .env en desarrollo local
+from pathlib import Path
+env_path = Path(__file__).resolve().parent.parent.parent / '.env'
+if env_path.exists():
+    import dotenv
+    dotenv.load_dotenv(env_path)
+    logger.info("Variables de entorno cargadas desde .env")
+
+# Mejora para debugging de YouTube
+logger.info(f"YouTube: {'Credenciales configuradas' if settings.YOUTUBE_CLIENT_ID else 'Sin credenciales configuradas'}")

@@ -3,9 +3,11 @@ from fastapi import FastAPI, Request
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
+import os
 
 # Importar el router de acciones
 from app.api.routes.dynamics_actions import router as dynamics_router
+from app.api.routes.chatgpt_proxy import router as chatgpt_router
 
 # Importar la configuración de la aplicación
 from app.core.config import settings
@@ -42,9 +44,11 @@ app = FastAPI(
 
 # Incluir el router con prefijo
 app.include_router(dynamics_router, prefix="/api/v1")
+app.include_router(chatgpt_router, prefix="/api/v1")
 
 # Log de confirmación después de incluir routers
 logger.info("Router de acciones dinámicas incluido bajo el prefijo: /api/v1")
+logger.info("Router ChatGPT Proxy incluido bajo el prefijo: /api/v1")
 logger.info("Documentación OpenAPI (Swagger UI) disponible en: /api/v1/docs")
 logger.info("Documentación ReDoc disponible en: /api/v1/redoc")
 
@@ -88,6 +92,7 @@ async def api_health_check():
             "wordpress": bool(settings.WP_SITE_URL),
             "notion": bool(settings.NOTION_API_KEY),
             "hubspot": bool(settings.HUBSPOT_PRIVATE_APP_KEY),
+            "runway": bool(os.getenv("RUNWAY_API_KEY")),
             "auth_manager": True
         }
     }

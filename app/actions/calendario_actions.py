@@ -193,8 +193,8 @@ def calendar_create_event(client: AuthenticatedHttpClient, params: Dict[str, Any
     
     logger.info(f"{action_name}: Creando evento en {calendar_path_segment} para '{user_identifier}'. Asunto: {event_payload.get('subject')}")
     try:
-        response = client.post(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=event_payload)
-        created_event = response.json()
+        response_data = client.post(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=event_payload)
+        created_event = response_data
         logger.info(f"Evento '{event_payload.get('subject')}' creado con ID: {created_event.get('id')}")
         return {"status": "success", "data": created_event}
     except Exception as e:
@@ -261,8 +261,8 @@ def update_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     
     logger.info(f"{action_name}: Actualizando evento ID '{event_id}' para '{user_identifier}'")
     try:
-        response = client.patch(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=update_payload)
-        return {"status": "success", "data": response.json()}
+        response_data = client.patch(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=update_payload)
+        return {"status": "success", "data": response_data}
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 
@@ -286,8 +286,8 @@ def delete_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     
     logger.info(f"{action_name}: Eliminando evento ID '{event_id}' para '{user_identifier}'")
     try:
-        response = client.delete(url, scope=CALENDARS_READ_WRITE_SCOPE)
-        return {"status": "success", "message": f"Evento '{event_id}' eliminado exitosamente.", "http_status": response.status_code}
+        client.delete(url, scope=CALENDARS_READ_WRITE_SCOPE)
+        return {"status": "success", "message": f"Evento '{event_id}' eliminado exitosamente.", "http_status": 204}
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 
@@ -316,8 +316,8 @@ def find_meeting_times(client: AuthenticatedHttpClient, params: Dict[str, Any]) 
     logger.info(f"{action_name}: Buscando horarios de reunión (findMeetingTimes) para usuario '{user_identifier}'")
     try:
         # Requiere Calendars.Read.Shared o Calendars.Read
-        response = client.post(url, scope=CALENDARS_READ_SHARED_SCOPE, json_data=meeting_time_suggestion_payload)
-        return {"status": "success", "data": response.json()}
+        response_data = client.post(url, scope=CALENDARS_READ_SHARED_SCOPE, json_data=meeting_time_suggestion_payload)
+        return {"status": "success", "data": response_data}
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 
@@ -370,8 +370,139 @@ def get_schedule(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
 
     logger.info(f"{action_name}: Consultando disponibilidad para usuarios en payload.")
     try:
-        response = client.post(url, scope=CALENDARS_READ_SHARED_SCOPE, json_data=schedule_information_payload)
-        return {"status": "success", "data": response.json().get("value", [])}
+        response_data = client.post(url, scope=CALENDARS_READ_SHARED_SCOPE, json_data=schedule_information_payload)
+        # Graph suele devolver {"value": [...]} para getSchedule
+        return {"status": "success", "data": response_data.get("value", [])}
+    except Exception as e:
+        return _handle_calendar_api_error(e, action_name, params)
+
+
+# ============================================================================
+# FUNCIONES ADICIONALES RESTAURADAS
+# ============================================================================
+
+def calendario_create_recurring_event(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear un evento recurrente en el calendario."""
+    params = params or {}
+    logger.info("Ejecutando calendario_create_recurring_event con params: %s", params)
+    action_name = "calendario_create_recurring_event"
+
+    user_identifier: Optional[str] = params.get("mailbox")
+    if not user_identifier:
+        logger.error(f"{action_name}: El parámetro 'mailbox' (user_id o UPN) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'mailbox' (user_id o UPN) es requerido.", "http_status": 400}
+
+    calendar_id: Optional[str] = params.get("calendar_id")
+    event_payload: Optional[Dict[str, Any]] = params.get("event_payload")
+    recurrence_pattern: Optional[Dict[str, Any]] = params.get("recurrence_pattern")
+
+    if not event_payload or not isinstance(event_payload, dict):
+        return {"status": "error", "action": action_name, "message": "'event_payload' (dict) es requerido.", "http_status": 400}
+
+    if not recurrence_pattern or not isinstance(recurrence_pattern, dict):
+        return {"status": "error", "action": action_name, "message": "'recurrence_pattern' (dict) es requerido.", "http_status": 400}
+
+    # Agregar patrón de recurrencia al evento
+    event_payload["recurrence"] = recurrence_pattern
+
+    required_fields = ["subject", "start", "end"]
+    if not all(field in event_payload for field in required_fields):
+        missing = [field for field in required_fields if field not in event_payload]
+        return {"status": "error", "action": action_name, "message": f"Faltan campos requeridos en 'event_payload': {missing}.", "http_status": 400}
+
+    user_path_segment = f"users/{user_identifier}"
+    calendar_path_segment = f"calendars/{calendar_id}" if calendar_id else "calendar"
+    url = f"{settings.GRAPH_API_BASE_URL}/{user_path_segment}/{calendar_path_segment}/events"
+    
+    logger.info(f"{action_name}: Creando evento recurrente en {calendar_path_segment} para '{user_identifier}'. Asunto: {event_payload.get('subject')}")
+    try:
+        response_data = client.post(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=event_payload)
+        created_event = response_data
+        logger.info(f"Evento recurrente '{event_payload.get('subject')}' creado con ID: {created_event.get('id')}")
+        return {"status": "success", "data": created_event}
+    except Exception as e:
+        return _handle_calendar_api_error(e, action_name, params)
+
+
+def calendario_get_calendar_permissions(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener permisos de calendario."""
+    params = params or {}
+    logger.info("Ejecutando calendario_get_calendar_permissions con params: %s", params)
+    action_name = "calendario_get_calendar_permissions"
+
+    user_identifier: Optional[str] = params.get("mailbox")
+    if not user_identifier:
+        logger.error(f"{action_name}: El parámetro 'mailbox' (user_id o UPN) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'mailbox' (user_id o UPN) es requerido.", "http_status": 400}
+
+    calendar_id: Optional[str] = params.get("calendar_id")
+    
+    user_path_segment = f"users/{user_identifier}"
+    calendar_path_segment = f"calendars/{calendar_id}" if calendar_id else "calendar"
+    url = f"{settings.GRAPH_API_BASE_URL}/{user_path_segment}/{calendar_path_segment}/calendarPermissions"
+    
+    logger.info(f"{action_name}: Obteniendo permisos de {calendar_path_segment} para '{user_identifier}'")
+    try:
+        response = client.get(url, scope=CALENDARS_READ_SCOPE)
+        return {"status": "success", "data": response}
+    except Exception as e:
+        return _handle_calendar_api_error(e, action_name, params)
+
+
+def calendario_create_calendar_group(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear un grupo de calendarios."""
+    params = params or {}
+    logger.info("Ejecutando calendario_create_calendar_group con params: %s", params)
+    action_name = "calendario_create_calendar_group"
+
+    user_identifier: Optional[str] = params.get("mailbox")
+    if not user_identifier:
+        logger.error(f"{action_name}: El parámetro 'mailbox' (user_id o UPN) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'mailbox' (user_id o UPN) es requerido.", "http_status": 400}
+
+    group_payload: Optional[Dict[str, Any]] = params.get("group_payload")
+    if not group_payload or not isinstance(group_payload, dict):
+        return {"status": "error", "action": action_name, "message": "'group_payload' (dict) es requerido.", "http_status": 400}
+
+    if not group_payload.get("name"):
+        return {"status": "error", "action": action_name, "message": "Campo 'name' es requerido en 'group_payload'.", "http_status": 400}
+
+    user_path_segment = f"users/{user_identifier}"
+    url = f"{settings.GRAPH_API_BASE_URL}/{user_path_segment}/calendarGroups"
+    
+    logger.info(f"{action_name}: Creando grupo de calendario para '{user_identifier}'. Nombre: {group_payload.get('name')}")
+    try:
+        response_data = client.post(url, scope=CALENDARS_READ_WRITE_SCOPE, json_data=group_payload)
+        created_group = response_data
+        logger.info(f"Grupo de calendario '{group_payload.get('name')}' creado con ID: {created_group.get('id')}")
+        return {"status": "success", "data": created_group}
+    except Exception as e:
+        return _handle_calendar_api_error(e, action_name, params)
+
+
+def calendario_get_event_attachments(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener adjuntos de un evento."""
+    params = params or {}
+    logger.info("Ejecutando calendario_get_event_attachments con params: %s", params)
+    action_name = "calendario_get_event_attachments"
+
+    user_identifier: Optional[str] = params.get("mailbox")
+    if not user_identifier:
+        logger.error(f"{action_name}: El parámetro 'mailbox' (user_id o UPN) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'mailbox' (user_id o UPN) es requerido.", "http_status": 400}
+
+    event_id: Optional[str] = params.get("event_id")
+    if not event_id:
+        logger.error(f"{action_name}: El parámetro 'event_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'event_id' es requerido.", "http_status": 400}
+
+    user_path_segment = f"users/{user_identifier}"
+    url = f"{settings.GRAPH_API_BASE_URL}/{user_path_segment}/events/{event_id}/attachments"
+    
+    logger.info(f"{action_name}: Obteniendo adjuntos del evento '{event_id}' para '{user_identifier}'")
+    try:
+        response = client.get(url, scope=CALENDARS_READ_SCOPE)
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_calendar_api_error(e, action_name, params)
 

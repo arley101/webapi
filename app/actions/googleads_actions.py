@@ -1,6 +1,7 @@
 # app/actions/googleads_actions.py
 import logging
 import base64
+import time
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 from google.ads.googleads.client import GoogleAdsClient
@@ -8,6 +9,10 @@ from google.ads.googleads.errors import GoogleAdsException
 from google.protobuf import json_format
 
 from app.core.config import settings
+# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
+def _get_resolver():
+    from app.actions.resolver_actions import Resolver
+    return Resolver()
 
 logger = logging.getLogger(__name__)
 
@@ -20,76 +25,249 @@ def get_google_ads_client() -> GoogleAdsClient:
         return _google_ads_client_instance
     
     try:
-        # CORRECCIÓN: Import condicional para evitar error de arranque
+        # Intentar obtener access_token automáticamente (si existe token_manager)
+        access_token = None
         try:
             from app.core.auth_manager import token_manager
-            # AUTOMÁTICO: Generar access token desde refresh token
             access_token = token_manager.get_google_access_token("google_ads")
         except ImportError:
-            # Fallback si auth_manager no está disponible
-            logger.warning("auth_manager no disponible, usando configuración tradicional")
-            access_token = None
+            logger.warning("auth_manager no disponible, usando refresh token tradicional")
+        except Exception as e:
+            logger.warning(f"No se pudo obtener access_token automático: {e}")
         
-        # Configuración con token automático o tradicional
+        # Configuración robusta para Google Ads API v20
         config = {
             "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
             "client_id": settings.GOOGLE_ADS_CLIENT_ID,
             "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
             "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
             "login_customer_id": str(settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID else None,
+            # Preferimos proto_plus activado para acceder a .name y helpers
             "use_proto_plus": True,
-            "api_version": "v18"
+            "api_version": "v20",
+            "http_timeout": 60,
         }
+        if access_token:
+            config["access_token"] = access_token
+            logger.info("Google Ads: usando access_token automático para API v20")
         
-        logger.info("📊 Google Ads: Cliente inicializado")
+        logger.info("Inicializando Google Ads Client (v20, proto_plus=True)")
         _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
         return _google_ads_client_instance
-        
     except Exception as e:
         logger.error(f"Error inicializando cliente Google Ads: {e}")
         raise ValueError(f"Google Ads client initialization failed: {str(e)}")
 
 def _handle_google_ads_api_error(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
-    error_details = [{"message": error.message, "error_code": str(error.error_code)} for error in ex.failure.errors]
-    logger.error(f"Google Ads API Exception en '{action_name}': {error_details}")
-    
-    # Verificar si es un error de versión deprecated
+    """
+    Manejo avanzado de errores Google Ads API v20 con diagnóstico y recomendaciones.
+    """
+    error_details: List[Dict[str, Any]] = []
+    try:
+        for error in ex.failure.errors:
+            error_code_str = str(error.error_code)
+            info = {
+                "message": getattr(error, "message", ""),
+                "error_code": error_code_str,
+                "trigger": getattr(error, "trigger", None),
+                "location": getattr(error, "location", None),
+                "severity": "CRITICAL" if "PERMISSION" in error_code_str else "WARNING",
+            }
+            if "DEPRECATED" in error_code_str or "UNSUPPORTED_VERSION" in error_code_str:
+                info.update({
+                    "severity": "CRITICAL",
+                    "migration_required": True,
+                    "recommendation": "Actualizar a Google Ads API v20 inmediatamente",
+                })
+            elif "QUOTA_EXCEEDED" in error_code_str or "RATE_LIMIT" in error_code_str:
+                info.update({
+                    "severity": "HIGH",
+                    "retry_strategy": "exponential_backoff",
+                    "recommendation": "Aplicar throttling y reintentar con backoff",
+                })
+            elif "PERMISSION_DENIED" in error_code_str or "AUTHENTICATION" in error_code_str:
+                info.update({
+                    "severity": "CRITICAL",
+                    "auth_issue": True,
+                    "recommendation": "Verificar credenciales y permisos del Customer ID",
+                })
+            error_details.append(info)
+        
+        logger.error(f"Google Ads API v20 Exception en '{action_name}': {len(error_details)} errores")
+        
+        return {
+            "success": False,
+            "error": "Error en Google Ads API v20",
+            "action": action_name,
+            "api_version": "v20",
+            "details": {
+                "errors": error_details,
+                "request_id": ex.request_id,
+                "error_summary": {
+                    "total_errors": len(error_details),
+                    "critical_errors": len([e for e in error_details if e.get("severity") == "CRITICAL"]),
+                    "auth_errors": len([e for e in error_details if e.get("auth_issue")]),
+                },
+            },
+            "recovery_recommendations": _generate_recovery_recommendations_v20(error_details),
+            "timestamp": datetime.now().isoformat(),
+        }
+    except Exception as processing_error:
+        logger.error(f"Error procesando excepción Google Ads: {processing_error}")
+        return {
+            "success": False,
+            "error": f"Error procesando respuesta de Google Ads API: {str(processing_error)}",
+            "original_exception": str(ex),
+            "timestamp": datetime.now().isoformat(),
+        }
+
+# --- Helper para recomendaciones de recuperación v20 ---
+def _generate_recovery_recommendations_v20(error_details: List[Dict[str, Any]]) -> List[str]:
+    """Generación de recomendaciones de recuperación específicas para API v20."""
+    recommendations: List[str] = []
     for error in error_details:
-        if "deprecated" in error.get("message", "").lower() or "UNSUPPORTED_VERSION" in error.get("error_code", ""):
-            logger.critical("⚠️ VERSIÓN DE API DEPRECADA - Actualizar configuración del cliente")
-    
-    return {
-        "success": False,
-        "error": "Error en la API de Google Ads",
-        "action": action_name,
-        "details": {
-            "errors": error_details, 
-            "request_id": ex.request_id
-        },
-        "timestamp": datetime.now().isoformat()
-    }
+        if error.get("migration_required"):
+            recommendations.append("🚀 ACCIÓN CRÍTICA: Migrar a Google Ads API v20 inmediatamente")
+        if error.get("auth_issue"):
+            recommendations.append("🔐 Verificar y renovar credenciales de autenticación")
+            recommendations.append("👤 Confirmar permisos de Customer ID en Google Ads")
+        if error.get("retry_strategy") == "exponential_backoff":
+            recommendations.append("⏰ Implementar delays exponenciales entre requests")
+            recommendations.append("📊 Considerar reducir frecuencia de consultas")
+    if not recommendations:
+        recommendations.extend([
+            "🔍 Revisar configuración general de Google Ads API v20",
+            "📝 Verificar sintaxis de queries GAQL para v20",
+            "🌐 Confirmar conectividad y configuración de red"
+        ])
+    # Eliminar duplicados preservando orden
+    seen = set()
+    unique: List[str] = []
+    for r in recommendations:
+        if r not in seen:
+            unique.append(r)
+            seen.add(r)
+    return unique
 
 def _execute_search_query(customer_id: str, query: str, action_name: str) -> Dict[str, Any]:
+    """
+    Ejecución optimizada de GAQL con search_stream y conversión segura a dict.
+    """
     try:
-        gads_client = get_google_ads_client()
-        ga_service = gads_client.get_service("GoogleAdsService")
-        stream = ga_service.search_stream(customer_id=customer_id, query=query)
-        results = [json_format.MessageToDict(row._pb) for batch in stream for row in batch.results]
-        return {"success": True, "data": results}
-    except GoogleAdsException as ex:
-        return _handle_google_ads_api_error(ex, action_name)
+        max_attempts = 3
+        backoff_base = 2
+        attempt = 0
+        last_exception: Optional[Exception] = None
+        while attempt < max_attempts:
+            start_ts = datetime.now()
+            try:
+                gads_client = get_google_ads_client()
+                ga_service = gads_client.get_service("GoogleAdsService")
+                logger.info(f"🔍 Ejecutando GAQL v20 (intento {attempt+1}/{max_attempts}): {query[:120]}...")
+                stream = ga_service.search_stream(customer_id=customer_id, query=query)
+                results: List[Dict[str, Any]] = []
+                batches = 0
+                total_rows = 0
+                for batch in stream:
+                    batches += 1
+                    for row in batch.results:
+                        try:
+                            results.append(json_format.MessageToDict(row._pb))
+                            total_rows += 1
+                        except Exception as conv_err:
+                            logger.warning(f"⚠️ Error convirtiendo fila: {conv_err}")
+                            continue
+                elapsed = (datetime.now() - start_ts).total_seconds()
+                logger.info(f"✅ GAQL OK: {total_rows} filas en {elapsed:.2f}s ({batches} batches)")
+                return {
+                    "success": True,
+                    "data": results,
+                    "metadata": {
+                        "api_version": "v20",
+                        "total_results": total_rows,
+                        "batches_processed": batches,
+                        "execution_time_seconds": round(elapsed, 2),
+                        "query_hash": hash(query),
+                        "timestamp": datetime.now().isoformat(),
+                    },
+                }
+            except GoogleAdsException as ex:
+                last_exception = ex
+                # Detectar rate limit / quota exceeded para reintentar
+                try:
+                    codes = [str(err.error_code) for err in ex.failure.errors]
+                except Exception:
+                    codes = []
+                if any("QUOTA_EXCEEDED" in c or "RATE_LIMIT" in c for c in codes):
+                    wait_s = backoff_base ** attempt
+                    logger.warning(f"⏳ Rate limit/quota: reintentando en {wait_s}s (códigos: {codes})")
+                    time.sleep(wait_s)
+                    attempt += 1
+                    continue
+                # Otros errores -> manejar y salir
+                return _handle_google_ads_api_error(ex, action_name)
+            except Exception as e:
+                last_exception = e
+                logger.error(f"❌ Error general (intento {attempt+1}): {e}")
+                wait_s = backoff_base ** attempt
+                time.sleep(wait_s)
+                attempt += 1
+        # Si agotó reintentos
+        if isinstance(last_exception, GoogleAdsException):
+            return _handle_google_ads_api_error(last_exception, action_name)  # type: ignore
+        return {
+            "success": False,
+            "error": str(last_exception) if last_exception else "Error desconocido tras reintentos",
+            "error_type": "general_execution_error",
+            "action": action_name,
+            "api_version": "v20",
+            "timestamp": datetime.now().isoformat(),
+        }
     except Exception as e:
-        logger.error(f"Error en {action_name}: {str(e)}")
-        return {"success": False, "error": str(e)}
+        logger.error(f"❌ Error no controlado en {action_name}: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "error_type": "general_execution_error",
+            "action": action_name,
+            "api_version": "v20",
+            "timestamp": datetime.now().isoformat(),
+        }
 
 def _execute_mutate_operations(customer_id: str, operations: list, service_name: str, action_name: str) -> Dict[str, Any]:
     try:
         gads_client = get_google_ads_client()
         service = gads_client.get_service(service_name)
-        response = service.mutate(customer_id=customer_id, operations=operations)
-        return {"success": True, "data": json_format.MessageToDict(response._pb)}
-    except GoogleAdsException as ex:
-        return _handle_google_ads_api_error(ex, action_name)
+        max_attempts = 3
+        backoff_base = 2
+        attempt = 0
+        last_exception: Optional[Exception] = None
+        while attempt < max_attempts:
+            try:
+                response = service.mutate(customer_id=customer_id, operations=operations)
+                return {"success": True, "data": json_format.MessageToDict(response._pb)}
+            except GoogleAdsException as ex:
+                last_exception = ex
+                try:
+                    codes = [str(err.error_code) for err in ex.failure.errors]
+                except Exception:
+                    codes = []
+                if any("QUOTA_EXCEEDED" in c or "RATE_LIMIT" in c for c in codes):
+                    wait_s = backoff_base ** attempt
+                    logger.warning(f"⏳ Rate limit/quota en mutate: reintentando en {wait_s}s (códigos: {codes})")
+                    time.sleep(wait_s)
+                    attempt += 1
+                    continue
+                return _handle_google_ads_api_error(ex, action_name)
+            except Exception as e:
+                last_exception = e
+                logger.error(f"❌ Error general mutate (intento {attempt+1}): {e}")
+                wait_s = backoff_base ** attempt
+                time.sleep(wait_s)
+                attempt += 1
+        if isinstance(last_exception, GoogleAdsException):
+            return _handle_google_ads_api_error(last_exception, action_name)  # type: ignore
+        return {"success": False, "error": str(last_exception) if last_exception else "Error desconocido tras reintentos"}
     except Exception as e:
         logger.error(f"Error en {action_name}: {str(e)}")
         return {"success": False, "error": str(e)}
@@ -179,76 +357,201 @@ def _create_campaign_budget(client, customer_id, name, amount_micros, is_shared=
 # --- ACCIONES COMPLETAS Y FUNCIONALES ---
 
 def googleads_get_campaigns(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    customer_id = _get_customer_id(params)
-    status_filter = params.get("status")
-    where_clause = f"WHERE campaign.status = '{status_filter.upper()}'" if status_filter else ""
-    query = f"SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type FROM campaign {where_clause} ORDER BY campaign.name"
-    return _execute_search_query(customer_id, query, "googleads_get_campaigns")
+    """
+    Obtener campañas de Google Ads con métricas y análisis.
+    """
+    logger.info("📢 Iniciando obtención de campañas Google Ads")
+    action_name = "googleads_get_campaigns"
+
+    try:
+        # Validación básica de entrada
+        customer_id = params.get("customer_id")
+        if not customer_id:
+            return {
+                "status": "error",
+                "error": "customer_id es requerido",
+                "timestamp": datetime.now().isoformat()
+            }
+
+        # Obtener cliente de Google Ads
+        ads_client = get_google_ads_client()
+        customer_id = customer_id.replace("-", "")
+        
+        # Configurar consulta GAQL básica
+        query = """
+        SELECT
+            campaign.id,
+            campaign.name,
+            campaign.status,
+            campaign.advertising_channel_type,
+            campaign.advertising_channel_sub_type,
+            campaign.start_date,
+            campaign.end_date,
+            campaign.campaign_budget,
+            metrics.impressions,
+            metrics.clicks,
+            metrics.ctr,
+            metrics.average_cpc,
+            metrics.cost_micros,
+            metrics.conversions,
+            metrics.conversions_value
+        FROM campaign
+        ORDER BY campaign.name
+        """
+        
+        # Agregar filtros si se proporcionan
+        if params.get("status_filter"):
+            status = params["status_filter"].upper()
+            query = query.replace("ORDER BY", f"WHERE campaign.status = {status} ORDER BY")
+        
+        # Ejecutar consulta
+        ga_service = ads_client.get_service("GoogleAdsService")
+        stream = ga_service.search_stream(customer_id=customer_id, query=query)
+        
+        # Procesar resultados
+        campaigns = []
+        total_impressions = 0
+        total_clicks = 0
+        total_cost = 0
+        
+        for batch in stream:
+            for row in batch.results:
+                campaign_data = {
+                    "id": row.campaign.id,
+                    "name": row.campaign.name,
+                    "status": row.campaign.status.name,
+                    "advertising_channel_type": row.campaign.advertising_channel_type.name,
+                    "start_date": row.campaign.start_date,
+                    "end_date": row.campaign.end_date,
+                    "metrics": {
+                        "impressions": row.metrics.impressions,
+                        "clicks": row.metrics.clicks,
+                        "ctr": row.metrics.ctr,
+                        "average_cpc": row.metrics.average_cpc,
+                        "cost_micros": row.metrics.cost_micros,
+                        "cost_usd": row.metrics.cost_micros / 1_000_000,
+                        "conversions": row.metrics.conversions,
+                        "conversions_value": row.metrics.conversions_value
+                    }
+                }
+                campaigns.append(campaign_data)
+                total_impressions += row.metrics.impressions
+                total_clicks += row.metrics.clicks
+                total_cost += row.metrics.cost_micros / 1_000_000
+
+        # Calcular métricas resumidas
+        avg_ctr = (total_clicks / total_impressions) * 100 if total_impressions > 0 else 0
+        avg_cpc = total_cost / total_clicks if total_clicks > 0 else 0
+
+        logger.info(f"Obtenidas {len(campaigns)} campañas de Google Ads")
+        
+        return {
+            "status": "success",
+            "data": campaigns,
+            "summary": {
+                "total_campaigns": len(campaigns),
+                "total_impressions": total_impressions,
+                "total_clicks": total_clicks,
+                "total_cost_usd": round(total_cost, 2),
+                "average_ctr": round(avg_ctr, 2),
+                "average_cpc": round(avg_cpc, 2),
+                "customer_id": customer_id
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except GoogleAdsException as ex:
+        error_details = []
+        for error in ex.failure.errors:
+            error_details.append({
+                "error_code": error.error_code,
+                "message": error.message,
+                "location": [location.field_path_elements for location in error.location.field_path_elements] if error.location else []
+            })
+        return {
+            "status": "error",
+            "error": f"Google Ads API error: {ex.failure.errors[0].message}",
+            "error_details": error_details,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
 
 def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Crea una nueva campaña en Google Ads
-    """
+    """Crea una nueva campaña en Google Ads (SEARCH por defecto)."""
     action_name = "googleads_create_campaign"
     try:
-        # Obtener token manager del cliente
-        token_manager = client
-        access_token = token_manager.get_google_access_token("google_ads")
-        
-        # Configurar cliente de Google Ads
-        google_ads_client = GoogleAdsClient.load_from_dict({
-            "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
-            "use_proto_plus": True,
-            "access_token": access_token,
-            "login_customer_id": settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID
-        })
-        
-        # Extraer parámetros
-        customer_id = params.get('customer_id', settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID)
-        campaign_name = params.get('name', f'Campaign_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
-        budget_amount = params.get('budget_amount_micros', 1000000)  # Default $1
-        
-        # Crear servicio de campaña
-        campaign_service = google_ads_client.get_service("CampaignService")
-        campaign_operation = google_ads_client.get_type("CampaignOperation")
-        
+        gads_client = get_google_ads_client()
+
+        # Parámetros de entrada
+        customer_id = str(params.get("customer_id", settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID)).replace("-", "")
+        if not customer_id:
+            raise ValueError("Se requiere 'customer_id'.")
+        campaign_name = params.get("name", f"Campaign_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
+        currency = params.get("currency_code", "USD")
+        budget_amount = int(params.get("budget_amount_micros", 1_000_000))  # 1 unidad monetaria
+        budget_amount = _validate_budget_for_currency(budget_amount, currency)
+
+        advertising_type = (params.get("type") or "SEARCH").upper()
+
+        # Crear presupuesto (usa helper correcto: name y amount)
+        budget_name = f"{campaign_name}_budget"
+        budget_resource_name = _create_campaign_budget(
+            gads_client,
+            customer_id,
+            budget_name,
+            budget_amount,
+            is_shared=False,
+        )
+
+        # Construir operación de campaña
+        campaign_service = gads_client.get_service("CampaignService")
+        campaign_operation = gads_client.get_type("CampaignOperation")
         campaign = campaign_operation.create
         campaign.name = campaign_name
-        campaign.advertising_channel_type = google_ads_client.enums.AdvertisingChannelTypeEnum.SEARCH
-        
-        # Configurar presupuesto
-        campaign.campaign_budget = campaign_service.campaign_budget_path(
-            customer_id, 
-            _create_campaign_budget(google_ads_client, customer_id, budget_amount)
-        )
-        
-        campaign.status = google_ads_client.enums.CampaignStatusEnum.PAUSED
-        
-        # Crear la campaña
-        response = campaign_service.mutate_campaigns(
-            customer_id=customer_id,
-            operations=[campaign_operation]
-        )
-        
-        created_campaign = response.results[0]
-        
+        campaign.campaign_budget = budget_resource_name
+
+        # Canal
+        campaign.advertising_channel_type = gads_client.enums.AdvertisingChannelTypeEnum[advertising_type]
+        if advertising_type == "PERFORMANCE_MAX":
+            campaign.advertising_channel_sub_type = gads_client.enums.AdvertisingChannelSubTypeEnum.PERFORMANCE_MAX
+
+        # Estado inicial
+        campaign.status = gads_client.enums.CampaignStatusEnum.PAUSED
+
+        # Ejecutar
+        response = campaign_service.mutate_campaigns(customer_id=customer_id, operations=[campaign_operation])
+        created = response.results[0]
+
         return {
             "status": "success",
             "message": f"Campaña '{campaign_name}' creada exitosamente",
             "data": {
-                "id": created_campaign.resource_name.split('/')[-1],
-                "resource_name": created_campaign.resource_name,
+                "resource_name": created.resource_name,
                 "name": campaign_name,
-                "status": "PAUSED"
-            }
+                "status": "PAUSED",
+                "budget_micros": budget_amount,
+                "type": advertising_type,
+            },
         }
         
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
+    except GoogleAdsException as ex:
+        return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
-        logger.error(f"Error en {action_name}: {str(e)}")
+        logger.error(f"Error en {action_name}: {e}")
         return {
             "status": "error",
             "message": f"Error al crear campaña: {str(e)}",
-            "action": action_name
+            "action": action_name,
         }
 
 def googleads_get_ad_groups(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -299,12 +602,17 @@ def googleads_update_campaign_status(client: Any, params: Dict[str, Any]) -> Dic
         field_mask.paths.append("status")
         operation.update_mask.CopyFrom(field_mask)
         
-        return _execute_mutate_operations(
+        result = _execute_mutate_operations(
             customer_id, 
             [operation], 
             "CampaignService", 
             "googleads_update_campaign_status"
         )
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE MODIFICACIÓN
+        _get_resolver().save_action_result("googleads_update_campaign_status", params, result)
+        
+        return result
     except Exception as e:
         logger.error(f"Error al actualizar estado de campaña: {str(e)}")
         return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
@@ -335,12 +643,17 @@ def googleads_create_remarketing_list(client: Any, params: Dict[str, Any]) -> Di
             gads_client.enums.CustomerMatchUploadKeyTypeEnum.CONTACT_INFO
         )
 
-        return _execute_mutate_operations(
+        result = _execute_mutate_operations(
             customer_id,
             [operation],
             "UserListService",
             "googleads_create_remarketing_list"
         )
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result("googleads_create_remarketing_list", params, result)
+        
+        return result
     except Exception as e:
         logger.error(f"Error al crear lista de remarketing: {str(e)}")
         return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
@@ -513,23 +826,93 @@ def googleads_add_keywords_to_ad_group(client: Any, params: Dict[str, Any]) -> D
         customer_id = _get_customer_id(params)
         ad_group_id = params.get("ad_group_id")
         keywords = params.get("keywords", [])
+        match_type = (params.get("match_type") or "EXACT").upper()
+        status = (params.get("status") or "ENABLED").upper()
 
         if not ad_group_id or not keywords:
             raise ValueError("Se requieren 'ad_group_id' y 'keywords'")
 
         gads_client = get_google_ads_client()
+        ad_group_service = gads_client.get_service("AdGroupService")
+        ad_group_resource = ad_group_service.ad_group_path(customer_id, ad_group_id)
         operations = []
 
-        for keyword in keywords:
-            operation = gads_client.get_type("AdGroupCriterionOperation")
-            criterion = operation.create
-            criterion.ad_group = gads_client.get_service("AdGroupService").ad_group_path(
-                customer_id, ad_group_id
-            )
-            criterion.status = gads_client.enums.AdGroupCriterionStatusEnum.ENABLED
-            criterion.keyword.text = keyword
-            criterion.keyword.match_type = gads_client.enums.KeywordMatchTypeEnum.EXACT
-            operations.append(operation)
+        for kw in keywords:
+            op = gads_client.get_type("AdGroupCriterionOperation")
+            criterion = op.create
+            criterion.ad_group = ad_group_resource
+            criterion.status = gads_client.enums.AdGroupCriterionStatusEnum[status]
+            criterion.keyword.text = str(kw)
+            # Mapear match type
+            m = match_type if match_type in {"EXACT", "PHRASE", "BROAD"} else "EXACT"
+            criterion.keyword.match_type = gads_client.enums.KeywordMatchTypeEnum[m]
+            operations.append(op)
+
+        result = _execute_mutate_operations(customer_id, operations, "AdGroupCriterionService", action_name)
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN/MODIFICACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
+    except GoogleAdsException as ex:
+        return _handle_google_ads_api_error(ex, action_name)
+    except Exception as e:
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+
+# --- UTILIDADES EXTRAS GOOGLE ADS ---
+
+def googleads_get_budgets(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Lista budgets del cliente (nombre, monto, compartido)."""
+    action_name = "googleads_get_budgets"
+    try:
+        customer_id = _get_customer_id(params)
+        query = (
+            "SELECT campaign_budget.id, campaign_budget.name, "
+            "campaign_budget.amount_micros, campaign_budget.explicitly_shared "
+            "FROM campaign_budget ORDER BY campaign_budget.name"
+        )
+        return _execute_search_query(customer_id, query, action_name)
+    except Exception as e:
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+
+def googleads_set_daily_budget(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Actualiza el presupuesto diario de una campaña (amount_micros)."""
+    action_name = "googleads_set_daily_budget"
+    try:
+        customer_id = _get_customer_id(params)
+        campaign_id = params.get("campaign_id")
+        amount_micros = int(params.get("amount_micros"))
+        currency_code = params.get("currency_code", "USD")
+        amount_micros = _validate_budget_for_currency(amount_micros, currency_code)
+
+        if not campaign_id:
+            raise ValueError("Se requiere 'campaign_id'.")
+
+        # Obtener resource_name del budget desde la campaña
+        campaign_query = (
+            f"SELECT campaign.campaign_budget FROM campaign WHERE campaign.id = {campaign_id} LIMIT 1"
+        )
+        campaign_res = _execute_search_query(customer_id, campaign_query, action_name)
+        if not campaign_res.get("success") or not campaign_res.get("data"):
+            return {"success": False, "error": "No se encontró la campaña o falló la consulta de budget."}
+        budget_resource = campaign_res["data"][0]["campaign"]["campaignBudget"]
+
+        # Actualizar el amount del budget
+        gads_client = get_google_ads_client()
+        budget_op = gads_client.get_type("CampaignBudgetOperation")
+        budget = budget_op.update
+        budget.resource_name = budget_resource
+        budget.amount_micros = amount_micros
+        field_mask = gads_client.get_type("FieldMask")
+        field_mask.paths.append("amount_micros")
+        budget_op.update_mask.CopyFrom(field_mask)
+
+        return _execute_mutate_operations(customer_id, [budget_op], "CampaignBudgetService", action_name)
+    except GoogleAdsException as ex:
+        return _handle_google_ads_api_error(ex, action_name)
+    except Exception as e:
+        logger.error(f"Error en {action_name}: {e}")
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
         return _execute_mutate_operations(
             customer_id, 
@@ -599,12 +982,17 @@ def googleads_create_responsive_search_ad(client: Any, params: Dict[str, Any]) -
             {"text": description} for description in descriptions[:4]  # Máximo 4 descripciones
         ]
 
-        return _execute_mutate_operations(
+        result = _execute_mutate_operations(
             customer_id,
             [operation],
             "AdGroupAdService",
             action_name
         )
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
+        _get_resolver().save_action_result(action_name, params, result)
+        
+        return result
     except Exception as e:
         return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
@@ -677,4 +1065,296 @@ def googleads_upload_offline_conversion(client: Any, params: Dict[str, Any]) -> 
     except Exception as e:
         return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
-# Puedes agregar más funciones según necesites...
+
+# ============================================================================
+# FUNCIONES ADICIONALES RESTAURADAS
+# ============================================================================
+
+def googleads_create_conversion_action(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear una acción de conversión en Google Ads."""
+    action_name = "googleads_create_conversion_action"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+    
+    customer_id = params.get("customer_id")
+    if not customer_id:
+        return {"success": False, "error": "customer_id es requerido", "timestamp": datetime.now().isoformat()}
+    
+    conversion_name = params.get("conversion_name")
+    if not conversion_name:
+        return {"success": False, "error": "conversion_name es requerido", "timestamp": datetime.now().isoformat()}
+    
+    try:
+        client = get_google_ads_client()
+        customer_id = customer_id.replace("-", "")
+        
+        # Crear la acción de conversión
+        conversion_action_operation = client.get_type("ConversionActionOperation")
+        conversion_action = conversion_action_operation.create
+        
+        conversion_action.name = conversion_name
+        conversion_action.type_ = client.enums.ConversionActionTypeEnum.WEBPAGE
+        conversion_action.category = client.enums.ConversionActionCategoryEnum.DEFAULT
+        conversion_action.status = client.enums.ConversionActionStatusEnum.ENABLED
+        conversion_action.view_through_lookback_window_days = 30
+        conversion_action.click_through_lookback_window_days = 30
+        
+        # Configurar el valor de conversión
+        value_settings = conversion_action.value_settings
+        value_settings.default_value = params.get("default_value", 1.0)
+        value_settings.default_currency_code = params.get("currency_code", "USD")
+        value_settings.always_use_default_value = params.get("always_use_default_value", True)
+        
+        # Configurar el conteo
+        conversion_action.counting_type = client.enums.ConversionActionCountingTypeEnum.ONE_PER_CLICK
+        
+        # Ejecutar la operación
+        conversion_action_service = client.get_service("ConversionActionService")
+        response = conversion_action_service.mutate_conversion_actions(
+            customer_id=customer_id, 
+            operations=[conversion_action_operation]
+        )
+        
+        result = response.results[0]
+        logger.info(f"Acción de conversión creada: {result.resource_name}")
+        
+        return {
+            "success": True,
+            "resource_name": result.resource_name,
+            "conversion_action_id": result.resource_name.split("/")[-1],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except GoogleAdsException as ex:
+        error_details = []
+        for error in ex.failure.errors:
+            error_details.append({
+                "error_code": error.error_code,
+                "message": error.message,
+                "location": [location.field_path_elements for location in error.location.field_path_elements] if error.location else []
+            })
+        return {
+            "success": False,
+            "error": f"Google Ads API error: {ex.failure.errors[0].message}",
+            "error_details": error_details,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+
+
+def googleads_get_conversion_metrics(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener métricas de conversión de Google Ads."""
+    action_name = "googleads_get_conversion_metrics"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+    
+    customer_id = params.get("customer_id")
+    if not customer_id:
+        return {"success": False, "error": "customer_id es requerido", "timestamp": datetime.now().isoformat()}
+    
+    try:
+        client = get_google_ads_client()
+        customer_id = customer_id.replace("-", "")
+        
+        # Configurar el rango de fechas
+        start_date = params.get("start_date", "2024-01-01")
+        end_date = params.get("end_date", "2024-12-31")
+        
+        # Consulta GAQL para obtener métricas de conversión
+        query = f"""
+        SELECT
+            campaign.id,
+            campaign.name,
+            campaign.status,
+            metrics.conversions,
+            metrics.conversions_value,
+            metrics.cost_per_conversion,
+            metrics.conversion_rate,
+            metrics.conversions_from_interactions_rate,
+            metrics.view_through_conversions,
+            segments.conversion_action_name,
+            segments.conversion_action_category,
+            segments.date
+        FROM campaign
+        WHERE segments.date BETWEEN '{start_date}' AND '{end_date}'
+        AND metrics.conversions > 0
+        ORDER BY metrics.conversions DESC
+        LIMIT {params.get('limit', 100)}
+        """
+        
+        ga_service = client.get_service("GoogleAdsService")
+        stream = ga_service.search_stream(customer_id=customer_id, query=query)
+        
+        conversions_data = []
+        total_conversions = 0
+        total_conversion_value = 0
+        
+        for batch in stream:
+            for row in batch.results:
+                conversion_data = {
+                    "campaign_id": row.campaign.id,
+                    "campaign_name": row.campaign.name,
+                    "campaign_status": row.campaign.status.name,
+                    "date": row.segments.date,
+                    "conversion_action_name": row.segments.conversion_action_name,
+                    "conversion_action_category": row.segments.conversion_action_category.name,
+                    "conversions": row.metrics.conversions,
+                    "conversions_value": row.metrics.conversions_value,
+                    "cost_per_conversion": row.metrics.cost_per_conversion,
+                    "conversion_rate": row.metrics.conversion_rate,
+                    "conversions_from_interactions_rate": row.metrics.conversions_from_interactions_rate,
+                    "view_through_conversions": row.metrics.view_through_conversions
+                }
+                conversions_data.append(conversion_data)
+                total_conversions += row.metrics.conversions
+                total_conversion_value += row.metrics.conversions_value
+        
+        # Calcular métricas agregadas
+        avg_conversion_rate = sum(row["conversion_rate"] for row in conversions_data) / len(conversions_data) if conversions_data else 0
+        avg_cost_per_conversion = sum(row["cost_per_conversion"] for row in conversions_data) / len(conversions_data) if conversions_data else 0
+        
+        logger.info(f"Obtenidas {len(conversions_data)} filas de métricas de conversión")
+        
+        return {
+            "success": True,
+            "data": conversions_data,
+            "summary": {
+                "total_conversions": total_conversions,
+                "total_conversion_value": total_conversion_value,
+                "average_conversion_rate": avg_conversion_rate,
+                "average_cost_per_conversion": avg_cost_per_conversion,
+                "total_campaigns": len(set(row["campaign_id"] for row in conversions_data)),
+                "date_range": f"{start_date} to {end_date}",
+                "total_records": len(conversions_data)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except GoogleAdsException as ex:
+        error_details = []
+        for error in ex.failure.errors:
+            error_details.append({
+                "error_code": error.error_code,
+                "message": error.message,
+                "location": [location.field_path_elements for location in error.location.field_path_elements] if error.location else []
+            })
+        return {
+            "success": False,
+            "error": f"Google Ads API error: {ex.failure.errors[0].message}",
+            "error_details": error_details,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+
+
+def googleads_get_conversion_actions(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener todas las acciones de conversión configuradas en Google Ads."""
+    action_name = "googleads_get_conversion_actions"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+    
+    customer_id = params.get("customer_id")
+    if not customer_id:
+        return {"success": False, "error": "customer_id es requerido", "timestamp": datetime.now().isoformat()}
+    
+    try:
+        client = get_google_ads_client()
+        customer_id = customer_id.replace("-", "")
+        
+        # Consulta GAQL para obtener todas las acciones de conversión
+        query = """
+        SELECT
+            conversion_action.id,
+            conversion_action.name,
+            conversion_action.status,
+            conversion_action.type,
+            conversion_action.category,
+            conversion_action.origin,
+            conversion_action.primary_for_goal,
+            conversion_action.click_through_lookback_window_days,
+            conversion_action.view_through_lookback_window_days,
+            conversion_action.value_settings.default_value,
+            conversion_action.value_settings.default_currency_code,
+            conversion_action.value_settings.always_use_default_value,
+            conversion_action.counting_type,
+            conversion_action.attribution_model_settings.attribution_model,
+            conversion_action.attribution_model_settings.data_driven_model_status
+        FROM conversion_action
+        ORDER BY conversion_action.name
+        """
+        
+        ga_service = client.get_service("GoogleAdsService")
+        stream = ga_service.search_stream(customer_id=customer_id, query=query)
+        
+        conversion_actions = []
+        
+        for batch in stream:
+            for row in batch.results:
+                conversion_action = {
+                    "id": row.conversion_action.id,
+                    "name": row.conversion_action.name,
+                    "status": row.conversion_action.status.name,
+                    "type": row.conversion_action.type_.name,
+                    "category": row.conversion_action.category.name,
+                    "origin": row.conversion_action.origin.name,
+                    "primary_for_goal": row.conversion_action.primary_for_goal,
+                    "click_through_lookback_window_days": row.conversion_action.click_through_lookback_window_days,
+                    "view_through_lookback_window_days": row.conversion_action.view_through_lookback_window_days,
+                    "counting_type": row.conversion_action.counting_type.name,
+                    "value_settings": {
+                        "default_value": row.conversion_action.value_settings.default_value,
+                        "default_currency_code": row.conversion_action.value_settings.default_currency_code,
+                        "always_use_default_value": row.conversion_action.value_settings.always_use_default_value
+                    },
+                    "attribution_model_settings": {
+                        "attribution_model": row.conversion_action.attribution_model_settings.attribution_model.name,
+                        "data_driven_model_status": row.conversion_action.attribution_model_settings.data_driven_model_status.name
+                    }
+                }
+                conversion_actions.append(conversion_action)
+        
+        # Estadísticas resumidas
+        total_actions = len(conversion_actions)
+        enabled_actions = len([ca for ca in conversion_actions if ca["status"] == "ENABLED"])
+        paused_actions = len([ca for ca in conversion_actions if ca["status"] == "PAUSED"])
+        
+        # Agrupar por categoría
+        categories = {}
+        for ca in conversion_actions:
+            category = ca["category"]
+            if category not in categories:
+                categories[category] = 0
+            categories[category] += 1
+        
+        logger.info(f"Obtenidas {total_actions} acciones de conversión")
+        
+        return {
+            "success": True,
+            "data": conversion_actions,
+            "summary": {
+                "total_conversion_actions": total_actions,
+                "enabled_actions": enabled_actions,
+                "paused_actions": paused_actions,
+                "categories_breakdown": categories,
+                "customer_id": customer_id
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except GoogleAdsException as ex:
+        error_details = []
+        for error in ex.failure.errors:
+            error_details.append({
+                "error_code": error.error_code,
+                "message": error.message,
+                "location": [location.field_path_elements for location in error.location.field_path_elements] if error.location else []
+            })
+        return {
+            "success": False,
+            "error": f"Google Ads API error: {ex.failure.errors[0].message}",
+            "error_details": error_details,
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
+
+# --- FIN DEL MÓDULO actions/googleads_actions.py ---

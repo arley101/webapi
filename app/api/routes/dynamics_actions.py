@@ -1,11 +1,10 @@
 # app/api/routes/dynamics_actions.py
 import logging
-import json 
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, status as http_status_codes
 from fastapi.responses import JSONResponse, StreamingResponse, Response 
 from azure.identity import DefaultAzureCredential, CredentialUnavailableError
 from azure.core.exceptions import ClientAuthenticationError
-from typing import Any, Optional, Union 
+from typing import Any, Optional, Union, Sequence
 
 from app.api.schemas import ActionRequest, ErrorResponse 
 from app.core.action_mapper import ACTION_MAP 
@@ -14,6 +13,21 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient # <--- LÍNEA
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# Helper to resolve Microsoft Graph scopes from settings
+def _resolve_graph_scopes() -> Sequence[str]:
+    """Return a normalized tuple of Microsoft Graph scopes from settings.
+    Supports multiple possible setting names and accepts str, list, or tuple.
+    """
+    # Try several possible attribute names to be resilient to env/config naming
+    for attr in ("GRAPH_API_DEFAULT_SCOPE", "GRAPH_SCOPE_DEFAULT", "GRAPH_SCOPE"):
+        scopes = getattr(settings, attr, None)
+        if scopes:
+            # Normalize to a tuple[str]
+            if isinstance(scopes, (list, tuple)):
+                return tuple(str(s) for s in scopes if s)
+            return (str(scopes),)
+    return ()
 
 # Helper para crear la respuesta de error estandarizada
 def create_error_response(
@@ -70,12 +84,14 @@ async def process_dynamic_action(
     try:
         credential = DefaultAzureCredential()
         try:
-            token_test_scope = settings.GRAPH_API_DEFAULT_SCOPE 
-            if not token_test_scope or not token_test_scope[0]: 
-                raise ValueError("GRAPH_API_DEFAULT_SCOPE no está configurado correctamente en settings.")
-            
-            token_info = credential.get_token(*token_test_scope) 
-            logger.debug(f"{logging_prefix} DefaultAzureCredential validada exitosamente. Token para '{token_test_scope[0]}' expira en (UTC): {token_info.expires_on}")
+            token_scopes = _resolve_graph_scopes()
+            if not token_scopes or not token_scopes[0]:
+                raise ValueError("Alcance(s) de Graph no configurado(s). Configure GRAPH_API_DEFAULT_SCOPE o GRAPH_SCOPE_DEFAULT en settings.")
+
+            token_info = credential.get_token(*token_scopes)
+            logger.debug(
+                f"{logging_prefix} DefaultAzureCredential validada. Token para '{token_scopes[0]}' expira en (UTC): {token_info.expires_on}"
+            )
         except CredentialUnavailableError as cred_err:
             logger.error(f"{logging_prefix} Credencial de Azure no disponible (Managed Identity o variables de entorno podrían estar mal configuradas): {cred_err}")
             return create_error_response(

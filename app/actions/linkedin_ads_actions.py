@@ -3,6 +3,7 @@ import logging
 import requests
 import json
 from typing import Dict, Any, Optional, List
+from datetime import datetime
 
 from app.core.config import settings
 from app.shared.helpers.http_client import AuthenticatedHttpClient
@@ -596,6 +597,448 @@ def linkedin_get_audience_insights(client: Optional[Any], params: Dict[str, Any]
             "action": action_name,
             "data": response.json()
         }
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+# ============================================================================
+# FUNCIONES ADICIONALES RESTAURADAS
+# ============================================================================
+
+def linkedin_get_campaign_demographics(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener datos demográficos de audiencia de campañas de LinkedIn."""
+    action_name = "linkedin_get_campaign_demographics"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+    
+    try:
+        campaign_id = params.get("campaign_id")
+        if not campaign_id:
+            return {"status": "error", "error": "campaign_id es requerido"}
+        
+        headers = _get_linkedin_api_headers(params)
+        
+        # Construir parámetros para analytics de demografía
+        start_date = params.get("start_date", "2024-01-01")
+        end_date = params.get("end_date", "2024-12-31")
+        
+        # Llamada a la API de analytics con breakdown por demografía
+        url = f"{LINKEDIN_API_BASE_URL}/v2/adAnalyticsV2"
+        analytics_params = {
+            "q": "analytics",
+            "pivot": "MEMBER_COMPANY_SIZE,MEMBER_INDUSTRY,MEMBER_JOB_FUNCTION,MEMBER_SENIORITY",
+            "campaigns": f"urn:li:sponsoredCampaign:{campaign_id}",
+            "dateRange.start.day": int(start_date.split('-')[2]),
+            "dateRange.start.month": int(start_date.split('-')[1]),
+            "dateRange.start.year": int(start_date.split('-')[0]),
+            "dateRange.end.day": int(end_date.split('-')[2]),
+            "dateRange.end.month": int(end_date.split('-')[1]),
+            "dateRange.end.year": int(end_date.split('-')[0]),
+            "fields": "externalWebsiteConversions,clicks,impressions,costInUsd,dateRange,pivot,pivotValue"
+        }
+        
+        response = requests.get(url, headers=headers, params=analytics_params)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Procesar los datos demográficos
+        demographics_data = {
+            "campaign_id": campaign_id,
+            "date_range": f"{start_date} to {end_date}",
+            "company_size": [],
+            "industry": [],
+            "job_function": [],
+            "seniority": []
+        }
+        
+        if "elements" in data:
+            for element in data["elements"]:
+                pivot_value = element.get("pivotValue")
+                metrics = {
+                    "impressions": element.get("impressions", 0),
+                    "clicks": element.get("clicks", 0),
+                    "cost_usd": element.get("costInUsd", 0),
+                    "conversions": element.get("externalWebsiteConversions", 0)
+                }
+                
+                # Categorizar por tipo de demografía
+                if "MEMBER_COMPANY_SIZE" in pivot_value:
+                    demographics_data["company_size"].append({
+                        "size": pivot_value, 
+                        "metrics": metrics
+                    })
+                elif "MEMBER_INDUSTRY" in pivot_value:
+                    demographics_data["industry"].append({
+                        "industry": pivot_value,
+                        "metrics": metrics
+                    })
+                elif "MEMBER_JOB_FUNCTION" in pivot_value:
+                    demographics_data["job_function"].append({
+                        "function": pivot_value,
+                        "metrics": metrics
+                    })
+                elif "MEMBER_SENIORITY" in pivot_value:
+                    demographics_data["seniority"].append({
+                        "level": pivot_value,
+                        "metrics": metrics
+                    })
+        
+        logger.info(f"Obtenidas demografías para campaña {campaign_id}")
+        return {"status": "success", "data": demographics_data}
+        
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+
+def linkedin_create_lead_gen_form(client: Optional[AuthenticatedHttpClient], params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear un formulario de generación de leads en LinkedIn."""
+    action_name = "linkedin_create_lead_gen_form"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+    
+    try:
+        account_id = params.get("account_id")
+        if not account_id:
+            return {"status": "error", "error": "account_id es requerido"}
+        
+        form_name = params.get("form_name")
+        if not form_name:
+            return {"status": "error", "error": "form_name es requerido"}
+        
+        headers = _get_linkedin_api_headers(params)
+        
+        # Construir el payload del formulario
+        form_payload = {
+            "account": f"urn:li:sponsoredAccount:{account_id}",
+            "name": form_name,
+            "description": params.get("description", ""),
+            "privacyPolicyUrl": params.get("privacy_policy_url", ""),
+            "thankYouMessage": params.get("thank_you_message", "Gracias por tu interés."),
+            "locale": {
+                "country": params.get("country", "US"),
+                "language": params.get("language", "en")
+            },
+            "questions": []
+        }
+        
+        # Agregar preguntas predefinidas
+        default_questions = params.get("questions", [
+            {"fieldType": "FIRST_NAME", "required": True},
+            {"fieldType": "LAST_NAME", "required": True},
+            {"fieldType": "EMAIL", "required": True},
+            {"fieldType": "COMPANY", "required": False},
+            {"fieldType": "JOB_TITLE", "required": False}
+        ])
+        
+        for question in default_questions:
+            question_obj = {
+                "fieldType": question.get("fieldType"),
+                "required": question.get("required", False)
+            }
+            
+            # Agregar opciones para preguntas personalizadas
+            if question.get("custom_question"):
+                question_obj["customQuestionText"] = question.get("custom_question")
+                if question.get("options"):
+                    question_obj["predefinedOptions"] = question.get("options")
+            
+            form_payload["questions"].append(question_obj)
+        
+        # Configuraciones adicionales
+        if params.get("webhook_url"):
+            form_payload["actions"] = [{
+                "type": "WEBHOOK",
+                "url": params.get("webhook_url")
+            }]
+        
+        # Crear el formulario
+        url = f"{LINKEDIN_API_BASE_URL}/v2/leadGenForms"
+        response = requests.post(url, headers=headers, json=form_payload)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Extraer ID del formulario de la respuesta
+        form_id = None
+        if "id" in data:
+            form_id = data["id"]
+        elif "elements" in data and len(data["elements"]) > 0:
+            form_id = data["elements"][0].get("id")
+        
+        logger.info(f"Formulario de lead gen creado exitosamente: {form_id}")
+        return {
+            "status": "success", 
+            "data": {
+                "form_id": form_id,
+                "form_name": form_name,
+                "account_id": account_id,
+                "response": data
+            }
+        }
+        
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+
+def linkedin_ads_get_demographics(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener análisis demográfico de audiencias de LinkedIn Ads."""
+    action_name = "linkedin_ads_get_demographics"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+    
+    try:
+        headers = _get_linkedin_api_headers(params)
+        account_urn = _get_linkedin_ad_account_urn(params)
+        
+        # Configurar parámetros de fecha
+        start_date = params.get("start_date", "2024-01-01")
+        end_date = params.get("end_date", "2024-12-31")
+        
+        # Obtener analytics demográficos por edad, género, y localización
+        demographics_data = {}
+        
+        # 1. Analytics por edad
+        age_url = f"{LINKEDIN_API_BASE_URL}/v2/adAnalyticsV2"
+        age_params = {
+            "q": "analytics",
+            "pivot": "MEMBER_AGE",
+            "dateRange.start.day": start_date.split("-")[2],
+            "dateRange.start.month": start_date.split("-")[1],
+            "dateRange.start.year": start_date.split("-")[0],
+            "dateRange.end.day": end_date.split("-")[2],
+            "dateRange.end.month": end_date.split("-")[1],
+            "dateRange.end.year": end_date.split("-")[0],
+            "accounts": account_urn,
+            "fields": "impressions,clicks,clicks,costInUsd,externalWebsiteConversions"
+        }
+        
+        age_response = requests.get(age_url, headers=headers, params=age_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        age_response.raise_for_status()
+        demographics_data["age_breakdown"] = age_response.json()
+        
+        # 2. Analytics por género
+        gender_params = age_params.copy()
+        gender_params["pivot"] = "MEMBER_GENDER"
+        
+        gender_response = requests.get(age_url, headers=headers, params=gender_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        gender_response.raise_for_status()
+        demographics_data["gender_breakdown"] = gender_response.json()
+        
+        # 3. Analytics por ubicación geográfica
+        location_params = age_params.copy()
+        location_params["pivot"] = "MEMBER_COUNTRY"
+        
+        location_response = requests.get(age_url, headers=headers, params=location_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        location_response.raise_for_status()
+        demographics_data["location_breakdown"] = location_response.json()
+        
+        # 4. Analytics por experiencia laboral
+        experience_params = age_params.copy()
+        experience_params["pivot"] = "MEMBER_SENIORITY"
+        
+        experience_response = requests.get(age_url, headers=headers, params=experience_params, timeout=settings.DEFAULT_API_TIMEOUT)
+        experience_response.raise_for_status()
+        demographics_data["seniority_breakdown"] = experience_response.json()
+        
+        # Procesar y resumir datos
+        total_impressions = 0
+        total_clicks = 0
+        total_cost = 0
+        
+        for breakdown_type, data in demographics_data.items():
+            if "elements" in data:
+                for element in data["elements"]:
+                    if "impressions" in element:
+                        total_impressions += element["impressions"]
+                    if "clicks" in element:
+                        total_clicks += element["clicks"]
+                    if "costInUsd" in element:
+                        total_cost += element["costInUsd"]
+        
+        # Calcular métricas agregadas
+        ctr = (total_clicks / total_impressions) * 100 if total_impressions > 0 else 0
+        cpc = total_cost / total_clicks if total_clicks > 0 else 0
+        cpm = (total_cost / total_impressions) * 1000 if total_impressions > 0 else 0
+        
+        logger.info(f"Analytics demográficos obtenidos para {account_urn}")
+        
+        return {
+            "status": "success",
+            "action": action_name,
+            "data": demographics_data,
+            "summary": {
+                "total_impressions": total_impressions,
+                "total_clicks": total_clicks,
+                "total_cost_usd": total_cost,
+                "ctr_percentage": round(ctr, 2),
+                "cpc_usd": round(cpc, 2),
+                "cpm_usd": round(cpm, 2),
+                "date_range": f"{start_date} to {end_date}",
+                "account_urn": account_urn
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        return _handle_linkedin_api_error(e, action_name, params)
+
+
+def linkedin_ads_generate_leads(params: Dict[str, Any]) -> Dict[str, Any]:
+    """Generar y gestionar leads a través de LinkedIn Ads."""
+    action_name = "linkedin_ads_generate_leads"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
+    
+    try:
+        headers = _get_linkedin_api_headers(params)
+        account_urn = _get_linkedin_ad_account_urn(params)
+        
+        operation = params.get("operation", "get_leads")  # get_leads, create_form, get_forms
+        
+        if operation == "get_leads":
+            # Obtener leads generados por formularios
+            form_id = params.get("form_id")
+            if not form_id:
+                return {"status": "error", "message": "form_id es requerido para obtener leads"}
+            
+            leads_url = f"{LINKEDIN_API_BASE_URL}/v2/leadFormResponses"
+            leads_params = {
+                "q": "leadForm",
+                "leadForm": f"urn:li:leadGenForm:{form_id}",
+                "fields": "id,submittedAt,formResponse,leadGenForm,associatedCampaign"
+            }
+            
+            response = requests.get(leads_url, headers=headers, params=leads_params, timeout=settings.DEFAULT_API_TIMEOUT)
+            response.raise_for_status()
+            leads_data = response.json()
+            
+            # Procesar leads
+            processed_leads = []
+            if "elements" in leads_data:
+                for lead in leads_data["elements"]:
+                    processed_lead = {
+                        "id": lead.get("id"),
+                        "submitted_at": lead.get("submittedAt"),
+                        "campaign": lead.get("associatedCampaign"),
+                        "form_responses": []
+                    }
+                    
+                    if "formResponse" in lead:
+                        for field in lead["formResponse"]:
+                            processed_lead["form_responses"].append({
+                                "field_name": field.get("fieldName"),
+                                "field_value": field.get("fieldValue")
+                            })
+                    
+                    processed_leads.append(processed_lead)
+            
+            return {
+                "status": "success",
+                "action": action_name,
+                "data": {
+                    "leads": processed_leads,
+                    "total_leads": len(processed_leads),
+                    "form_id": form_id,
+                    "account_urn": account_urn
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        elif operation == "get_forms":
+            # Obtener formularios de lead generation
+            forms_url = f"{LINKEDIN_API_BASE_URL}/v2/leadGenForms"
+            forms_params = {
+                "q": "account",
+                "account": account_urn,
+                "fields": "id,name,description,status,formType,thankYouMessage,privacyPolicyUrl"
+            }
+            
+            response = requests.get(forms_url, headers=headers, params=forms_params, timeout=settings.DEFAULT_API_TIMEOUT)
+            response.raise_for_status()
+            forms_data = response.json()
+            
+            processed_forms = []
+            if "elements" in forms_data:
+                for form in forms_data["elements"]:
+                    processed_forms.append({
+                        "id": form.get("id"),
+                        "name": form.get("name"),
+                        "description": form.get("description"),
+                        "status": form.get("status"),
+                        "form_type": form.get("formType"),
+                        "thank_you_message": form.get("thankYouMessage"),
+                        "privacy_policy_url": form.get("privacyPolicyUrl")
+                    })
+            
+            return {
+                "status": "success",
+                "action": action_name,
+                "data": {
+                    "forms": processed_forms,
+                    "total_forms": len(processed_forms),
+                    "account_urn": account_urn
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        elif operation == "create_campaign":
+            # Crear campaña optimizada para lead generation
+            campaign_name = params.get("campaign_name")
+            if not campaign_name:
+                return {"status": "error", "message": "campaign_name es requerido"}
+            
+            campaign_payload = {
+                "name": campaign_name,
+                "type": "SPONSORED_CONTENT",
+                "account": account_urn,
+                "status": "PAUSED",  # Crear en pausa para configuración
+                "targetingCriteria": {
+                    "include": {
+                        "and": [
+                            {
+                                "or": {
+                                    "urn:li:adTargetingFacet:locations": params.get("target_locations", ["urn:li:geo:103644278"])  # US por defecto
+                                }
+                            }
+                        ]
+                    }
+                },
+                "objectiveType": "LEAD_GENERATION",
+                "costType": "CPC",
+                "dailyBudget": {
+                    "amount": str(params.get("daily_budget", 100)),
+                    "currencyCode": "USD"
+                }
+            }
+            
+            # Si se proporciona una audiencia específica
+            if "target_job_titles" in params:
+                campaign_payload["targetingCriteria"]["include"]["and"].append({
+                    "or": {
+                        "urn:li:adTargetingFacet:titles": params["target_job_titles"]
+                    }
+                })
+            
+            campaign_url = f"{LINKEDIN_API_BASE_URL}/v2/adCampaignsV2"
+            response = requests.post(campaign_url, headers=headers, json=campaign_payload, timeout=settings.DEFAULT_API_TIMEOUT)
+            response.raise_for_status()
+            campaign_data = response.json()
+            
+            return {
+                "status": "success",
+                "action": action_name,
+                "data": {
+                    "campaign_id": campaign_data.get("id"),
+                    "campaign_name": campaign_name,
+                    "status": "CREATED_PAUSED",
+                    "account_urn": account_urn,
+                    "objective": "LEAD_GENERATION"
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        else:
+            return {
+                "status": "error",
+                "message": f"Operación no válida: {operation}. Use: get_leads, get_forms, create_campaign"
+            }
+            
     except Exception as e:
         return _handle_linkedin_api_error(e, action_name, params)
 

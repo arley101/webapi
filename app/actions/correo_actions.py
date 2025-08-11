@@ -225,9 +225,9 @@ def send_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     
     logger.info(f"{action_name}: Enviando correo desde '{user_identifier}'. Asunto: '{subject}'")
     try:
-        response = client.post(url, scope=MAIL_SEND_SCOPE, json_data=sendmail_payload)
-        # sendMail devuelve 202 Accepted
-        return {"status": "success", "message": "Solicitud de envío de correo aceptada.", "http_status": response.status_code}
+        client.post(url, scope=MAIL_SEND_SCOPE, json_data=sendmail_payload)
+        # sendMail devuelve 202 Accepted (sin cuerpo)
+        return {"status": "success", "message": "Solicitud de envío de correo aceptada.", "http_status": 202}
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
@@ -264,9 +264,9 @@ def reply_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     log_operation = "Respondiendo a todos" if reply_all else "Respondiendo"
     logger.info(f"{action_name}: {log_operation} al correo '{message_id}' para usuario '{user_identifier}'")
     try:
-        response = client.post(url, scope=MAIL_SEND_SCOPE, json_data=payload_reply)
-        # reply y replyAll devuelven 202 Accepted
-        return {"status": "success", "message": f"Solicitud de {log_operation.lower()} aceptada.", "http_status": response.status_code}
+        client.post(url, scope=MAIL_SEND_SCOPE, json_data=payload_reply)
+        # reply y replyAll devuelven 202 Accepted (sin cuerpo)
+        return {"status": "success", "message": f"Solicitud de {log_operation.lower()} aceptada.", "http_status": 202}
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
@@ -303,9 +303,9 @@ def forward_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
 
     logger.info(f"{action_name}: Reenviando correo '{message_id}' para usuario '{user_identifier}'")
     try:
-        response = client.post(url, scope=MAIL_SEND_SCOPE, json_data=payload_forward)
-        # forward devuelve 202 Accepted
-        return {"status": "success", "message": "Solicitud de reenvío aceptada.", "http_status": response.status_code}
+        client.post(url, scope=MAIL_SEND_SCOPE, json_data=payload_forward)
+        # forward devuelve 202 Accepted (sin cuerpo)
+        return {"status": "success", "message": "Solicitud de reenvío aceptada.", "http_status": 202}
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
@@ -329,9 +329,9 @@ def delete_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> D
     
     logger.info(f"{action_name}: Eliminando correo '{message_id}' para usuario '{user_identifier}'")
     try:
-        response = client.delete(url, scope=MAIL_READ_WRITE_SCOPE)
-        # DELETE devuelve 204 No Content
-        return {"status": "success", "message": "Correo movido a elementos eliminados.", "http_status": response.status_code}
+        client.delete(url, scope=MAIL_READ_WRITE_SCOPE)
+        # DELETE devuelve 204 No Content (sin cuerpo)
+        return {"status": "success", "message": "Correo movido a elementos eliminados.", "http_status": 204}
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
@@ -359,7 +359,7 @@ def move_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dic
     try:
         response = client.post(url, scope=MAIL_READ_WRITE_SCOPE, json_data=payload)
         # move devuelve el mensaje movido (201 Created o 200 OK)
-        return {"status": "success", "data": response.json(), "message": "Correo movido."}
+        return {"status": "success", "data": response, "message": "Correo movido."}
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
@@ -425,7 +425,7 @@ def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     try:
         response = client.post(url, scope=MAIL_READ_WRITE_SCOPE, json_data=payload)
         # POST a /mailFolders o /childFolders devuelve el mailFolder creado (201 Created)
-        return {"status": "success", "data": response.json(), "message": "Carpeta de correo creada."}
+        return {"status": "success", "data": response, "message": "Carpeta de correo creada."}
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 
@@ -502,6 +502,136 @@ def search_messages(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> 
         total_matching_count = response_data.get('@odata.count', len(all_items)) if 'response_data' in locals() else len(all_items)
         logger.info(f"'{action_name}' recuperó {len(all_items)} items (de {total_matching_count} coincidentes) en {page_count} páginas.")
         return {"status": "success", "data": {"value": all_items, "@odata.count": total_matching_count}, "total_retrieved": len(all_items), "pages_processed": page_count}
+    except Exception as e:
+        return _handle_email_api_error(e, action_name, params)
+
+
+# ============================================================================
+# FUNCIONES ADICIONALES RESTAURADAS
+# ============================================================================
+
+def correo_get_message_properties(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener propiedades específicas de un mensaje."""
+    params = params or {}
+    logger.info("Ejecutando correo_get_message_properties con params: %s", params)
+    action_name = "correo_get_message_properties"
+
+    mailbox_identifier: Optional[str] = params.get("mailbox")
+    if not mailbox_identifier:
+        logger.error(f"{action_name}: El parámetro 'mailbox' (user_id o UPN) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'mailbox' (user_id o UPN) es requerido.", "http_status": 400}
+
+    message_id: Optional[str] = params.get("message_id")
+    if not message_id:
+        logger.error(f"{action_name}: El parámetro 'message_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'message_id' es requerido.", "http_status": 400}
+
+    properties: Optional[str] = params.get("properties")
+    if not properties:
+        properties = "id,subject,from,receivedDateTime,isRead,importance,hasAttachments"
+
+    mailbox_path_segment = f"users/{mailbox_identifier}"
+    url = f"{settings.GRAPH_API_BASE_URL}/{mailbox_path_segment}/messages/{message_id}"
+    
+    query_params = {"$select": properties}
+    
+    logger.info(f"{action_name}: Obteniendo propiedades del mensaje '{message_id}' para '{mailbox_identifier}'")
+    try:
+        response = client.get(url, scope=MAIL_READ_SCOPE, params=query_params)
+        return {"status": "success", "data": response}
+    except Exception as e:
+        return _handle_email_api_error(e, action_name, params)
+
+
+def correo_move_message(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Mover un mensaje a una carpeta específica."""
+    params = params or {}
+    logger.info("Ejecutando correo_move_message con params: %s", params)
+    action_name = "correo_move_message"
+
+    mailbox_identifier: Optional[str] = params.get("mailbox")
+    if not mailbox_identifier:
+        logger.error(f"{action_name}: El parámetro 'mailbox' (user_id o UPN) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'mailbox' (user_id o UPN) es requerido.", "http_status": 400}
+
+    message_id: Optional[str] = params.get("message_id")
+    if not message_id:
+        logger.error(f"{action_name}: El parámetro 'message_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'message_id' es requerido.", "http_status": 400}
+
+    destination_folder_id: Optional[str] = params.get("destination_folder_id")
+    if not destination_folder_id:
+        logger.error(f"{action_name}: El parámetro 'destination_folder_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'destination_folder_id' es requerido.", "http_status": 400}
+
+    mailbox_path_segment = f"users/{mailbox_identifier}"
+    url = f"{settings.GRAPH_API_BASE_URL}/{mailbox_path_segment}/messages/{message_id}/move"
+    
+    move_payload = {"destinationId": destination_folder_id}
+    
+    logger.info(f"{action_name}: Moviendo mensaje '{message_id}' a carpeta '{destination_folder_id}' para '{mailbox_identifier}'")
+    try:
+        response = client.post(url, scope=MAIL_READ_WRITE_SCOPE, json_data=move_payload)
+        return {"status": "success", "data": response}
+    except Exception as e:
+        return _handle_email_api_error(e, action_name, params)
+
+
+def correo_create_mail_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear una nueva carpeta de correo."""
+    params = params or {}
+    logger.info("Ejecutando correo_create_mail_folder con params: %s", params)
+    action_name = "correo_create_mail_folder"
+
+    mailbox_identifier: Optional[str] = params.get("mailbox")
+    if not mailbox_identifier:
+        logger.error(f"{action_name}: El parámetro 'mailbox' (user_id o UPN) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'mailbox' (user_id o UPN) es requerido.", "http_status": 400}
+
+    folder_name: Optional[str] = params.get("folder_name")
+    if not folder_name:
+        logger.error(f"{action_name}: El parámetro 'folder_name' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'folder_name' es requerido.", "http_status": 400}
+
+    parent_folder_id: Optional[str] = params.get("parent_folder_id")
+    
+    mailbox_path_segment = f"users/{mailbox_identifier}"
+    
+    if parent_folder_id:
+        url = f"{settings.GRAPH_API_BASE_URL}/{mailbox_path_segment}/mailFolders/{parent_folder_id}/childFolders"
+    else:
+        url = f"{settings.GRAPH_API_BASE_URL}/{mailbox_path_segment}/mailFolders"
+    
+    folder_payload = {"displayName": folder_name}
+    
+    logger.info(f"{action_name}: Creando carpeta '{folder_name}' para '{mailbox_identifier}'")
+    try:
+        response = client.post(url, scope=MAIL_READ_WRITE_SCOPE, json_data=folder_payload)
+        created_folder = response
+        logger.info(f"Carpeta '{folder_name}' creada con ID: {created_folder.get('id')}")
+        return {"status": "success", "data": created_folder}
+    except Exception as e:
+        return _handle_email_api_error(e, action_name, params)
+
+
+def correo_get_mail_rules(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener reglas de correo del buzón."""
+    params = params or {}
+    logger.info("Ejecutando correo_get_mail_rules con params: %s", params)
+    action_name = "correo_get_mail_rules"
+
+    mailbox_identifier: Optional[str] = params.get("mailbox")
+    if not mailbox_identifier:
+        logger.error(f"{action_name}: El parámetro 'mailbox' (user_id o UPN) es requerido.")
+        return {"status": "error", "action": action_name, "message": "'mailbox' (user_id o UPN) es requerido.", "http_status": 400}
+
+    mailbox_path_segment = f"users/{mailbox_identifier}"
+    url = f"{settings.GRAPH_API_BASE_URL}/{mailbox_path_segment}/mailFolders/inbox/messageRules"
+    
+    logger.info(f"{action_name}: Obteniendo reglas de correo para '{mailbox_identifier}'")
+    try:
+        response = client.get(url, scope=MAIL_READ_SCOPE)
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_email_api_error(e, action_name, params)
 

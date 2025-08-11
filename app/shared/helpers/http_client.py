@@ -5,13 +5,55 @@ import json
 from azure.identity import DefaultAzureCredential, ClientSecretCredential, CredentialUnavailableError
 from azure.core.exceptions import ClientAuthenticationError
 
-from typing import List, Optional, Any, Dict, Union # Añadido Union
+from typing import List, Optional, Any, Dict, Union, Sequence
 import os
 
 # Importar la configuración de la aplicación
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+def _normalize_scopes(scopes: Optional[Union[str, Sequence[str]]]) -> List[str]:
+    """Normaliza diferentes formatos de scopes a una lista de strings no vacíos."""
+    if scopes is None:
+        return []
+    if isinstance(scopes, str):
+        s = scopes.strip()
+        return [s] if s else []
+    try:
+        result: List[str] = []
+        for item in scopes:  # type: ignore[assignment]
+            if isinstance(item, str) and item.strip():
+                result.append(item.strip())
+        return result
+    except TypeError:
+        return []
+
+def _get_default_graph_scopes() -> List[str]:
+    """Obtiene scopes por defecto para Microsoft Graph desde settings o entorno.
+    Soporta múltiples nombres de variables y formatos (str o lista).
+    Si no hay configuración válida, usa un fallback seguro y registra advertencia.
+    """
+    # Intentar desde settings con distintos nombres comunes
+    candidates: List[Optional[Union[str, Sequence[str]]]] = []
+    for attr in ("GRAPH_API_DEFAULT_SCOPE", "GRAPH_SCOPE_DEFAULT", "GRAPH_SCOPE"):
+        if hasattr(settings, attr):
+            candidates.append(getattr(settings, attr))
+    # Intentar desde variable de entorno estandar
+    env_scope = os.environ.get("GRAPH_SCOPE_DEFAULT")
+    if env_scope:
+        candidates.append(env_scope)
+    # Elegir el primer candidato válido
+    for c in candidates:
+        scopes = _normalize_scopes(c)
+        if scopes:
+            return scopes
+    # Fallback seguro para Managed Identity con permisos de aplicación
+    fallback = ["https://graph.microsoft.com/.default"]
+    logging.getLogger(__name__).warning(
+        "GRAPH scope no configurado correctamente. Usando fallback %s", fallback
+    )
+    return fallback
 
 class AuthenticatedHttpClient:
     """Cliente HTTP con autenticación para múltiples servicios"""
@@ -40,13 +82,12 @@ class AuthenticatedHttpClient:
         self.session = requests.Session()
         self.default_timeout = settings.DEFAULT_API_TIMEOUT
         
-        # Establecer el scope por defecto para Graph API al inicializar
-        self.default_graph_scope: List[str] = settings.GRAPH_API_DEFAULT_SCOPE
-        if not self.default_graph_scope or not isinstance(self.default_graph_scope, list) or not self.default_graph_scope[0]:
-            logger.warning("GRAPH_API_DEFAULT_SCOPE no está configurado correctamente en settings o está vacío. Esto podría causar problemas para el método get().")
-            # Podrías asignar un fallback más genérico aquí si es absolutamente necesario,
-            # pero es mejor que esté bien configurado en settings.py
-            # self.default_graph_scope = ["https://graph.microsoft.com/.default"] 
+        # Establecer el scope por defecto para Graph API al inicializar (acepta str o lista)
+        self.default_graph_scope: List[str] = _get_default_graph_scopes()
+        logger.info(
+            "Scopes por defecto para Graph: %s",
+            self.default_graph_scope
+        )
 
         self.session.headers.update({
             'User-Agent': f'{settings.APP_NAME}/{settings.APP_VERSION}',
@@ -83,30 +124,31 @@ class AuthenticatedHttpClient:
         else:
             raise ValueError("No se encontraron credenciales Azure válidas")
 
-    def _get_access_token(self, scope: List[str]) -> Optional[str]:
-        if not scope or not isinstance(scope, list) or not all(isinstance(s, str) for s in scope):
-            logger.error("Se requiere un scope válido (lista de strings no vacía) para obtener el token de acceso. Scope recibido: %s", scope)
+    def _get_access_token(self, scope: Optional[Union[str, Sequence[str]]]) -> Optional[str]:
+        scope_list = _normalize_scopes(scope)
+        if not scope_list:
+            logger.error("Se requiere un scope válido (str o lista no vacía) para obtener el token de acceso. Scope recibido: %s", scope)
             return None
         try:
-            logger.debug(f"Solicitando token para scope: {scope}")
-            token_result = self.credential.get_token(*scope)
-            logger.debug(f"Token obtenido exitosamente para scope: {scope}. Expiración (UTC): {token_result.expires_on}")
+            logger.debug(f"Solicitando token para scope: {scope_list}")
+            token_result = self.credential.get_token(*scope_list)
+            logger.debug(f"Token obtenido exitosamente para scope: {scope_list}. Expiración (UTC): {token_result.expires_on}")
             return token_result.token
         except CredentialUnavailableError as e:
-            logger.error(f"Error de credencial de Azure no disponible al obtener token para {scope}: {e}.")
+            logger.error(f"Error de credencial de Azure no disponible al obtener token para {scope_list}: {e}.")
             return None
-        except ClientAuthenticationError as e: 
-            logger.error(f"Error de autenticación del cliente de Azure al obtener token para {scope}: {e}.")
+        except ClientAuthenticationError as e:
+            logger.error(f"Error de autenticación del cliente de Azure al obtener token para {scope_list}: {e}.")
             return None
-        except Exception as e: 
-            logger.exception(f"Error inesperado al obtener token para {scope}: {e}") 
+        except Exception as e:
+            logger.exception(f"Error inesperado al obtener token para {scope_list}: {e}")
             return None
 
-    def request(self, method: str, url: str, scope: List[str], **kwargs: Any) -> requests.Response:
+    def request(self, method: str, url: str, scope: Optional[Union[str, Sequence[str]]], **kwargs: Any) -> requests.Response:
         log_context = f"Request: {method} {url.split('?')[0]}"
         logger.debug(f"{log_context} - Iniciando solicitud con scope: {scope}")
 
-        access_token = self._get_access_token(scope)
+        access_token = self._get_access_token(scope or self.default_graph_scope)
         if not access_token:
             logger.error(f"{log_context} - Fallo al obtener token de acceso para scope {scope}.")
             raise ValueError(f"No se pudo obtener el token de acceso para el scope {scope}. Verifique la configuración de credenciales y los logs.")
@@ -152,7 +194,7 @@ class AuthenticatedHttpClient:
             logger.exception(f"{log_context} - Error inesperado durante la solicitud: {e}")
             raise
 
-    def get(self, url: str, scope: Optional[List[str]] = None, headers: Optional[Dict[str, str]] = None, params: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Union[Dict[str, Any], str, bytes]:
+    def get(self, url: str, scope: Optional[Union[str, Sequence[str]]] = None, headers: Optional[Dict[str, str]] = None, params: Optional[Dict[str, Any]] = None, **kwargs: Any) -> Union[Dict[str, Any], str, bytes]:
         """
         Realiza una solicitud GET utilizando la sesión y el token de autenticación.
         Permite un scope opcional; si no se provee, usa self.default_graph_scope.
@@ -161,13 +203,10 @@ class AuthenticatedHttpClient:
         action_name_log = "AuthenticatedHttpClient.get"
         log_context = f"GET Request: {url.split('?')[0]}"
         
-        current_scope_to_use = scope
+        current_scope_to_use = _normalize_scopes(scope) or self.default_graph_scope
         if not current_scope_to_use:
-            if hasattr(self, 'default_graph_scope') and self.default_graph_scope:
-                current_scope_to_use = self.default_graph_scope
-            else:
-                logger.error(f"{log_context} - No se pudo determinar el scope para la solicitud GET y default_graph_scope no está configurado en AuthenticatedHttpClient.")
-                raise ValueError("No se pudo determinar el scope para la solicitud GET y no se proporcionó uno, ni se configuró un default_graph_scope.")
+            logger.error(f"{log_context} - No se pudo determinar el scope para la solicitud GET.")
+            raise ValueError("No se pudo determinar el scope para la solicitud GET.")
 
         logger.debug(f"{log_context} - Iniciando solicitud GET con scope: {current_scope_to_use}")
         
@@ -236,20 +275,20 @@ class AuthenticatedHttpClient:
             logger.exception(f"{log_context} - Error inesperado durante solicitud GET: {e}")
             raise
 
-    def post(self, url: str, scope: List[str], **kwargs: Any) -> requests.Response:
+    def post(self, url: str, scope: Optional[Union[str, Sequence[str]]], **kwargs: Any) -> requests.Response:
         if 'json_data' in kwargs and 'json' not in kwargs:
             kwargs['json'] = kwargs.pop('json_data')
         return self.request('POST', url, scope, **kwargs)
 
-    def put(self, url: str, scope: List[str], **kwargs: Any) -> requests.Response:
+    def put(self, url: str, scope: Optional[Union[str, Sequence[str]]], **kwargs: Any) -> requests.Response:
         if 'json_data' in kwargs and 'json' not in kwargs:
             kwargs['json'] = kwargs.pop('json_data')
         return self.request('PUT', url, scope, **kwargs)
 
-    def delete(self, url: str, scope: List[str], **kwargs: Any) -> requests.Response: 
+    def delete(self, url: str, scope: Optional[Union[str, Sequence[str]]], **kwargs: Any) -> requests.Response: 
         return self.request('DELETE', url, scope, **kwargs)
 
-    def patch(self, url: str, scope: List[str], **kwargs: Any) -> requests.Response:
+    def patch(self, url: str, scope: Optional[Union[str, Sequence[str]]], **kwargs: Any) -> requests.Response:
         if 'json_data' in kwargs and 'json' not in kwargs:
             kwargs['json'] = kwargs.pop('json_data')
         return self.request('PATCH', url, scope, **kwargs)

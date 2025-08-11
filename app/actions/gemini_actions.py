@@ -9,6 +9,10 @@ from datetime import datetime
 import re
 
 from app.core.config import settings
+# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
+def _get_resolver():
+    from app.actions.resolver_actions import Resolver
+    return Resolver()
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # URL de la API correcta para Gemini
 GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1"
-GEMINI_MODEL = "gemini-1.5-flash"  # Modelo actualizado y disponible
+GEMINI_MODEL = getattr(settings, "GEMINI_MODEL", "gemini-1.5-flash")  # Permite override desde settings
 
 def _get_gemini_url():
     """Construye la URL correcta para Gemini API"""
@@ -88,7 +92,8 @@ def _make_gemini_request(prompt: str, system_instruction: Optional[str] = None) 
             }
             
         else:
-            error_data = response.json() if response.headers.get('content-type') == 'application/json' else {}
+            content_type = (response.headers.get('content-type') or '').lower()
+            error_data = response.json() if 'application/json' in content_type else {}
             logger.error(f"Error de Gemini API: {response.status_code} - {error_data}")
             
             return {
@@ -209,7 +214,7 @@ def analyze_conversation_context(client: Any, params: Dict[str, Any]) -> Dict[st
             if 'parameters' not in analysis:
                 analysis['parameters'] = {}
             
-            logger.success(f"✅ Análisis parseado correctamente: {analysis}")
+            logger.info(f"✅ Análisis parseado correctamente: {analysis}")
             
             return {
                 "success": True,
@@ -368,7 +373,7 @@ Proporciona respuestas variadas: una breve, una detallada y una con siguiente ac
         if current_suggestion:
             suggestions.append(current_suggestion.strip())
         
-        return {
+        result = {
             "success": True,
             "data": {
                 "suggestions": suggestions[:3],  # Limitar a 3
@@ -376,6 +381,11 @@ Proporciona respuestas variadas: una breve, una detallada y una con siguiente ac
                 "tone": tone
             }
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE GENERACIÓN
+        _get_resolver().save_action_result("generate_response_suggestions", params, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error en generate_response_suggestions: {str(e)}")
@@ -432,13 +442,14 @@ Responde en formato JSON."""
                     "urls": [],
                     "key_points": [response_text]
                 }
-        except:
+        except Exception as e:
+            logger.error(f"No se pudo parsear respuesta JSON de Gemini: {e}")
             extracted_info = {
                 "raw_extraction": response_text,
-                "parse_error": "No se pudo parsear la respuesta como JSON"
+                "parse_error": str(e)
             }
         
-        return {
+        result = {
             "success": True,
             "data": {
                 "extracted_information": extracted_info,
@@ -446,6 +457,11 @@ Responde en formato JSON."""
                 "info_types_requested": info_types
             }
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE ANÁLISIS/EXTRACCIÓN
+        _get_resolver().save_action_result("extract_key_information", params, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error en extract_key_information: {str(e)}")
@@ -491,7 +507,7 @@ Requisitos:
         if len(summary) > max_length:
             summary = summary[:max_length-3] + "..."
         
-        return {
+        result = {
             "success": True,
             "data": {
                 "summary": summary,
@@ -500,6 +516,11 @@ Requisitos:
                 "length": len(summary)
             }
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE GENERACIÓN
+        _get_resolver().save_action_result("summarize_conversation", params, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error en summarize_conversation: {str(e)}")
@@ -649,7 +670,7 @@ Genera un plan paso a paso con:
         if current_step:
             plan_steps.append(current_step)
         
-        return {
+        result = {
             "success": True,
             "data": {
                 "execution_plan": {
@@ -661,6 +682,11 @@ Genera un plan paso a paso con:
                 }
             }
         }
+        
+        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE GENERACIÓN
+        _get_resolver().save_action_result("generate_execution_plan", params, result)
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error en generate_execution_plan: {str(e)}")

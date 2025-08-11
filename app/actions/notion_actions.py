@@ -6,6 +6,10 @@ from typing import Dict, Any, Optional, List, Union, Callable
 from functools import wraps
 
 from app.core.config import settings
+# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
+def _get_resolver():
+    from app.actions.resolver_actions import Resolver
+    return Resolver()
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 
 logger = logging.getLogger(__name__)

@@ -408,7 +408,7 @@ def update_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
                     current_etag_details = final_task_data_response["details"]["@odata.etag"]
                 
                 if not current_etag_details:
-                    get_details_response_data = client.get(details_url, scope=planner_rw_scope, params={"$select": "@odata.etag"})
+                    get_details_response_data = client.get(url_details, scope=planner_rw_scope, params={"$select": "@odata.etag"})
                     # CORRECCIÓN: get_details_response_data ya es un dict
                     current_etag_details = get_details_response_data.get("@odata.etag")
                 
@@ -531,7 +531,7 @@ def create_bucket(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
     if order_hint: 
         body["orderHint"] = order_hint
     
-    logger.info(f"Creando bucket '{name}' en plan Planner '{plcolectivan_id}'. OrderHint: {order_hint or 'Default'}")
+    logger.info(f"Creando bucket '{name}' en plan Planner '{plan_id}'. OrderHint: {order_hint or 'Default'}")
     planner_rw_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READWRITE', 
                                getattr(settings, 'GRAPH_SCOPE_GROUP_READWRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE))
     try:
@@ -583,6 +583,166 @@ def planner_get_plan_by_name(client: AuthenticatedHttpClient, params: Dict[str, 
 
         return {"status": "success", "data": found_plans[0]}
         
+    except Exception as e:
+        return _handle_planner_api_error(e, action_name, params)
+
+
+# ============================================================================
+# FUNCIONES ADICIONALES RESTAURADAS
+# ============================================================================
+
+def planner_create_task_checklist(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crear una lista de verificación (checklist) para una tarea de Planner."""
+    params = params or {}
+    logger.info("Ejecutando planner_create_task_checklist con params: %s", params)
+    action_name = "planner_create_task_checklist"
+
+    task_id: Optional[str] = params.get("task_id")
+    if not task_id:
+        logger.error(f"{action_name}: El parámetro 'task_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'task_id' es requerido.", "http_status": 400}
+
+    checklist_items: Optional[List[Dict[str, Any]]] = params.get("checklist_items")
+    if not checklist_items or not isinstance(checklist_items, list):
+        logger.error(f"{action_name}: El parámetro 'checklist_items' debe ser una lista.")
+        return {"status": "error", "action": action_name, "message": "'checklist_items' debe ser una lista.", "http_status": 400}
+
+    try:
+        # Primero obtener los detalles de la tarea para acceder a taskDetails
+        task_url = f"{settings.GRAPH_API_BASE_URL}/planner/tasks/{task_id}/details"
+        
+        planner_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READ_WRITE', settings.GRAPH_API_DEFAULT_SCOPE)
+        task_details = client.get(task_url, scope=planner_scope)
+        
+        # Preparar el checklist
+        checklist = {}
+        for i, item in enumerate(checklist_items):
+            if isinstance(item, str):
+                checklist[f"checklist_item_{i}"] = {
+                    "title": item,
+                    "isChecked": False
+                }
+            elif isinstance(item, dict) and "title" in item:
+                checklist[f"checklist_item_{i}"] = {
+                    "title": item["title"],
+                    "isChecked": item.get("isChecked", False)
+                }
+            else:
+                logger.warning(f"Item de checklist inválido ignorado: {item}")
+
+        # Actualizar los detalles de la tarea con el checklist
+        update_payload = {
+            "checklist": checklist
+        }
+
+        # Incluir @odata.etag si está disponible para optimistic concurrency
+        if "@odata.etag" in task_details:
+            headers = {"If-Match": task_details["@odata.etag"]}
+        else:
+            headers = {}
+
+        logger.info(f"{action_name}: Creando checklist para tarea '{task_id}' con {len(checklist)} items")
+        response = client.patch(task_url, scope=planner_scope, json_data=update_payload, headers=headers)
+        
+        return {"status": "success", "data": response}
+    except Exception as e:
+        return _handle_planner_api_error(e, action_name, params)
+
+
+def planner_get_plan_categories(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Obtener las categorías configuradas para un plan de Planner."""
+    params = params or {}
+    logger.info("Ejecutando planner_get_plan_categories con params: %s", params)
+    action_name = "planner_get_plan_categories"
+
+    plan_id: Optional[str] = params.get("plan_id")
+    if not plan_id:
+        logger.error(f"{action_name}: El parámetro 'plan_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'plan_id' es requerido.", "http_status": 400}
+
+    try:
+        # Obtener los detalles del plan que incluyen las categorías
+        plan_details_url = f"{settings.GRAPH_API_BASE_URL}/planner/plans/{plan_id}/details"
+        
+        planner_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READ', settings.GRAPH_API_DEFAULT_SCOPE)
+        plan_details = client.get(plan_details_url, scope=planner_scope)
+        
+        # Extraer información de categorías
+        categories = {}
+        category_descriptions = plan_details.get("categoryDescriptions", {})
+        
+        # Planner tiene 6 categorías predefinidas (category1 a category6)
+        for i in range(1, 7):
+            category_key = f"category{i}"
+            category_name = category_descriptions.get(category_key, "")
+            categories[category_key] = {
+                "name": category_name,
+                "description": category_name,
+                "is_configured": bool(category_name)
+            }
+
+        logger.info(f"{action_name}: Obtenidas categorías para plan '{plan_id}'")
+        return {
+            "status": "success", 
+            "data": {
+                "plan_id": plan_id,
+                "categories": categories,
+                "configured_categories": sum(1 for cat in categories.values() if cat["is_configured"])
+            }
+        }
+    except Exception as e:
+        return _handle_planner_api_error(e, action_name, params)
+
+
+def planner_assign_task_to_user(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Asignar una tarea de Planner a un usuario específico."""
+    params = params or {}
+    logger.info("Ejecutando planner_assign_task_to_user con params: %s", params)
+    action_name = "planner_assign_task_to_user"
+
+    task_id: Optional[str] = params.get("task_id")
+    if not task_id:
+        logger.error(f"{action_name}: El parámetro 'task_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'task_id' es requerido.", "http_status": 400}
+
+    user_id: Optional[str] = params.get("user_id")
+    if not user_id:
+        logger.error(f"{action_name}: El parámetro 'user_id' es requerido.")
+        return {"status": "error", "action": action_name, "message": "'user_id' es requerido.", "http_status": 400}
+
+    replace_assignments: bool = params.get("replace_assignments", False)
+
+    try:
+        # Primero obtener la tarea actual para manejar asignaciones existentes
+        task_url = f"{settings.GRAPH_API_BASE_URL}/planner/tasks/{task_id}"
+        
+        planner_scope = getattr(settings, 'GRAPH_SCOPE_TASKS_READ_WRITE', settings.GRAPH_API_DEFAULT_SCOPE)
+        current_task = client.get(task_url, scope=planner_scope)
+        
+        # Preparar las asignaciones
+        assignments = current_task.get("assignments", {}) if not replace_assignments else {}
+        
+        # Agregar el nuevo usuario a las asignaciones
+        assignments[user_id] = {
+            "@odata.type": "microsoft.graph.plannerAssignment",
+            "orderHint": " !"  # Posición por defecto
+        }
+
+        # Preparar payload de actualización
+        update_payload = {
+            "assignments": assignments
+        }
+
+        # Incluir @odata.etag para optimistic concurrency
+        if "@odata.etag" in current_task:
+            headers = {"If-Match": current_task["@odata.etag"]}
+        else:
+            headers = {}
+
+        logger.info(f"{action_name}: Asignando tarea '{task_id}' al usuario '{user_id}'")
+        response = client.patch(task_url, scope=planner_scope, json_data=update_payload, headers=headers)
+        
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_planner_api_error(e, action_name, params)
 
