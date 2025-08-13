@@ -133,6 +133,38 @@ if intelligent_assistant_router is not None:
 else:
     logger.warning("Router Asistente Inteligente NO cargó; la app seguirá viva con endpoints de health.")
 
+# Configurar archivos estáticos para la interfaz de chat
+try:
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+    import os
+    
+    static_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+    if os.path.exists(static_path):
+        app.mount("/static", StaticFiles(directory=static_path), name="static")
+        logger.info(f"Archivos estáticos servidos desde: {static_path}")
+        
+        # Ruta para la interfaz de chat
+        @app.get("/chat", tags=["Interface"])
+        async def serve_chat_interface():
+            """Servir la interfaz de chat web con audio"""
+            static_file = os.path.join(static_path, "index.html")
+            if os.path.exists(static_file):
+                return FileResponse(static_file)
+            else:
+                return {
+                    "message": "Interfaz de chat no encontrada",
+                    "instructions": "La interfaz está disponible en static/index.html",
+                    "api_docs": "/docs"
+                }
+        
+        logger.info("Interfaz de chat disponible en: /chat")
+    else:
+        logger.warning(f"Directorio static no encontrado: {static_path}")
+        
+except Exception as e:
+    logger.warning(f"No se pudo configurar interfaz de chat: {e}")
+
 logger.info("Documentación OpenAPI (Swagger UI) disponible en: /api/v1/docs")
 logger.info("Documentación ReDoc disponible en: /api/v1/redoc")
 

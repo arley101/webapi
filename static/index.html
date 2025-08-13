@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Tu Asistente Inteligente</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-container {
+            width: 95%;
+            max-width: 800px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .chat-header h1 {
+            font-size: 1.8em;
+            margin-bottom: 5px;
+        }
+
+        .chat-header p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message.bot {
+            justify-content: flex-start;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 12px 16px;
+            border-radius: 18px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: #667eea;
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.bot .message-content {
+            background: white;
+            color: #333;
+            border: 1px solid #e1e5e9;
+            border-bottom-left-radius: 4px;
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e1e5e9;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e1e5e9;
+            border-radius: 25px;
+            outline: none;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .chat-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-btn, .voice-btn {
+            padding: 12px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+            width: 48px;
+            height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .send-btn:hover, .voice-btn:hover {
+            background: #5a6fd8;
+            transform: scale(1.05);
+        }
+
+        .voice-btn.recording {
+            background: #e74c3c;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .typing-indicator {
+            display: none;
+            padding: 12px 16px;
+            background: white;
+            border: 1px solid #e1e5e9;
+            border-radius: 18px;
+            border-bottom-left-radius: 4px;
+            max-width: 70%;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dots span {
+            width: 8px;
+            height: 8px;
+            background: #667eea;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dots span:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dots span:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% { opacity: 0.3; }
+            30% { opacity: 1; }
+        }
+
+        .status-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            font-size: 14px;
+            z-index: 1000;
+            transition: all 0.3s;
+        }
+
+        .status-indicator.online {
+            background: #27ae60;
+        }
+
+        .status-indicator.offline {
+            background: #e74c3c;
+        }
+
+        .welcome-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .welcome-message h2 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        @media (max-width: 768px) {
+            .chat-container {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+            
+            .message-content {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="status-indicator offline" id="status">🔴 Desconectado</div>
+    
+    <div class="chat-container">
+        <div class="chat-header">
+            <h1>🤖 Tu Asistente Inteligente</h1>
+            <p>Conectado a tu API con 405 acciones disponibles</p>
+        </div>
+        
+        <div class="chat-messages" id="messages">
+            <div class="welcome-message">
+                <h2>¡Hola! 👋</h2>
+                <p>Soy tu asistente inteligente personal. Puedo ayudarte con:</p>
+                <ul style="text-align: left; margin-top: 15px;">
+                    <li>📅 Gestionar tu calendario y reuniones</li>
+                    <li>📧 Enviar emails y mensajes</li>
+                    <li>📊 Analizar datos y crear reportes</li>
+                    <li>📁 Organizar archivos y documentos</li>
+                    <li>🤝 Gestionar contactos y CRM</li>
+                    <li>💼 Automatizar tareas de trabajo</li>
+                    <li>🎯 Y mucho más...</li>
+                </ul>
+                <p style="margin-top: 15px;"><strong>Escribe tu mensaje o usa el botón de micrófono 🎤</strong></p>
+            </div>
+            
+            <div class="typing-indicator" id="typing">
+                <div class="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <input type="text" class="chat-input" id="messageInput" 
+                   placeholder="Escribe tu mensaje aquí..." 
+                   onkeypress="handleKeyPress(event)">
+            <button class="voice-btn" id="voiceBtn" onclick="toggleVoiceRecording()">🎤</button>
+            <button class="send-btn" onclick="sendMessage()">➤</button>
+        </div>
+    </div>
+
+    <script>
+        // Variables globales
+        let isRecording = false;
+        let recognition = null;
+        let synthesis = window.speechSynthesis;
+        let currentSession = null;
+        
+        // Configuración de la API
+        const API_BASE = window.location.origin;
+        const API_ENDPOINTS = {
+            startSession: `${API_BASE}/api/v1/intelligent-assistant/session/start`,
+            chat: `${API_BASE}/api/v1/intelligent-assistant/chat`,
+            health: `${API_BASE}/api/v1/health`
+        };
+
+        // Elementos del DOM
+        const messagesContainer = document.getElementById('messages');
+        const messageInput = document.getElementById('messageInput');
+        const voiceBtn = document.getElementById('voiceBtn');
+        const typingIndicator = document.getElementById('typing');
+        const statusIndicator = document.getElementById('status');
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeVoiceRecognition();
+            checkAPIConnection();
+            startChatSession();
+        });
+
+        // Verificar conexión con la API
+        async function checkAPIConnection() {
+            try {
+                const response = await fetch(API_ENDPOINTS.health);
+                if (response.ok) {
+                    updateStatus('online', '🟢 Conectado');
+                } else {
+                    updateStatus('offline', '🔴 API Error');
+                }
+            } catch (error) {
+                updateStatus('offline', '🔴 Sin conexión');
+                console.error('Error conectando con API:', error);
+            }
+        }
+
+        // Actualizar estado de conexión
+        function updateStatus(status, text) {
+            statusIndicator.className = `status-indicator ${status}`;
+            statusIndicator.textContent = text;
+        }
+
+        // Inicializar sesión de chat
+        async function startChatSession() {
+            try {
+                const response = await fetch(API_ENDPOINTS.startSession, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        user_id: 'demo_user_' + Date.now(),
+                        context: 'Interfaz web de prueba'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    currentSession = data.session_id;
+                    console.log('Sesión iniciada:', currentSession);
+                } else {
+                    console.error('Error iniciando sesión');
+                }
+            } catch (error) {
+                console.error('Error iniciando sesión:', error);
+            }
+        }
+
+        // Inicializar reconocimiento de voz
+        function initializeVoiceRecognition() {
+            if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                recognition = new SpeechRecognition();
+                
+                recognition.continuous = false;
+                recognition.interimResults = false;
+                recognition.lang = 'es-ES';
+                
+                recognition.onstart = function() {
+                    voiceBtn.classList.add('recording');
+                    voiceBtn.textContent = '🛑';
+                };
+                
+                recognition.onresult = function(event) {
+                    const transcript = event.results[0][0].transcript;
+                    messageInput.value = transcript;
+                    sendMessage();
+                };
+                
+                recognition.onend = function() {
+                    voiceBtn.classList.remove('recording');
+                    voiceBtn.textContent = '🎤';
+                    isRecording = false;
+                };
+                
+                recognition.onerror = function(event) {
+                    console.error('Error de reconocimiento de voz:', event.error);
+                    voiceBtn.classList.remove('recording');
+                    voiceBtn.textContent = '🎤';
+                    isRecording = false;
+                };
+            } else {
+                voiceBtn.style.display = 'none';
+                console.log('Reconocimiento de voz no soportado');
+            }
+        }
+
+        // Toggle grabación de voz
+        function toggleVoiceRecording() {
+            if (!recognition) {
+                alert('Reconocimiento de voz no disponible en este navegador');
+                return;
+            }
+            
+            if (isRecording) {
+                recognition.stop();
+            } else {
+                recognition.start();
+                isRecording = true;
+            }
+        }
+
+        // Manejar Enter en el input
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        // Enviar mensaje
+        async function sendMessage() {
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            // Mostrar mensaje del usuario
+            addMessage(message, 'user');
+            messageInput.value = '';
+            
+            // Mostrar indicador de escritura
+            showTypingIndicator();
+            
+            try {
+                const response = await fetch(API_ENDPOINTS.chat, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        user_id: 'demo_user',
+                        session_id: currentSession
+                    })
+                });
+                
+                hideTypingIndicator();
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addMessage(data.response, 'bot');
+                    
+                    // Leer respuesta en voz alta
+                    speakText(data.response);
+                    
+                    // Mostrar información adicional si existe
+                    if (data.action_executed) {
+                        addMessage(`✅ Acción ejecutada: ${data.action_executed}`, 'bot', true);
+                    }
+                    
+                    if (data.suggestions && data.suggestions.length > 0) {
+                        const suggestions = data.suggestions.join(', ');
+                        addMessage(`💡 Sugerencias: ${suggestions}`, 'bot', true);
+                    }
+                } else {
+                    addMessage('❌ Error al procesar tu mensaje. Por favor intenta de nuevo.', 'bot');
+                }
+            } catch (error) {
+                hideTypingIndicator();
+                addMessage('❌ Error de conexión. Verifica que tu API esté funcionando.', 'bot');
+                console.error('Error enviando mensaje:', error);
+            }
+        }
+
+        // Agregar mensaje al chat
+        function addMessage(text, sender, isSystem = false) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${sender}`;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = text;
+            
+            if (isSystem) {
+                contentDiv.style.fontSize = '0.9em';
+                contentDiv.style.opacity = '0.8';
+            }
+            
+            messageDiv.appendChild(contentDiv);
+            
+            // Insertar antes del indicador de escritura
+            messagesContainer.insertBefore(messageDiv, typingIndicator);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Mostrar indicador de escritura
+        function showTypingIndicator() {
+            typingIndicator.style.display = 'block';
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        // Ocultar indicador de escritura
+        function hideTypingIndicator() {
+            typingIndicator.style.display = 'none';
+        }
+
+        // Síntesis de voz
+        function speakText(text) {
+            if (synthesis && 'speechSynthesis' in window) {
+                // Detener cualquier síntesis anterior
+                synthesis.cancel();
+                
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'es-ES';
+                utterance.rate = 0.9;
+                utterance.pitch = 1;
+                
+                // Buscar voz en español
+                const voices = synthesis.getVoices();
+                const spanishVoice = voices.find(voice => voice.lang.startsWith('es'));
+                if (spanishVoice) {
+                    utterance.voice = spanishVoice;
+                }
+                
+                synthesis.speak(utterance);
+            }
+        }
+
+        // Verificar conexión periódicamente
+        setInterval(checkAPIConnection, 30000);
+    </script>
+</body>
+</html>
