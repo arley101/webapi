@@ -70,8 +70,8 @@ openai==1.40.8
 # ============================================================================
 # WEB RESEARCH & SCRAPING
 # ============================================================================
-beautifulsoup4>=4.13,<5.0
-lxml>=6.0,<7.0
+beautifulsoup4>=4.12,<5.0
+lxml>=4.9,<6.0
 readability-lxml>=0.8,<1.0
 
 # ============================================================================
@@ -97,18 +97,5 @@ validators>=0.35,<1.0
 PyYAML>=6.0,<7.0
 
 # ============================================================================
-# TESTING & DEVELOPMENT (Mover a requirements-dev.txt)
+# TESTING & DEVELOPMENT: mover a requirements-dev.txt (pytest, pytest-asyncio, black, isort)
 # ============================================================================
-pytest>=7.4,<8.0
-pytest-asyncio>=0.21,<1.0
-black>=25.1,<26.0
-isort>=6.0
-
-# VERIFICAR que estas librerías estén presentes:
-# google-generativeai==0.8.3  # Para Gemini
-# msal>=1.25,<2.0  # Para autenticación Microsoft
-# notion-client==2.2.1  # Para Notion
-# pandas>=2.3,<3.0  # Para exportación de datos
-# openpyxl>=3.1,<4.0  # Para Excel
-
-# NO CAMBIAR las versiones existentes a menos que haya un error específico

@@ -8,20 +8,47 @@ import logging
 from datetime import datetime
 import os
 
-# Importar el router de acciones
-from app.api.routes.dynamics_actions import router as dynamics_router
-from app.api.routes.chatgpt_proxy import router as chatgpt_router
-
-# Importar la configuración de la aplicación
-from app.core.config import settings
-
-# Configuración básica de logging
+# --- Provisional logging y carga segura de settings ---
 logging.basicConfig(
-    level=settings.LOG_LEVEL.upper(),
+    level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger(__name__)
+
+try:
+    from app.core.config import settings  # noqa: F401 (reimport seguro)
+except Exception as e:
+    logger.warning("Fallo al importar settings; usando valores por defecto: %s", e)
+    class _FallbackSettings:
+        LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+        ENVIRONMENT = os.getenv("ENVIRONMENT", "unknown")
+        APP_VERSION = os.getenv("APP_VERSION", "1.1")
+        AZURE_CLIENT_ID = os.getenv("AZURE_CLIENT_ID", "")
+        GOOGLE_ADS_CLIENT_ID = os.getenv("GOOGLE_ADS_CLIENT_ID", "")
+        YOUTUBE_CLIENT_ID = os.getenv("YOUTUBE_CLIENT_ID", "")
+        META_APP_ID = os.getenv("META_APP_ID", "")
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+        WP_SITE_URL = os.getenv("WP_SITE_URL", "")
+        NOTION_API_KEY = os.getenv("NOTION_API_KEY", "")
+        HUBSPOT_PRIVATE_APP_KEY = os.getenv("HUBSPOT_PRIVATE_APP_KEY", "")
+    settings = _FallbackSettings()
+
+# Logging ya configurado arriba con fallback de settings
+logger = logging.getLogger(__name__)
+
+# Importar el router de acciones
+try:
+    from app.api.routes.dynamics_actions import router as dynamics_router
+except Exception as e:
+    logger.warning("No se pudo cargar dynamics_actions: %s", e)
+    dynamics_router = None
+
+try:
+    from app.api.routes.chatgpt_proxy import router as chatgpt_router
+except Exception as e:
+    logger.warning("No se pudo cargar chatgpt_proxy: %s", e)
+    chatgpt_router = None
 
 # Lifespan manager (reemplaza @app.on_event)
 @asynccontextmanager
@@ -81,13 +108,19 @@ async def generic_exception_handler(request: Request, exc: Exception):
         },
     )
 
-# Incluir el router con prefijo
-app.include_router(dynamics_router, prefix="/api/v1")
-app.include_router(chatgpt_router, prefix="/api/v1")
+# Incluir routers (si cargaron correctamente)
+if dynamics_router is not None:
+    app.include_router(dynamics_router, prefix="/api/v1")
+    logger.info("Router de acciones dinámicas incluido bajo el prefijo: /api/v1")
+else:
+    logger.warning("Router de acciones dinámicas NO cargó; la app seguirá viva con endpoints de health.")
 
-# Log de confirmación después de incluir routers
-logger.info("Router de acciones dinámicas incluido bajo el prefijo: /api/v1")
-logger.info("Router ChatGPT Proxy incluido bajo el prefijo: /api/v1")
+if chatgpt_router is not None:
+    app.include_router(chatgpt_router, prefix="/api/v1")
+    logger.info("Router ChatGPT Proxy incluido bajo el prefijo: /api/v1")
+else:
+    logger.warning("Router ChatGPT Proxy NO cargó; la app seguirá viva con endpoints de health.")
+
 logger.info("Documentación OpenAPI (Swagger UI) disponible en: /api/v1/docs")
 logger.info("Documentación ReDoc disponible en: /api/v1/redoc")
 
@@ -114,23 +147,29 @@ async def health_check():
 @app.get("/api/v1/health")
 async def api_health_check():
     """Health check endpoint detallado para verificar estado del sistema."""
-    from app.core.action_mapper import ACTION_MAP
-    
+    from importlib import import_module
+    try:
+        ACTION_MAP = import_module("app.core.action_mapper").ACTION_MAP
+        total_actions = len(ACTION_MAP)
+    except Exception as e:
+        logger.warning("No se pudo cargar ACTION_MAP: %s", e)
+        total_actions = 0
+
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "version": getattr(settings, 'APP_VERSION', '1.1'),
         "environment": settings.ENVIRONMENT,
-        "total_actions": len(ACTION_MAP),
+        "total_actions": total_actions,
         "backend_features": {
-            "microsoft_graph": bool(settings.AZURE_CLIENT_ID),
-            "google_ads": bool(settings.GOOGLE_ADS_CLIENT_ID),
-            "youtube": bool(settings.YOUTUBE_CLIENT_ID or settings.GOOGLE_ADS_CLIENT_ID),
-            "meta_ads": bool(settings.META_APP_ID),
-            "gemini": bool(settings.GEMINI_API_KEY),
-            "wordpress": bool(settings.WP_SITE_URL),
-            "notion": bool(settings.NOTION_API_KEY),
-            "hubspot": bool(settings.HUBSPOT_PRIVATE_APP_KEY),
+            "microsoft_graph": bool(getattr(settings, 'AZURE_CLIENT_ID', '')),
+            "google_ads": bool(getattr(settings, 'GOOGLE_ADS_CLIENT_ID', '')),
+            "youtube": bool(getattr(settings, 'YOUTUBE_CLIENT_ID', '') or getattr(settings, 'GOOGLE_ADS_CLIENT_ID', '')),
+            "meta_ads": bool(getattr(settings, 'META_APP_ID', '')),
+            "gemini": bool(getattr(settings, 'GEMINI_API_KEY', '')),
+            "wordpress": bool(getattr(settings, 'WP_SITE_URL', '')),
+            "notion": bool(getattr(settings, 'NOTION_API_KEY', '')),
+            "hubspot": bool(getattr(settings, 'HUBSPOT_PRIVATE_APP_KEY', '')),
             "runway": bool(os.getenv("RUNWAY_API_KEY")),
             "auth_manager": True
         }
