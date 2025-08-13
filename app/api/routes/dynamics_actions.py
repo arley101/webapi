@@ -7,13 +7,31 @@ from azure.core.exceptions import ClientAuthenticationError
 from typing import Any, Optional, Union, Sequence
 from uuid import uuid4
 from datetime import datetime, timezone
+import os
 
 from app.api.schemas import ActionRequest, ErrorResponse 
 from app.core.action_mapper import ACTION_MAP 
-from app.core.config import settings 
+
+# Configurar logger primero
+logger = logging.getLogger(__name__)
+
+# Importación segura de settings con fallback
+try:
+    from app.core.config import settings
+except Exception as e:
+    logger.warning("Fallo al importar settings; usando valores por defecto: %s", e)
+    class _FallbackSettings:
+        LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+        ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+        DEFAULT_API_TIMEOUT = 90
+        # Añadir atributos que necesita el código
+        GRAPH_API_DEFAULT_SCOPE = ["https://graph.microsoft.com/.default"]
+        GRAPH_SCOPE_DEFAULT = ["https://graph.microsoft.com/.default"]
+        GRAPH_SCOPE = ["https://graph.microsoft.com/.default"]
+    settings = _FallbackSettings()
+
 from app.shared.helpers.http_client import AuthenticatedHttpClient # <--- LÍNEA CONFIRMADA Y NECESARIA
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ---- Simple Job Orchestrator (in-memory) ----------------------------------

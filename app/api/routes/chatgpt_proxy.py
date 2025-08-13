@@ -11,8 +11,20 @@ from fastapi.responses import JSONResponse
 from typing import Any, Dict, Optional
 import json
 import re
+import os
 
 from app.core.action_mapper import ACTION_MAP
+
+# Importación segura con fallback (similar a main.py)
+try:
+    from app.core.config import settings
+except Exception as e:
+    logging.warning("Fallo al importar settings en chatgpt_proxy; usando valores por defecto: %s", e)
+    class _FallbackSettings:
+        LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
+        ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
+    settings = _FallbackSettings()
+
 from app.core.auth_manager import get_auth_client
 from app.actions import gemini_actions
 from app.memory.simple_memory import simple_memory_manager as memory_manager

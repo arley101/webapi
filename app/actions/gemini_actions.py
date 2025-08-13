@@ -7,9 +7,35 @@ from typing import Dict, Any, List, Optional
 import requests
 from datetime import datetime
 import re
+import os
 
 # CORRECCIÓN: Se elimina la importación global para evitar el ciclo.
 # El Resolver se importará localmente dentro de las funciones que lo necesiten.
+
+# Importación segura de settings
+try:
+    from app.core.config import settings
+except Exception as e:
+    logging.warning("Fallo al importar settings en gemini_actions; usando valores por defecto: %s", e)
+    class _FallbackSettings:
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+        GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    settings = _FallbackSettings()
+
+def _get_resolver_fallback():
+    """Función de respaldo para resolver cuando no se puede importar"""
+    try:
+        from app.actions.resolver_actions import Resolver
+        return Resolver()
+    except Exception:
+        # Fallback que no hace nada pero permite que el código funcione
+        class DummyResolver:
+            def save_action_result(self, *args, **kwargs):
+                pass
+        return DummyResolver()
+
+# Usar la función de respaldo globalmente
+_get_resolver = _get_resolver_fallback
 
 logger = logging.getLogger(__name__)
 

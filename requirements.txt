@@ -29,13 +29,13 @@ python-jose[cryptography]==3.3.0  # Para JWT
 passlib[bcrypt]>=1.7,<2.0
 
 # ============================================================================
-# GOOGLE APIS & SERVICES - CORRECCIÓN CRÍTICA
+# GOOGLE APIS & SERVICES - COMPATIBLE CON API v20+
 # ============================================================================
 google-api-python-client==2.134.0
 google-auth==2.32.0
 google-auth-oauthlib==1.2.1
-# SOLUCIÓN: Actualizar a la versión más reciente que soporta API v18
-google-ads==25.1.0
+# ACTUALIZADO: Google Ads API v20+ compatible (agosto 2025)
+google-ads==28.0.0
 google-generativeai==0.8.3
 # google-api-core viene como dependencia transitiva
 
