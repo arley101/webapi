@@ -50,6 +50,12 @@ except Exception as e:
     logger.warning("No se pudo cargar chatgpt_proxy: %s", e)
     chatgpt_router = None
 
+try:
+    from app.api.routes.intelligent_assistant_router import router as intelligent_assistant_router
+except Exception as e:
+    logger.warning("No se pudo cargar intelligent_assistant_router: %s", e)
+    intelligent_assistant_router = None
+
 # Lifespan manager (reemplaza @app.on_event)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -120,6 +126,12 @@ if chatgpt_router is not None:
     logger.info("Router ChatGPT Proxy incluido bajo el prefijo: /api/v1")
 else:
     logger.warning("Router ChatGPT Proxy NO cargó; la app seguirá viva con endpoints de health.")
+
+if intelligent_assistant_router is not None:
+    app.include_router(intelligent_assistant_router, prefix="/api/v1/intelligent-assistant")
+    logger.info("Router Asistente Inteligente incluido bajo el prefijo: /api/v1/intelligent-assistant")
+else:
+    logger.warning("Router Asistente Inteligente NO cargó; la app seguirá viva con endpoints de health.")
 
 logger.info("Documentación OpenAPI (Swagger UI) disponible en: /api/v1/docs")
 logger.info("Documentación ReDoc disponible en: /api/v1/redoc")

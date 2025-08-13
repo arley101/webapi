@@ -1,0 +1,9 @@
+# Azure Developer CLI (azd) configuration
+name: elite-dynamics-intelligent-assistant
+metadata:
+  template: elite-dynamics-intelligent-assistant@1.0.0
+services:
+  web:
+    project: .
+    language: python
+    host: appservice

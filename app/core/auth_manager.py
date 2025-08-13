@@ -3,9 +3,62 @@ import requests
 import logging
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
+from dataclasses import dataclass
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+@dataclass
+class AuthenticatedUser:
+    """Representación de un usuario autenticado"""
+    user_id: str
+    email: Optional[str] = None
+    name: Optional[str] = None
+    tenant_id: Optional[str] = None
+    roles: list = None
+    
+    def __post_init__(self):
+        if self.roles is None:
+            self.roles = []
+
+# Security scheme
+security = HTTPBearer(auto_error=False)
+
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> AuthenticatedUser:
+    """
+    Obtiene el usuario actual desde el token de autorización
+    Por ahora es una implementación básica, puede ser extendida con validación real de tokens
+    """
+    if not credentials:
+        # Usuario por defecto para desarrollo
+        return AuthenticatedUser(
+            user_id="default_user",
+            email="default@example.com",
+            name="Default User",
+            tenant_id="default_tenant"
+        )
+    
+    # Aquí puedes agregar validación real del token
+    # Por ejemplo, validar JWT, Azure AD, etc.
+    
+    try:
+        # Simular extracción de información del token
+        user_id = "user_from_token"  # Extraer del token real
+        return AuthenticatedUser(
+            user_id=user_id,
+            email="user@example.com",
+            name="Token User",
+            tenant_id="tenant_from_token"
+        )
+    except Exception as e:
+        logger.error(f"Error validando token: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 class TokenManager:
     """Gestor automático de tokens que regenera access tokens desde refresh tokens"""

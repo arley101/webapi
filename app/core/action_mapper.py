@@ -24,7 +24,7 @@ from app.actions import (
     stream_actions, teams_actions, tiktok_ads_actions, todo_actions,
     userprofile_actions, users_actions, vivainsights_actions,
     youtube_channel_actions, gemini_actions, x_ads_actions, webresearch_actions, 
-    wordpress_actions, resolver_actions  # ✅ AGREGADO RESOLVER_ACTIONS
+    wordpress_actions, resolver_actions, intelligent_assistant_actions  # ✅ AGREGADO INTELLIGENT_ASSISTANT_ACTIONS
 )
 
 # Importar workflows (lazy import para evitar circular imports)
@@ -91,6 +91,7 @@ WORKFLOW_CATEGORY = "Workflows"
 MEMORY_CATEGORY = "Memory System"
 WORDPRESS_CATEGORY = "WordPress"
 WOOCOMMERCE_CATEGORY = "WooCommerce"
+INTELLIGENT_ASSISTANT_CATEGORY = "Intelligent AI Assistant"  # ✅ NUEVA CATEGORÍA
 
 # ============================================================================
 # MAPEO DE ACCIONES - WORKFLOWS (3 acciones)
@@ -117,6 +118,23 @@ MEMORY_ACTIONS: Dict[str, Callable] = {
     "get_memory_history": get_memory_history,
     "search_memory": search_memory,
     "export_memory_summary": export_memory_summary,
+}
+
+# ============================================================================
+# MAPEO DE ACCIONES - ASISTENTE INTELIGENTE (11 acciones)
+# ============================================================================
+
+INTELLIGENT_ASSISTANT_ACTIONS: Dict[str, Callable] = {
+    "start_intelligent_session": intelligent_assistant_actions.start_intelligent_session,
+    "process_intelligent_query": intelligent_assistant_actions.process_intelligent_query,
+    "submit_user_feedback": intelligent_assistant_actions.submit_user_feedback,
+    "get_user_intelligence_profile": intelligent_assistant_actions.get_user_intelligence_profile,
+    "end_intelligent_session": intelligent_assistant_actions.end_intelligent_session,
+    "upload_file_intelligently": intelligent_assistant_actions.upload_file_intelligently,
+    "search_files_intelligently": intelligent_assistant_actions.search_files_intelligently,
+    "get_conversation_history": intelligent_assistant_actions.get_conversation_history,
+    "analyze_user_behavior_patterns": intelligent_assistant_actions.analyze_user_behavior_patterns,
+    "get_learning_insights": intelligent_assistant_actions.get_learning_insights,
 }
 
 # ============================================================================
@@ -1595,6 +1613,7 @@ def get_all_actions() -> Dict[str, Callable]:
         AZURE_MGMT_ACTIONS,    # 11 funciones - Azure
         
         # 🔧 CORE APIS (5-9 funciones cada uno)
+        INTELLIGENT_ASSISTANT_ACTIONS, # 10 funciones - AI Assistant  # ✅ NUEVO
         TODO_ACTIONS,          # 9 funciones - To Do
         TIKTOK_ADS_ACTIONS,    # 9 funciones - TikTok
         POWER_AUTOMATE_ACTIONS, # 9 funciones - Power Automate
@@ -1759,6 +1778,19 @@ def get_action_count():
         int: Número total de funciones
     """
     return len(get_all_actions())
+
+def get_action(action_name: str) -> Optional[Callable]:
+    """
+    Obtiene una acción específica por su nombre
+    
+    Args:
+        action_name: Nombre de la acción a buscar
+        
+    Returns:
+        Optional[Callable]: La función de la acción o None si no se encuentra
+    """
+    all_actions = get_all_actions()
+    return all_actions.get(action_name)
 
 # 📊 MÉTRICAS DEL SISTEMA
 ACTION_COUNT = len(get_all_actions())

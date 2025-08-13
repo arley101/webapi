@@ -24,5 +24,31 @@ Por el momento, este archivo sirve como placeholder para tales constantes futura
 y para clarificar que las configuraciones dinámicas se manejan en `app.core.config`.
 """
 
+# Constantes para respuestas HTTP estandarizadas
+SUCCESS_RESPONSE = {
+    "success": True,
+    "message": "Operación exitosa"
+}
+
+ERROR_RESPONSE = {
+    "success": False,
+    "message": "Error en la operación"
+}
+
+# Constantes del sistema de asistente inteligente
+AI_ASSISTANT_VERSION = "1.0.0"
+DEFAULT_SESSION_TIMEOUT_MINUTES = 30
+MAX_FILE_SIZE_MB = 100
+SUPPORTED_FILE_EXTENSIONS = frozenset([
+    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp",  # images
+    ".mp4", ".avi", ".mov", ".wmv", ".flv", ".mkv", ".webm",    # videos
+    ".pdf", ".doc", ".docx", ".txt", ".rtf", ".odt",           # documents
+    ".ppt", ".pptx", ".odp",                                   # presentations
+    ".xls", ".xlsx", ".csv", ".ods",                           # spreadsheets
+    ".mp3", ".wav", ".flac", ".aac", ".ogg",                   # audio
+    ".py", ".js", ".html", ".css", ".json", ".xml", ".md",     # code
+    ".zip", ".rar", ".7z", ".tar", ".gz"                       # archives
+])
+
 # No se definen constantes aquí por ahora, ya que las configuraciones relevantes
 # se manejan a través de `settings` para permitir la personalización por entorno.
