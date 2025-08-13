@@ -8,7 +8,7 @@ import json
 import logging
 import hashlib
 from typing import Dict, Any, List, Optional, Union
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import re
 from threading import RLock
 
@@ -1566,3 +1566,21 @@ def _extract_access_urls(save_results: Dict[str, Any]) -> Dict[str, str]:
         if isinstance(result, dict) and result.get("success") and "url" in result:
             urls[platform] = result["url"]
     return urls
+
+# Clase Resolver para compatibilidad con gemini_actions
+class Resolver:
+    """Clase de resolución de recursos simple para compatibilidad"""
+    
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+    
+    def save_action_result(self, action_name: str, params: Dict[str, Any], result: Dict[str, Any]):
+        """Guarda el resultado de una acción en memoria/log"""
+        try:
+            # Por ahora solo hacer logging - se puede expandir más tarde
+            self.logger.info(f"Action {action_name} executed with result: {result.get('status', 'unknown')}")
+        except Exception as e:
+            self.logger.warning(f"Error saving action result for {action_name}: {e}")
+
+# Instancia global para uso directo
+resolver_instance = Resolver()
