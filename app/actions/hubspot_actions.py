@@ -38,17 +38,16 @@ def _serialize_datetimes(data: Any) -> Any:
 
 def _get_hubspot_client(params: Dict[str, Any]) -> HubSpot:
     """Crea y devuelve un cliente de HubSpot autenticado."""
-    token = params.get("hubspot_token_override", settings.HUBSPOT_PRIVATE_APP_TOKEN)
+    # CORRECCIÓN: Se usa settings.HUBSPOT_PRIVATE_APP_KEY que es el nombre correcto de la propiedad en el objeto de configuración.
+    token = params.get("hubspot_token_override", settings.HUBSPOT_PRIVATE_APP_KEY)
     if not token:
-        raise ValueError("Se requiere el Token de App Privada de HubSpot (HUBSPOT_PRIVATE_APP_TOKEN).")
+        raise ValueError("Se requiere el Token de App Privada de HubSpot (HUBSPOT_PRIVATE_APP_TOKEN en variables de entorno).")
     return HubSpot(access_token=token)
 
 def _handle_hubspot_api_error(e: Any, action_name: str) -> Dict[str, Any]:
     """
     Centraliza el manejo de errores de la API de HubSpot.
-    Esta versión es más robusta y no depende de una importación específica de ApiException.
     """
-    # Comprueba si el error tiene los atributos de una ApiException del SDK de HubSpot
     if hasattr(e, 'status') and hasattr(e, 'body') and hasattr(e, 'reason'):
         logger.error(f"Error en HubSpot Action '{action_name}': {e.status} - {e.body}", exc_info=True)
         return {
@@ -59,7 +58,6 @@ def _handle_hubspot_api_error(e: Any, action_name: str) -> Dict[str, Any]:
             "http_status": e.status
         }
     else:
-        # Maneja cualquier otra excepción de forma genérica
         logger.error(f"Error inesperado en HubSpot Action '{action_name}': {e}", exc_info=True)
         return {
             "status": "error",
@@ -68,7 +66,6 @@ def _handle_hubspot_api_error(e: Any, action_name: str) -> Dict[str, Any]:
             "details": str(e),
             "http_status": 500
         }
-
 
 # --- IMPLEMENTACIÓN COMPLETA DE ACCIONES DEL ACTION MAPPER ---
 

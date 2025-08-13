@@ -12,37 +12,45 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient
 logger = logging.getLogger(__name__)
 
 # --- Helper para parsear y formatear datetimes (ISO 8601 UTC con Z) ---
-def _parse_and_utc_datetime_str(datetime_str: Any, field_name_for_log: str) -> Optional[str]:
-    if datetime_str is None:
-        return None
-    if isinstance(datetime_str, datetime):
-        dt_obj = datetime_str
-    elif isinstance(datetime_str, str):
-        try:
-            if datetime_str.upper().endswith('Z'):
-                dt_obj = datetime.fromisoformat(datetime_str[:-1] + '+00:00')
-            elif '+' in datetime_str[10:] or '-' in datetime_str[10:]: # Ya tiene offset
-                 dt_obj = datetime.fromisoformat(datetime_str)
-            else: # Asumir que es naive, o un formato que fromisoformat pueda parsear
-                dt_obj = datetime.fromisoformat(datetime_str)
-        except ValueError as e:
-            logger.error(f"Formato de fecha/hora inválido para '{field_name_for_log}': '{datetime_str}'. Error: {e}")
-            raise ValueError(f"Formato de fecha/hora inválido para '{field_name_for_log}': '{datetime_str}'. Se esperaba ISO 8601 (ej: YYYY-MM-DDTHH:MM:SSZ).") from e
-    else:
-        raise ValueError(f"Tipo inválido para '{field_name_for_log}': se esperaba string ISO 8601 o datetime, se recibió {type(datetime_str)}.")
+def list_plans(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+    params = params or {}
+    action_name = "planner_list_plans"
+    logger.info(f"Ejecutando {action_name} con params: {params}")
 
-    if dt_obj.tzinfo is None or dt_obj.tzinfo.utcoffset(dt_obj) is None:
-        # Si es naive, se asume que está en la zona horaria local y se convierte a UTC.
-        # O, si se espera que el string ya sea UTC pero sin designador, se localiza a UTC.
-        # Para Planner, las fechas se esperan en UTC.
-        dt_obj_utc = dt_obj.replace(tzinfo=dt_timezone.utc)
-        logger.debug(f"Fecha/hora '{datetime_str}' para '{field_name_for_log}' era naive. Asumiendo y convirtiendo a UTC: {dt_obj_utc.isoformat()}")
+    owner_type: str = params.get("owner_type", "user").lower()
+    owner_id: Optional[str] = params.get("owner_id")
+
+    url_base: str
+    log_owner_description: str
+
+    if owner_type == "user":
+        user_identifier = owner_id or params.get("user_id")
+        if not user_identifier:
+            return {"status": "error", "action": action_name, "message": "Para 'owner_type=user', se requiere 'owner_id' o 'user_id'.", "http_status": 400}
+        url_base = f"{settings.GRAPH_API_BASE_URL}/users/{user_identifier}/planner/plans"
+        log_owner_description = f"usuario '{user_identifier}'"
+    elif owner_type == "group":
+        if not owner_id:
+            return {"status": "error", "action": action_name, "message": "Si 'owner_type' es 'group', se requiere 'owner_id' del grupo.", "http_status": 400}
+        url_base = f"{settings.GRAPH_API_BASE_URL}/groups/{owner_id}/planner/plans"
+        log_owner_description = f"grupo '{owner_id}'"
     else:
-        dt_obj_utc = dt_obj.astimezone(dt_timezone.utc)
+        return {"status": "error", "action": action_name, "message": "Parámetro 'owner_type' debe ser 'user' o 'group'.", "http_status": 400}
+
+    # CORRECCIÓN: Se simplifican los parámetros para evitar el error "Request Too Long".
+    # La API de Planner para listar planes es sensible y no soporta filtros complejos.
+    odata_params: Dict[str, Any] = {
+        '$select': params.get('select', "id,title,owner,createdDateTime,container")
+    }
     
-    # Formato específico que Planner espera (con 'Z')
-    return dt_obj_utc.isoformat(timespec='milliseconds').replace('+00:00', 'Z')
-
+    logger.info(f"Listando planes de Planner para {log_owner_description}.")
+    planner_scope = getattr(settings, 'GRAPH_SCOPE_GROUP_READ_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
+    try:
+        # La llamada ahora es más limpia y directa.
+        response = client.get(url_base, scope=planner_scope, params=odata_params)
+        return {"status": "success", "data": response.get("value", [])}
+    except Exception as e:
+        return _handle_planner_api_error(e, action_name, params)
 
 # --- Helper para manejo de errores ---
 def _handle_planner_api_error(e: Exception, action_name: str, params_for_log: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

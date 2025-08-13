@@ -285,8 +285,7 @@ def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
                 create_session_url = f"{item_endpoint_for_upload_base.rstrip(':')}/createUploadSession"
 
             session_body = {"item": {"@microsoft.graph.conflictBehavior": conflict_behavior, "name": nombre_archivo }}
-            response_session = client.post(create_session_url, scope=files_rw_scope, json_data=session_body)
-            session_info = response_session.json()
+            session_info = client.post(create_session_url, scope=files_rw_scope, json_data=session_body)
             upload_url_from_session = session_info.get("uploadUrl")
             if not upload_url_from_session: raise ValueError("No se pudo obtener 'uploadUrl' de la sesión.")
             logger.info(f"Sesión de carga OD creada. URL (preview): {upload_url_from_session.split('?')[0]}...")
@@ -336,7 +335,7 @@ def upload_file(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
             query_api_params_put = {"@microsoft.graph.conflictBehavior": conflict_behavior}
             custom_headers_put = {'Content-Type': 'application/octet-stream'}
             response = client.put(url=url_put_simple, scope=files_rw_scope, params=query_api_params_put, data=contenido_bytes, headers=custom_headers_put)
-            return {"status": "success", "data": response.json(), "message": "Archivo subido (simple)."}
+            return {"status": "success", "data": response, "message": "Archivo subido (simple)."}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -404,8 +403,8 @@ def delete_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
 
         logger.info(f"{action_name}: Eliminando item OneDrive para user '{user_identifier}': ID '{resolved_item_id}' (original: '{item_id_or_path_param}')")
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.delete(item_endpoint_for_delete, scope=files_rw_scope)
-        return {"status": "success", "message": f"Elemento '{item_id_or_path_param}' (ID: {resolved_item_id}) eliminado para user '{user_identifier}'.", "http_status": response.status_code}
+        _ = client.delete(item_endpoint_for_delete, scope=files_rw_scope)
+        return {"status": "success", "message": f"Elemento '{item_id_or_path_param}' (ID: {resolved_item_id}) eliminado para user '{user_identifier}'.", "http_status": 204}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -441,7 +440,7 @@ def create_folder(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
         logger.info(f"{action_name}: Creando carpeta OneDrive para user '{user_identifier}': Nombre '{nombre_carpeta}' en ruta padre '{ruta_padre_relativa}'")
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.post(url, scope=files_rw_scope, json_data=body)
-        return {"status": "success", "data": response.json(), "message": f"Carpeta '{nombre_carpeta}' creada para user '{user_identifier}'."}
+        return {"status": "success", "data": response, "message": f"Carpeta '{nombre_carpeta}' creada para user '{user_identifier}'."}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -511,7 +510,7 @@ def move_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
         logger.info(f"Moviendo OneDrive item ID '{resolved_item_id_origen}' de user '{user_identifier}' a '{parent_reference_param}'. Nuevo nombre: '{body.get('name')}'")
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.patch(item_origen_endpoint_for_patch, scope=files_rw_scope, json_data=body)
-        return {"status": "success", "data": response.json(), "message": "Elemento movido/renombrado."}
+        return {"status": "success", "data": response, "message": "Elemento movido/renombrado."}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -579,18 +578,9 @@ def copy_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[s
         logger.info(f"{action_name}: Iniciando copia OneDrive item ID '{resolved_item_id_origen}' de user '{user_identifier}' a '{parent_reference_param}'. Nuevo nombre: '{body_copy_payload.get('name')}'")
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.post(url_copy, scope=files_rw_scope, json_data=body_copy_payload)
-        monitor_url = response.headers.get('Location') 
-        
-        if response.status_code == 202 and monitor_url:
-            logger.info(f"Solicitud de copia aceptada (202). Monitor URL: {monitor_url}")
-            try: response_data = response.json() if response.content else {}
-            except json.JSONDecodeError: response_data = {}
-            return {"status": "pending", "message": "Solicitud de copia aceptada y en progreso.", "monitor_url": monitor_url, "data": response_data, "http_status": 202}
-        elif response.status_code in [200, 201]:
-            return {"status": "success", "data": response.json(), "message": "Elemento copiado exitosamente (síncrono)."}
-        else:
-            logger.warning(f"Respuesta de copia OD inesperada. Status: {response.status_code}, Headers: {response.headers}, Body: {response.text[:200]}")
-            return _handle_onedrive_api_error(requests.exceptions.HTTPError(response=response), action_name, params)
+        # El cliente devuelve dict; algunos detalles (headers/Location) no están disponibles aquí.
+        # Devolvemos la respuesta tal cual y permitimos al caller verificar progreso si aplica.
+        return {"status": "success", "data": response, "message": "Solicitud de copia enviada."}
 
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
@@ -628,7 +618,7 @@ def update_item_metadata(client: AuthenticatedHttpClient, params: Dict[str, Any]
         logger.info(f"{action_name}: Actualizando metadatos OneDrive para user '{user_identifier}': ID '{resolved_item_id}' (original: '{item_id_or_path_param}')")
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.patch(item_endpoint_for_update, scope=files_rw_scope, json_data=nuevos_valores_payload, headers=custom_headers)
-        return {"status": "success", "data": response.json(), "message": "Metadatos actualizados."}
+        return {"status": "success", "data": response, "message": "Metadatos actualizados."}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 
@@ -757,7 +747,7 @@ def get_sharing_link(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
         logger.info(f"{action_name}: Creando/obteniendo enlace para OneDrive item ID '{resolved_item_id}' (user '{user_identifier}')")
         files_rw_scope = getattr(settings, 'GRAPH_SCOPE_FILES_READ_WRITE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.post(url_create_link, scope=files_rw_scope, json_data=body)
-        return {"status": "success", "data": response.json()}
+        return {"status": "success", "data": response}
     except Exception as e:
         return _handle_onedrive_api_error(e, action_name, params)
 

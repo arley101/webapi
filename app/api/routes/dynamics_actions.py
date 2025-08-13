@@ -5,6 +5,8 @@ from fastapi.responses import JSONResponse, StreamingResponse, Response
 from azure.identity import DefaultAzureCredential, CredentialUnavailableError
 from azure.core.exceptions import ClientAuthenticationError
 from typing import Any, Optional, Union, Sequence
+from uuid import uuid4
+from datetime import datetime, timezone
 
 from app.api.schemas import ActionRequest, ErrorResponse 
 from app.core.action_mapper import ACTION_MAP 
@@ -13,6 +15,35 @@ from app.shared.helpers.http_client import AuthenticatedHttpClient # <--- LÍNEA
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+# ---- Simple Job Orchestrator (in-memory) ----------------------------------
+# Nota: Esto es suficiente para producción ligera; en producción robusta reemplazar por Redis/Storage Table/Queue.
+JOBS: dict[str, dict[str, Any]] = {}
+
+def _job_record(status: str, result: Optional[Any] = None, error: Optional[str] = None) -> dict[str, Any]:
+    rec = {
+        "status": status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if result is not None:
+        rec["result"] = result
+    if error is not None:
+        rec["error"] = error
+    return rec
+
+def _run_action_and_store(job_id: str, action_fn, http_client, params: dict):
+    try:
+        JOBS[job_id] = _job_record("running")
+        res = action_fn(http_client, params)
+        # Normalizamos tipos de resultado a algo serializable cuando es dict/str
+        if isinstance(res, (dict, list, str, int, float, bool)) or res is None:
+            JOBS[job_id] = _job_record("succeeded", result=res)
+        else:
+            # Para binarios/streams muy grandes, devolvemos un aviso y sugerimos descargar vía acción dedicada
+            JOBS[job_id] = _job_record("succeeded", result={"info": "Resultado binario o no serializable. Use la acción específica de descarga/exportación."})
+    except Exception as e:
+        JOBS[job_id] = _job_record("failed", error=f"{type(e).__name__}: {e}")
+# ---------------------------------------------------------------------------
 
 # Helper to resolve Microsoft Graph scopes from settings
 def _resolve_graph_scopes() -> Sequence[str]:
@@ -69,6 +100,15 @@ async def process_dynamic_action(
     action_request: ActionRequest, 
     background_tasks: BackgroundTasks 
 ):
+    # Normalización mínima / flags de orquestación
+    if action_request.params is None or not isinstance(action_request.params, dict):
+        action_request.params = {}
+    orchestration_flags = {
+        "_async": bool(action_request.params.pop("_async", False)),
+        "_continue": action_request.params.pop("_continue", None),
+        "_session_id": action_request.params.pop("_session_id", None),
+    }
+
     action_name = action_request.action
     params_req = action_request.params 
     
@@ -136,6 +176,22 @@ async def process_dynamic_action(
             status_code=http_status_codes.HTTP_400_BAD_REQUEST,
             action=action_name,
             message=f"La acción '{action_name}' no es válida o no está implementada en el backend."
+        )
+
+    # Modo asíncrono opcional: si el cliente pide _async, devolvemos 202 + job_id
+    if orchestration_flags["_async"]:
+        job_id = str(uuid4())
+        JOBS[job_id] = _job_record("queued")
+        background_tasks.add_task(_run_action_and_store, job_id, action_function, auth_http_client, params_req)
+        logger.info(f"{logging_prefix} Acción encolada como job {job_id}")
+        return JSONResponse(
+            status_code=http_status_codes.HTTP_202_ACCEPTED,
+            content={
+                "status": "accepted",
+                "job_id": job_id,
+                "poll_url": f"/api/v1/jobs/{job_id}",
+                "message": "Acción aceptada para procesamiento asíncrono."
+            }
         )
 
     logger.info(f"{logging_prefix} Ejecutando función mapeada '{action_function.__name__}' del módulo '{action_function.__module__}'")
@@ -219,3 +275,18 @@ async def process_dynamic_action(
             message="Error interno del servidor al ejecutar la acción.",
             details=f"{type(e).__name__}: {str(e)}"
         )
+
+@router.get(
+    "/jobs/{job_id}",
+    summary="Consulta el estado de un job asíncrono",
+    description="Devuelve el estado y, cuando esté disponible, el resultado del job.",
+    responses={
+        200: {"description": "Estado/resultado del job."},
+        404: {"description": "Job no encontrado."}
+    }
+)
+async def get_job_status(job_id: str):
+    rec = JOBS.get(job_id)
+    if not rec:
+        return JSONResponse(status_code=http_status_codes.HTTP_404_NOT_FOUND, content={"status": "error", "message": "Job no encontrado."})
+    return JSONResponse(status_code=http_status_codes.HTTP_200_OK, content=rec)

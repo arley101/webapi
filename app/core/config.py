@@ -220,14 +220,3 @@ logger.info(f"SharePoint Site ID: {'Configurado' if settings.SHAREPOINT_DEFAULT_
 logger.info(f"Notion configurado: {'Sí' if settings.NOTION_API_KEY else 'No'}")
 logger.info(f"Gemini configurado: {'Sí' if settings.GEMINI_API_KEY else 'No'}")
 logger.info(f"Runway configurado: {'Sí' if settings.RUNWAY_API_KEY else 'No'}")
-
-# Cargar variables desde .env en desarrollo local
-from pathlib import Path
-env_path = Path(__file__).resolve().parent.parent.parent / '.env'
-if env_path.exists():
-    import dotenv
-    dotenv.load_dotenv(env_path)
-    logger.info("Variables de entorno cargadas desde .env")
-
-# Mejora para debugging de YouTube
-logger.info(f"YouTube: {'Credenciales configuradas' if settings.YOUTUBE_CLIENT_ID else 'Sin credenciales configuradas'}")

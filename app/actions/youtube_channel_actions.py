@@ -35,36 +35,26 @@ VALID_MODERATION_STATUSES = ['heldForReview', 'published', 'rejected']
 
 def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
     """
-    Construye las credenciales de OAuth 2.0 usando configuración de Azure.
+    Construye las credenciales de OAuth 2.0 para YouTube de forma dedicada y robusta.
+    CORRECCIÓN: Se eliminó el fallback a credenciales de Google Ads para evitar conflictos.
     """
-    # Determinar origen de credenciales (prioridad: params > settings específicas > Azure)
-    client_id = (
-        params.get("client_id") or 
-        settings.YOUTUBE_CLIENT_ID or 
-        settings.GOOGLE_ADS_CLIENT_ID
-    )
-    client_secret = (
-        params.get("client_secret") or 
-        settings.YOUTUBE_CLIENT_SECRET or 
-        settings.GOOGLE_ADS_CLIENT_SECRET
-    )
-    refresh_token = (
-        params.get("refresh_token") or 
-        settings.YOUTUBE_REFRESH_TOKEN or 
-        settings.GOOGLE_ADS_REFRESH_TOKEN
-    )
+    # Ahora solo busca credenciales específicas de YouTube desde la configuración.
+    client_id = params.get("client_id") or settings.YOUTUBE_CLIENT_ID
+    client_secret = params.get("client_secret") or settings.YOUTUBE_CLIENT_SECRET
+    refresh_token = params.get("refresh_token") or settings.YOUTUBE_REFRESH_TOKEN
 
-    # Si tenemos un token de acceso de Azure directamente, úsalo
-    access_token = params.get("access_token") or settings.YOUTUBE_ACCESS_TOKEN
+    # Validación estricta: si falta alguna credencial de YouTube, la operación debe fallar.
+    if not all([client_id, client_secret, refresh_token]):
+        raise ValueError("Credenciales de YouTube (YOUTUBE_CLIENT_ID, YOUTUBE_CLIENT_SECRET, YOUTUBE_REFRESH_TOKEN) no están configuradas correctamente en el entorno.")
 
-    # Opción 1: Usar token de acceso directo de Azure si está disponible
-    if access_token:
-        logger.info("🎥 YouTube: Usando token de acceso directo de Azure")
-        return Credentials(
-            token=access_token,
-            client_id=client_id,
-            client_secret=client_secret,
-            token_uri="https://oauth2.googleapis.com/token",
+    try:
+        creds = Credentials.from_authorized_user_info(
+            info={
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "token_uri": "https://oauth2.googleapis.com/token", # Añadido para mayor robustez
+            },
             scopes=[
                 "https://www.googleapis.com/auth/youtube",
                 "https://www.googleapis.com/auth/youtube.upload",
@@ -72,61 +62,18 @@ def _get_youtube_credentials(params: Dict[str, Any]) -> Credentials:
                 "https://www.googleapis.com/auth/yt-analytics.readonly"
             ]
         )
-    
-    # Opción 2: Usar refresh token (auto-refresco por Google Auth Library)
-    if all([client_id, client_secret, refresh_token]):
-        try:
-            creds = Credentials.from_authorized_user_info(
-                info={
-                    "client_id": client_id,
-                    "client_secret": client_secret,
-                    "refresh_token": refresh_token,
-                    "type": "authorized_user"
-                },
-                scopes=[
-                    "https://www.googleapis.com/auth/youtube",
-                    "https://www.googleapis.com/auth/youtube.upload",
-                    "https://www.googleapis.com/auth/youtube.force-ssl",
-                    "https://www.googleapis.com/auth/yt-analytics.readonly"
-                ]
-            )
+        
+        # Refresca el token si es necesario para asegurar su validez
+        if not creds.valid and creds.refresh_token:
+            from google.auth.transport.requests import Request
+            creds.refresh(Request())
             
-            # Refrescar token si es necesario
-            if not creds.valid:
-                from google.auth.transport.requests import Request
-                creds.refresh(Request())
-                
-            logger.info("🎥 YouTube: Credenciales generadas con refresh token")
-            return creds
-        except Exception as e:
-            logger.error(f"Error generando credenciales YouTube con refresh token: {e}")
-            # Continuar a la siguiente opción si esta falla
-    
-    # Opción 3: Intento con credenciales de Azure (asumiendo que hay un sistema para obtenerlas)
-    try:
-        from app.core.azure_helpers import get_azure_credential
-        azure_credential = get_azure_credential("youtube")
-        if azure_credential and "access_token" in azure_credential:
-            logger.info("🎥 YouTube: Credenciales obtenidas de Azure Key Vault")
-            return Credentials(
-                token=azure_credential["access_token"],
-                client_id=azure_credential.get("client_id", client_id),
-                client_secret=azure_credential.get("client_secret", client_secret),
-                token_uri="https://oauth2.googleapis.com/token",
-                scopes=[
-                    "https://www.googleapis.com/auth/youtube",
-                    "https://www.googleapis.com/auth/youtube.upload",
-                    "https://www.googleapis.com/auth/youtube.force-ssl",
-                    "https://www.googleapis.com/auth/yt-analytics.readonly"
-                ]
-            )
-    except ImportError:
-        logger.warning("Módulo Azure helpers no disponible")
+        logger.info("🎥 YouTube: Credenciales dedicadas generadas exitosamente con refresh token.")
+        return creds
     except Exception as e:
-        logger.error(f"Error obteniendo credenciales de Azure: {e}")
-
-    # Si llegamos aquí, no hay credenciales disponibles
-    raise ValueError("Credenciales de YouTube no configuradas. Verifica Azure KeyVault o configuración en .env")
+        logger.error(f"Error crítico generando credenciales dedicadas de YouTube: {e}")
+        # Relanzar el error para que sea manejado por el decorador de errores de la acción.
+        raise ValueError(f"Fallo al generar o refrescar las credenciales de YouTube: {e}")
 
 def _build_youtube_service(credentials: Credentials) -> Resource:
     """Construye y retorna el servicio de YouTube."""

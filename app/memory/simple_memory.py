@@ -6,6 +6,7 @@ Sistema de Memoria Simplificado sin dependencias circulares
 import logging
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from typing import Callable, Tuple
 import json
 
 logger = logging.getLogger(__name__)
@@ -13,6 +14,57 @@ logger = logging.getLogger(__name__)
 class SimpleMemoryManager:
     """Gestor simplificado de memoria"""
     
+    # Backends opcionales de persistencia (inyectables desde otras capas)
+    _sp_handler: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
+    _od_handler: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
+    _notion_handler: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None
+
+    def attach_backends(
+        self,
+        sharepoint_handler: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+        onedrive_handler: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+        notion_handler: Optional[Callable[[Dict[str, Any]], Dict[str, Any]]] = None,
+    ) -> None:
+        """
+        Inyecta funciones de persistencia. Cada handler recibe un payload dict y devuelve un dict
+        con, idealmente, {'success': bool, 'url': str?, 'id': str?, 'details': {...}}.
+        """
+        if sharepoint_handler:
+            self._sp_handler = sharepoint_handler
+        if onedrive_handler:
+            self._od_handler = onedrive_handler
+        if notion_handler:
+            self._notion_handler = notion_handler
+
+    def _dispatch_persistence(self, payload: Dict[str, Any]) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
+        """
+        Decide y ejecuta persistencia opcional según 'persist_to' en payload['data'] o metadatos.
+        Retorna (provider_name, result_dict) si se ejecutó, en caso contrario (None, None).
+        """
+        data = payload.get("data") or {}
+        persist_to = (data.get("persist_to") or "").lower().strip()
+        handler = None
+        provider = None
+        if persist_to == "sharepoint" and self._sp_handler:
+            handler = self._sp_handler
+            provider = "sharepoint"
+        elif persist_to == "onedrive" and self._od_handler:
+            handler = self._od_handler
+            provider = "onedrive"
+        elif persist_to == "notion" and self._notion_handler:
+            handler = self._notion_handler
+            provider = "notion"
+
+        if handler is None:
+            return None, None
+
+        try:
+            result = handler(data)  # se espera {'success': bool, 'url': str?, 'id': str?, ...}
+            return provider, result if isinstance(result, dict) else {"success": True, "details": result}
+        except Exception as e:
+            logger.error(f"Error persistiendo en {provider}: {e}")
+            return provider, {"success": False, "error": str(e)}
+
     def __init__(self):
         self.memory_storage = {}  # En memoria para simplificar
         self.sessions = {}
@@ -29,6 +81,27 @@ class SimpleMemoryManager:
                 "data": interaction_data,
                 "id": len(self.sessions[session_id]) + 1
             }
+            
+            # Persistencia opcional (SharePoint/OneDrive/Notion) si se indicó en data.persist_to
+            provider, persist_result = self._dispatch_persistence({
+                "session_id": session_id,
+                "user_id": user_id,
+                "data": interaction_data,
+            })
+            if provider:
+                interaction["persistence"] = {
+                    "provider": provider,
+                    "result": persist_result,
+                }
+                # Enlazar acceso rápido si hay URL/ID
+                qa = {}
+                if isinstance(persist_result, dict):
+                    if persist_result.get("url"):
+                        qa["url"] = persist_result["url"]
+                    if persist_result.get("id"):
+                        qa["id"] = persist_result["id"]
+                    if qa:
+                        interaction.setdefault("quick_access", {}).update(qa)
             
             self.sessions[session_id].append(interaction)
             
@@ -149,4 +222,18 @@ def search_memory(query: str, session_id: Optional[str] = None, limit: int = 20)
 
 def export_memory_summary(session_id: str, format_type: str = "json") -> Dict[str, Any]:
     """Exportar resumen de memoria"""
-    return simple_memory_manager.export_session_summary(session_id, format_type)
+    result = simple_memory_manager.export_session_summary(session_id, format_type)
+    # Asegurar estructura homogénea
+    if result.get("success") and isinstance(result.get("summary"), dict):
+        summary = result["summary"]
+        # Si alguna interacción tuvo quick_access, exponer un atajo a la última
+        try:
+            interactions = summary.get("data") or []
+            for item in reversed(interactions):
+                qa = item.get("quick_access")
+                if isinstance(qa, dict) and (qa.get("url") or qa.get("id")):
+                    result.setdefault("quick_access", {}).update({k: v for k, v in qa.items() if v})
+                    break
+        except Exception:
+            pass
+    return result

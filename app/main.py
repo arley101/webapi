@@ -1,5 +1,8 @@
 # app/main.py
-from fastapi import FastAPI, Request 
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
@@ -41,6 +44,42 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
     lifespan=lifespan  # Usar lifespan en lugar de on_event
 )
+
+# CORS (ajústelo para producción: dominios específicos)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Normalización de errores 422 (validación) y 500 (genéricos) a JSON consistente
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return JSONResponse(
+        status_code=422,
+        content={
+            "status": "error",
+            "message": "Datos de entrada inválidos.",
+            "http_status": 422,
+            "details": exc.errors(),
+        },
+    )
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    # Evita respuestas HTML y mantiene formato JSON homogéneo
+    logger.exception("Unhandled exception: %s", exc)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "status": "error",
+            "message": "Error interno del servidor.",
+            "http_status": 500,
+            "details": str(exc),
+        },
+    )
 
 # Incluir el router con prefijo
 app.include_router(dynamics_router, prefix="/api/v1")

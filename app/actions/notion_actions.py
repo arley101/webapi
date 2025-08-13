@@ -72,23 +72,13 @@ NOTION_BLOCK_TYPES = {
 }
 
 def _get_notion_api_headers(params: Dict[str, Any]) -> Dict[str, str]:
-    """
-    Prepara los headers para las solicitudes a la Notion API.
-    
-    Args:
-        params: Diccionario con parámetros, debe contener access_token o usar el valor por defecto.
-        
-    Returns:
-        Dict con los headers necesarios para la API de Notion.
-        
-    Raises:
-        ValueError: Si no se proporciona un token de acceso válido.
-    """
-    notion_token: Optional[str] = params.get("access_token", settings.NOTION_API_TOKEN)
+    """Prepara los headers para las solicitudes a la Notion API."""
+    # CORRECCIÓN: Se usa settings.NOTION_API_KEY que es el nombre correcto de la propiedad.
+    notion_token: Optional[str] = params.get("access_token", settings.NOTION_API_KEY)
     notion_version: str = params.get("notion_version", settings.NOTION_API_VERSION) 
 
     if not notion_token:
-        raise ValueError("Se requiere el Token de Integración de Notion (NOTION_API_TOKEN).")
+        raise ValueError("Se requiere el Token de Integración de Notion (NOTION_API_TOKEN en variables de entorno).")
     if not notion_version:
         raise ValueError("Se requiere la versión de la API de Notion (NOTION_API_VERSION).")
 

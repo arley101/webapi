@@ -12,7 +12,11 @@ from urllib.parse import quote
 from app.core.config import settings
 from app.shared.helpers.http_client import AuthenticatedHttpClient
 
+
 logger = logging.getLogger(__name__)
+
+# Scope por defecto con fallback seguro
+DEFAULT_SCOPE = getattr(settings, 'GRAPH_API_DEFAULT_SCOPE', 'https://graph.microsoft.com/.default')
 
 # --- Helper para validar si un input parece un Graph Site ID ---
 def _is_valid_graph_site_id_format(site_id_string: str) -> bool:
@@ -51,7 +55,7 @@ def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any])
     if site_name:
         # Buscar el sitio por nombre
         search_url = f"{settings.GRAPH_API_BASE_URL}/sites?search={quote(site_name)}"
-        response = client.get(search_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.get(search_url, scope=DEFAULT_SCOPE)
         
         if response.get("value"):
             # Retornar el primer sitio encontrado
@@ -66,7 +70,7 @@ def _obtener_site_id_sp(client: AuthenticatedHttpClient, params: Dict[str, Any])
     
     # 4. Si no hay nada configurado, obtener el sitio raíz
     root_url = f"{settings.GRAPH_API_BASE_URL}/sites/root"
-    response = client.get(root_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+    response = client.get(root_url, scope=DEFAULT_SCOPE)
     
     if response.get("id"):
         return response["id"]
@@ -87,7 +91,7 @@ def _get_drive_id(client: AuthenticatedHttpClient, site_id: str, drive_id_or_nam
     
     # Si es un nombre, buscar el drive
     drives_url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives"
-    response = client.get(drives_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+    response = client.get(drives_url, scope=DEFAULT_SCOPE)
     
     if not response.get("value"):
         raise ValueError(f"No se encontraron drives en el sitio {site_id}")
@@ -221,7 +225,7 @@ def _get_item_id_from_path_if_needed_sp(
     # Si parece ser un path, obtener metadatos para conseguir el ID
     try:
         endpoint = _get_sp_item_endpoint_by_path(site_id, drive_id, item_path_or_id)
-        response = client.get(endpoint, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+        response = client.get(endpoint, scope=DEFAULT_SCOPE)
         
         if response.get("id"):
             return response["id"]
@@ -247,15 +251,15 @@ def get_site_info(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
         
         # Obtener información del sitio
         site_url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}"
-        site_info = client.get(site_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+        site_info = client.get(site_url, scope=DEFAULT_SCOPE)
         
         # Obtener drives del sitio
         drives_url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/drives"
-        drives_response = client.get(drives_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+        drives_response = client.get(drives_url, scope=DEFAULT_SCOPE)
         
         # Obtener listas del sitio
         lists_url = f"{settings.GRAPH_API_BASE_URL}/sites/{site_id}/lists"
-        lists_response = client.get(lists_url, scope=settings.GRAPH_API_DEFAULT_SCOPE)
+        lists_response = client.get(lists_url, scope=DEFAULT_SCOPE)
         
         return {
             "success": True,
@@ -326,41 +330,45 @@ def create_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
                 "template": "genericList"
             }
         }
-        
+
         # Hacer la llamada a la API
         url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists"
-        response = client.post(url, json=list_data)
-        
-        if response.status_code == 201:
-            created_list = response.json()
+        response = client.post(url, scope=DEFAULT_SCOPE, json_data=list_data)
+
+        created_list = response or {}
+        if created_list.get("id"):
             list_id = created_list["id"]
             
             # Crear columnas adicionales si se especificaron
             for column in columns:
                 column_result = _create_list_column(client, site_id, list_id, column)
                 if not column_result.get("success"):
-                    logger.warning(f"Failed to create column {column['name']}: {column_result.get('error')}")
+                    logger.warning(f"Failed to create column {column.get('name')}: {column_result.get('error')}")
             
-            # Auto-registrar en el sistema
-            from app.actions import resolver_actions
-            register_result = resolver_actions.smart_save_resource(client, {
-                "resource_type": "sharepoint_list",
-                "resource_data": {
-                    "id": list_id,
-                    "name": list_name,
-                    "webUrl": created_list.get("webUrl"),
-                    "site_id": site_id,
-                    "columns": columns
-                },
-                "action_name": "sp_create_list",
-                "tags": ["sharepoint", "list", "created"]
-            })
+            # Auto-registrar en el sistema (best-effort)
+            try:
+                from app.actions import resolver_actions
+                register_result = resolver_actions.smart_save_resource(client, {
+                    "resource_type": "sharepoint_list",
+                    "resource_data": {
+                        "id": list_id,
+                        "name": list_name,
+                        "webUrl": created_list.get("webUrl"),
+                        "site_id": site_id,
+                        "columns": columns
+                    },
+                    "action_name": "sp_create_list",
+                    "tags": ["sharepoint", "list", "created"]
+                })
+            except Exception as _e:
+                logger.warning(f"Auto-registro falló o no disponible: {_e}")
+                register_result = {"success": False}
             
             return {
                 "success": True,
                 "data": {
                     "id": list_id,
-                    "name": created_list.get("displayName"),
+                    "name": created_list.get("displayName") or created_list.get("name"),
                     "webUrl": created_list.get("webUrl"),
                     "createdDateTime": created_list.get("createdDateTime"),
                     "description": created_list.get("description"),
@@ -373,8 +381,8 @@ def create_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         else:
             return {
                 "success": False,
-                "error": f"Failed to create list: {response.status_code}",
-                "details": response.text
+                "error": "Failed to create list",
+                "details": created_list
             }
             
     except Exception as e:
@@ -417,12 +425,11 @@ def _create_list_column(client: Any, site_id: str, list_id: str, column_config: 
             column_data["defaultValue"] = {"value": str(column_config["defaultValue"])}
         
         url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/columns"
-        response = client.post(url, json=column_data)
-        
-        if response.status_code == 201:
-            return {"success": True, "data": response.json()}
+        response = client.post(url, scope=DEFAULT_SCOPE, json_data=column_data)
+        if isinstance(response, dict) and (response.get("id") or response.get("name")):
+            return {"success": True, "data": response}
         else:
-            return {"success": False, "error": f"Failed to create column: {response.text}"}
+            return {"success": False, "error": "Failed to create column", "details": response}
             
     except Exception as e:
         return {"success": False, "error": str(e)}
@@ -505,7 +512,7 @@ def update_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         logger.info(f"Actualizando lista SP '{list_id_or_name}' en sitio '{target_site_id}' con payload: {update_payload}")
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.patch(url, scope=sites_manage_scope, json_data=update_payload)
-        return {"status": "success", "data": response.json()}
+        return {"status": "success", "data": response}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -524,9 +531,9 @@ def delete_list(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict
         
         logger.info(f"Eliminando lista SP '{list_id_or_name}' de sitio '{target_site_id}'.")
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.delete(url, scope=sites_manage_scope)
+        _ = client.delete(url, scope=sites_manage_scope)
         # Delete devuelve 204 No Content
-        return {"status": "success", "message": f"Lista '{list_id_or_name}' eliminada exitosamente de sitio '{target_site_id}'.", "http_status": response.status_code}
+        return {"status": "success", "message": f"Lista '{list_id_or_name}' eliminada exitosamente de sitio '{target_site_id}'.", "http_status": 204}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -547,30 +554,32 @@ def add_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
         item_data = {
             "fields": fields
         }
-        
+
         # Hacer la llamada a la API
         url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/lists/{list_id}/items"
-        response = client.post(url, json=item_data)
-        
-        if response.status_code == 201:
-            created_item = response.json()
-            
+        response = client.post(url, scope=DEFAULT_SCOPE, json_data=item_data)
+
+        created_item = response or {}
+        if created_item.get("id"):
             # Auto-registrar si el item es importante
             if len(json.dumps(fields)) > 100:  # Si tiene contenido significativo
-                from app.actions import resolver_actions
-                register_result = resolver_actions.smart_save_resource(client, {
-                    "resource_type": "sharepoint_item",
-                    "resource_data": {
-                        "id": created_item.get("id"),
-                        "list_id": list_id,
-                        "site_id": site_id,
-                        "fields": fields,
-                        "webUrl": created_item.get("webUrl")
-                    },
-                    "action_name": "sp_add_list_item",
-                    "tags": ["sharepoint", "list_item", "created"]
-                })
-            
+                try:
+                    from app.actions import resolver_actions
+                    _ = resolver_actions.smart_save_resource(client, {
+                        "resource_type": "sharepoint_item",
+                        "resource_data": {
+                            "id": created_item.get("id"),
+                            "list_id": list_id,
+                            "site_id": site_id,
+                            "fields": fields,
+                            "webUrl": created_item.get("webUrl")
+                        },
+                        "action_name": "sp_add_list_item",
+                        "tags": ["sharepoint", "list_item", "created"]
+                    })
+                except Exception as _e:
+                    logger.debug(f"Auto-registro no disponible: {_e}")
+
             return {
                 "success": True,
                 "data": {
@@ -585,8 +594,8 @@ def add_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Di
         else:
             return {
                 "success": False,
-                "error": f"Failed to add item: {response.status_code}",
-                "details": response.text
+                "error": "Failed to add item",
+                "details": response
             }
             
     except Exception as e:
@@ -687,7 +696,7 @@ def update_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
         logger.info(f"Actualizando item SP ID '{item_id}' en lista '{list_id_or_name}', sitio '{target_site_id}'. ETag: {etag or 'N/A'}")
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
         response = client.patch(url, scope=sites_manage_scope, json_data=fields_to_update, headers=request_headers)
-        return {"status": "success", "data": response.json()}
+        return {"status": "success", "data": response}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 
@@ -713,9 +722,9 @@ def delete_list_item(client: AuthenticatedHttpClient, params: Dict[str, Any]) ->
         
         logger.info(f"Eliminando item SP ID '{item_id}' de lista '{list_id_or_name}', sitio '{target_site_id}'. ETag: {etag or 'N/A'}")
         sites_manage_scope = getattr(settings, 'GRAPH_SCOPE_SITES_MANAGE_ALL', settings.GRAPH_API_DEFAULT_SCOPE)
-        response = client.delete(url, scope=sites_manage_scope, headers=request_headers)
+        _ = client.delete(url, scope=sites_manage_scope, headers=request_headers)
         # Delete devuelve 204 No Content
-        return {"status": "success", "message": f"Item '{item_id}' eliminado de lista '{list_id_or_name}'.", "http_status": response.status_code}
+        return {"status": "success", "message": f"Item '{item_id}' eliminado de lista '{list_id_or_name}'.", "http_status": 204}
     except Exception as e: 
         return _handle_graph_api_error(e, action_name, params)
 

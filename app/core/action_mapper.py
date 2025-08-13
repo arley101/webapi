@@ -505,7 +505,7 @@ RESOLVER_ACTIONS: Dict[str, Callable] = {
     "validate_resource_id": resolver_actions.validate_resource_id,
     "get_resource_config": resolver_actions.get_resource_config,
     "search_resources": resolver_actions.search_resources,
-    "execute_workflow": resolver_actions.execute_workflow,
+    "resolver_execute_workflow": resolver_actions.execute_workflow,
     "smart_save_resource": resolver_actions.smart_save_resource,
     "save_to_notion_registry": resolver_actions.save_to_notion_registry,
     "get_credentials_from_vault": resolver_actions.get_credentials_from_vault,
@@ -1705,7 +1705,7 @@ def validate_memory_system() -> Dict[str, Any]:
         Dict con validación del sistema de memoria
     """
     try:
-        from app.actions.resolver_actions import resolver
+        from app.actions import resolver_actions
         
         validation_result = {
             "memory_system_active": True,

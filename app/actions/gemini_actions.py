@@ -8,11 +8,8 @@ import requests
 from datetime import datetime
 import re
 
-from app.core.config import settings
-# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
-def _get_resolver():
-    from app.actions.resolver_actions import Resolver
-    return Resolver()
+# CORRECCIÓN: Se elimina la importación global para evitar el ciclo.
+# El Resolver se importará localmente dentro de las funciones que lo necesiten.
 
 logger = logging.getLogger(__name__)
 
@@ -334,6 +331,10 @@ def _fallback_pattern_analysis(query: str, available_actions: List[str]) -> Dict
 
 def generate_response_suggestions(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
     """Genera sugerencias de respuesta basadas en el contexto"""
+    # CORRECCIÓN: Importación local para romper el ciclo de dependencia.
+    from app.actions.resolver_actions import Resolver
+    _get_resolver = Resolver
+
     try:
         context = params.get("context", {})
         message = params.get("message", "")
@@ -342,10 +343,7 @@ def generate_response_suggestions(client: Any, params: Dict[str, Any]) -> Dict[s
         prompt = f"""Genera 3 sugerencias de respuesta para este mensaje:
 "{message}"
 
-Tono deseado: {tone}
-Contexto: Comunicación empresarial para Elite Cosmetic Dental
-
-Proporciona respuestas variadas: una breve, una detallada y una con siguiente acción."""
+Tono deseado: {tone}"""
 
         gemini_response = _make_gemini_request(prompt)
         
@@ -356,30 +354,30 @@ Proporciona respuestas variadas: una breve, una detallada y una con siguiente ac
             }
         
         suggestions_text = gemini_response.get("text", "")
-        
-        # Procesar las sugerencias
-        suggestions = []
-        lines = suggestions_text.split('\n')
-        current_suggestion = ""
-        
-        for line in lines:
-            if line.strip() and (line.startswith('1.') or line.startswith('2.') or line.startswith('3.')):
-                if current_suggestion:
-                    suggestions.append(current_suggestion.strip())
-                current_suggestion = line[2:].strip()
-            elif current_suggestion:
-                current_suggestion += " " + line.strip()
-        
-        if current_suggestion:
-            suggestions.append(current_suggestion.strip())
+        suggestions = [s.strip() for s in suggestions_text.split('\n') if s.strip()]
         
         result = {
             "success": True,
             "data": {
-                "suggestions": suggestions[:3],  # Limitar a 3
+                "suggestions": suggestions[:3],
                 "context": context,
                 "tone": tone
             }
+        }
+        
+        # Envolver la llamada a la memoria en un try-except para que no rompa la función principal
+        try:
+            _get_resolver().save_action_result("generate_response_suggestions", params, result)
+        except Exception as mem_err:
+            logger.warning(f"No se pudo persistir la memoria para generate_response_suggestions: {mem_err}")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en generate_response_suggestions: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e)
         }
         
         # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE GENERACIÓN

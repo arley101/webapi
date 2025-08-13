@@ -9,54 +9,60 @@ from google.ads.googleads.errors import GoogleAdsException
 from google.protobuf import json_format
 
 from app.core.config import settings
-# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
-def _get_resolver():
-    from app.actions.resolver_actions import Resolver
-    return Resolver()
 
+# Logger del módulo y caché del cliente
 logger = logging.getLogger(__name__)
-
-# --- INICIALIZACIÓN DEL CLIENTE Y HELPERS ROBUSTOS ---
 _google_ads_client_instance: Optional[GoogleAdsClient] = None
 
+# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
 def get_google_ads_client() -> GoogleAdsClient:
+    """
+    Inicializa y devuelve el cliente de Google Ads de forma robusta.
+    CORRECCIÓN: Carga la configuración directamente desde el objeto settings,
+    eliminando la dependencia del auth_manager para mayor estabilidad.
+    """
     global _google_ads_client_instance
     if _google_ads_client_instance:
         return _google_ads_client_instance
-    
+
     try:
-        # Intentar obtener access_token automáticamente (si existe token_manager)
-        access_token = None
-        try:
-            from app.core.auth_manager import token_manager
-            access_token = token_manager.get_google_access_token("google_ads")
-        except ImportError:
-            logger.warning("auth_manager no disponible, usando refresh token tradicional")
-        except Exception as e:
-            logger.warning(f"No se pudo obtener access_token automático: {e}")
-        
-        # Configuración robusta para Google Ads API v20
-        config = {
+        # Configuración compatible con Google Ads Client (v20) usando load_from_dict
+        config_dict = {
             "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
-            "client_id": settings.GOOGLE_ADS_CLIENT_ID,
-            "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
-            "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
             "login_customer_id": str(settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID else None,
-            # Preferimos proto_plus activado para acceder a .name y helpers
             "use_proto_plus": True,
-            "api_version": "v20",
-            "http_timeout": 60,
+            "oauth2": {
+                "client_id": settings.GOOGLE_ADS_CLIENT_ID,
+                "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
+                "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
+            },
         }
-        if access_token:
-            config["access_token"] = access_token
-            logger.info("Google Ads: usando access_token automático para API v20")
-        
-        logger.info("Inicializando Google Ads Client (v20, proto_plus=True)")
-        _google_ads_client_instance = GoogleAdsClient.load_from_dict(config)
+        # Validación
+        oauth_ok = all(config_dict["oauth2"].get(k) for k in ("client_id", "client_secret", "refresh_token"))
+        if not (config_dict.get("developer_token") and oauth_ok):
+            raise ValueError("Faltan credenciales de Google Ads (developer_token / oauth2). Verifique variables de entorno GOOGLE_ADS_*.") 
+
+        logger.info("Inicializando Google Ads Client con configuración directa desde settings (load_from_dict).")
+        _google_ads_client_instance = GoogleAdsClient.load_from_dict(config_dict)
         return _google_ads_client_instance
     except Exception as e:
-        logger.error(f"Error inicializando cliente Google Ads: {e}")
-        raise ValueError(f"Google Ads client initialization failed: {str(e)}")
+        logger.error(f"Error crítico inicializando el cliente de Google Ads: {e}")
+        raise ValueError(f"La inicialización del cliente de Google Ads falló: {str(e)}")
+
+
+# Acceso seguro al resolver (no-op si no está disponible)
+def _get_resolver():
+    try:
+        from app.actions import resolver_actions
+        # Debe exponer save_action_result; si no, devolvemos un no-op
+        if hasattr(resolver_actions, "save_action_result") and callable(getattr(resolver_actions, "save_action_result")):
+            return resolver_actions
+    except Exception:
+        pass
+    class _NullResolver:
+        def save_action_result(self, *args, **kwargs):
+            return None
+    return _NullResolver()
 
 def _handle_google_ads_api_error(ex: GoogleAdsException, action_name: str) -> Dict[str, Any]:
     """
@@ -527,8 +533,7 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
         # Ejecutar
         response = campaign_service.mutate_campaigns(customer_id=customer_id, operations=[campaign_operation])
         created = response.results[0]
-
-        return {
+        result = {
             "status": "success",
             "message": f"Campaña '{campaign_name}' creada exitosamente",
             "data": {
@@ -539,10 +544,11 @@ def googleads_create_campaign(client: Any, params: Dict[str, Any]) -> Dict[str, 
                 "type": advertising_type,
             },
         }
-        
-        # ✅ PERSISTENCIA DE MEMORIA - FUNCIÓN DE CREACIÓN
-        _get_resolver().save_action_result(action_name, params, result)
-        
+        # ✅ Persistir resultado (no-op si no hay resolver)
+        try:
+            _get_resolver().save_action_result(action_name, params, result)
+        except Exception as _e:
+            logger.debug(f"No-op save_action_result: {_e}")
         return result
     except GoogleAdsException as ex:
         return _handle_google_ads_api_error(ex, action_name)
@@ -912,15 +918,6 @@ def googleads_set_daily_budget(client: Any, params: Dict[str, Any]) -> Dict[str,
         return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
         logger.error(f"Error en {action_name}: {e}")
-        return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
-
-        return _execute_mutate_operations(
-            customer_id, 
-            operations, 
-            "AdGroupCriterionService", 
-            action_name
-        )
-    except Exception as e:
         return {"success": False, "error": str(e), "timestamp": datetime.now().isoformat()}
 
 def googleads_apply_audience_to_ad_group(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:

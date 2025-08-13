@@ -72,6 +72,10 @@ async def process_chatgpt_query(query: str, params: dict) -> JSONResponse:
     """
     Función auxiliar para procesar queries de ChatGPT
     """
+    query = (query or "").lower().strip()
+    if not isinstance(params, dict) or params is None:
+        params = {}
+
     try:
         logger.info(f"ChatGPT Query recibido: {query}")
         
@@ -247,9 +251,7 @@ async def chatgpt_proxy_get(query: str):
     Endpoint GET para ChatGPT - Consultas rápidas via URL params
     """
     try:
-        query = query.lower().strip()
-        
-        if not query:
+        if not query or not str(query).strip():
             return JSONResponse({
                 "status": "error",
                 "message": "Se requiere un parámetro 'query'",
@@ -275,24 +277,32 @@ async def chatgpt_proxy_post(request: Request):
     """
     try:
         body = await request.json()
-        
-        # Extraer query del cuerpo de la solicitud
-        query = body.get("query", "").lower().strip()
-        params = body.get("params", {})
-        
-        if not query:
+
+        # Aceptar dos modos: (A) message libre, (B) query + params
+        message = body.get("message")
+        query = body.get("query")
+        params = body.get("params") or {}
+        if not isinstance(params, dict):
+            params = {}
+
+        # Si viene message sin query, usar message como consulta natural
+        if message and not query:
+            query = str(message)
+
+        # Validación: debe existir query (derivada o explícita)
+        if not query or not str(query).strip():
             return JSONResponse({
                 "status": "error",
-                "message": "Se requiere un 'query' en el cuerpo de la solicitud",
+                "message": "Formato no reconocido. Envíe 'message' (modo libre) o 'query' (modo tradicional).",
                 "example": {
-                    "query": "subir video a youtube",
-                    "params": {"file_path": "/ruta/video.mp4", "title": "Mi Video"}
+                    "modo_libre": {"message": "enviar correo a alguien@dominio.com con asunto Prueba y cuerpo Hola"},
+                    "modo_tradicional": {"query": "enviar correo", "params": {"mailbox":"ceo@elitecosmeticdental.com","to_recipients":["destino@dominio.com"],"subject":"Prueba","body_content":"Hola"}}
                 },
                 "chatgpt_friendly": True
             })
-        
-        # Procesar query usando la función auxiliar
-        result = await process_chatgpt_query(query, params)
+
+        # Procesar query usando la función auxiliar (ella normaliza y valida)
+        result = await process_chatgpt_query(str(query), params)
         return result
         
     except Exception as e:
