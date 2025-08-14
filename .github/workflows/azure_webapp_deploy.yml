@@ -1,4 +1,4 @@
-name: Deploy Python App to Azure App Service (Oryx, no Docker)
+name: Deploy to Azure App Service - Simplified
 
 on:
   push:
@@ -19,13 +19,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Setup Python
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
         python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Validate app structure
+      run: |
+        echo "✅ Verificando estructura..."
+        test -f app/main.py || (echo "❌ app/main.py no encontrado" && exit 1)
+        test -f requirements.txt || (echo "❌ requirements.txt no encontrado" && exit 1)
+        python -c "from app.main import app; print('✅ App se importa correctamente')"
 
     - name: Azure Login (OIDC)
       uses: azure/login@v2
@@ -34,72 +46,26 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    # ======= FORZAR REBUILD LIMPIO =======
-    - name: Force clean Oryx cache & old files
-      run: |
-        echo "🔥 Cleaning Oryx artifacts and wwwroot..."
-        CREDS=$(az webapp deployment list-publishing-credentials \
-          --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }})
-        USER=$(echo $CREDS | jq -r '.publishingUserName')
-        PASS=$(echo $CREDS | jq -r '.publishingPassword')
-
-        # Borrar manifest y paquete
-        for path in /site/wwwroot/oryx-manifest.toml /site/wwwroot/output.tar.gz /tmp/oryx /site/wwwroot/* ; do
-          curl -s -X DELETE "https://${{ env.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net/api/vfs${path}" \
-            -u "$USER:$PASS" || true
-        done
-
-        # Variables temporales para obligar rebuild
-        az webapp config appsettings set \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --settings DEPLOYMENT_TIMESTAMP=$(date +%s) \
-                    SCM_BUILD_ARGS="--no-cache" \
-                    ORYX_DISABLE_CACHE=true
-
-    - name: Validate repo structure
-      run: |
-        test -f app/main.py || (echo "main.py no encontrado" && exit 1)
-        test -f requirements.txt || (echo "requirements.txt no encontrado" && exit 1)
-        echo "Estructura OK:"
-        find app -maxdepth 2 -name "*.py" | head -30
-
-    - name: Install dependencies (just to fail early)
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: Deploy with Oryx/ZipDeploy
+    - name: Deploy to Azure Web App
       uses: azure/webapps-deploy@v3
       with:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         package: .
         clean: true
 
-    - name: Post-deploy health check
+    - name: Health check
       run: |
-        echo "⏳ Esperando a que la app levante..."
-        sleep 120
-        for i in {1..6}; do
-          echo "Intento $i..."
-          code=$(curl -k -s -o /dev/null -w "%{http_code}" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health")
-          if [ "$code" = "200" ]; then
-            echo "✅ Health OK"
+        echo "⏳ Esperando que la app inicie..."
+        sleep 60
+        
+        # Health check básico
+        for i in {1..5}; do
+          echo "Intento $i de health check..."
+          status=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health")
+          if [ "$status" = "200" ]; then
+            echo "✅ Health check exitoso!"
             break
           fi
-          sleep 20
+          echo "⏳ Status: $status, reintentando..."
+          sleep 30
         done
-
-        echo "Probando /api/v1/dynamics..."
-        curl -s -X POST "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics" \
-          -H "Content-Type: application/json" \
-          -d '{"action":"gemini_suggest_action","params":{"query":"test"}}' || true
-
-    - name: Cleanup temp settings
-      if: always()
-      run: |
-        az webapp config appsettings delete \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --setting-names SCM_BUILD_ARGS ORYX_DISABLE_CACHE || true
