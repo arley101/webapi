@@ -1,101 +1,80 @@
-# ============================================================================
-# FRAMEWORK PRINCIPAL - FASTAPI & UVICORN
-# ============================================================================
-fastapi==0.111.1
-uvicorn[standard]==0.30.3
-# Nota: gunicorn solo necesario si usas workers multi-proceso en producción
-gunicorn==22.0.0
+# Requirements Final para Asistente Inteligente
+# Optimizado para producción con todas las integraciones
 
-# Pydantic y configuración
-pydantic==2.11.4
-pydantic-settings==2.9.1
-python-dotenv==1.1.0
-typing-extensions>=4.13,<5.0
-annotated-types>=0.7,<1.0
-# ============================================================================
-# HTTP & NETWORKING
-# ============================================================================
-httpx==0.27.0  # Solo si necesitas cliente HTTP async
-requests==2.32.3  # Para llamadas HTTP síncronas
-# aiohttp se puede eliminar si usas httpx
-python-multipart==0.0.9  # Para uploads de archivos
+# === FRAMEWORK CORE ===
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+python-multipart==0.0.6
 
-# ============================================================================
-# AUTENTICACIÓN & OAUTH
-# ============================================================================
-oauthlib>=3.3,<4.0
-msal>=1.25,<2.0
-python-jose[cryptography]==3.3.0  # Para JWT
-passlib[bcrypt]>=1.7,<2.0
-
-# ============================================================================
-# GOOGLE APIS & SERVICES - COMPATIBLE CON API v20+
-# ============================================================================
-google-api-python-client==2.134.0
-google-auth==2.32.0
-google-auth-oauthlib==1.2.1
-# ACTUALIZADO: Google Ads API v20+ compatible (agosto 2025)
-google-ads==28.0.0
-google-generativeai==0.8.3
-# google-api-core viene como dependencia transitiva
-
-# ============================================================================
-# MICROSOFT GRAPH & AZURE
-# ============================================================================
-azure-identity==1.17.1
-azure-mgmt-resource==23.1.1
-azure-mgmt-logic==10.0.0
-azure-mgmt-web==7.2.0
+# === MICROSOFT ECOSYSTEM ===
+azure-identity==1.15.0
+azure-mgmt-resource==23.0.1
+azure-mgmt-compute==30.3.0
+azure-storage-blob==12.19.0
+msal==1.26.0
 msgraph-core==0.2.2
+microsoft-graph==1.0.0
 
-# ============================================================================
-# SOCIAL MEDIA & ADS APIS
-# ============================================================================
-facebook-business>=23.0,<24.0
-twitter-ads>=11.0,<12.0
-tiktok-business-api>=1.9,<2.0
-linkedin-api>=2.2,<3.0
+# === GOOGLE SERVICES ===
+google-auth==2.24.0
+google-auth-oauthlib==1.1.0
+google-api-python-client==2.108.0
+google-ads==22.1.0
+googleapis-common-protos==1.61.0
 
-# ============================================================================
-# CRM & BUSINESS TOOLS
-# ============================================================================
-hubspot-api-client==9.0.0  # Versión estable más reciente
-notion-client==2.2.1
+# === SOCIAL MEDIA APIS ===
+tweepy==4.14.0
+python-linkedin-v2==2.0.1
+facebook-business==18.0.2
+pytube==15.0.0
 
-# ============================================================================
-# IA & MACHINE LEARNING
-# ============================================================================
-openai==1.40.8
+# === AI & ML ===
+openai==1.6.1
+google-generativeai==0.3.2
+anthropic==0.8.1
 
-# ============================================================================
-# WEB RESEARCH & SCRAPING
-# ============================================================================
-beautifulsoup4>=4.12,<5.0
-lxml>=4.9,<6.0
-readability-lxml>=0.8,<1.0
+# === WEB & HTTP ===
+httpx==0.25.2
+aiohttp==3.9.1
+requests==2.31.0
+websockets==12.0
 
-# ============================================================================
-# DATA PROCESSING & ANALYSIS
-# ============================================================================
-numpy>=2.3,<3.0
-pandas>=2.3,<3.0
-openpyxl>=3.1,<4.0
-xlsxwriter>=3.2,<4.0
-PyPDF2>=3.0,<4.0
-python-docx>=1.2,<2.0
+# === DATA PROCESSING ===
+pandas==2.1.4
+numpy==1.25.2
+openpyxl==3.1.2
+python-dateutil==2.8.2
 
-# ============================================================================
-# UTILITIES & HELPERS
-# ============================================================================
-python-dateutil>=2.8,<3.0
-pytz>=2023.3,<2024.0
-click>=8.1,<9.0
-jinja2>=3.1,<4.0
-loguru>=0.7.2,<1.0 
-python-slugify>=8.0,<9.0
-validators>=0.35,<1.0
-PyYAML>=6.0,<7.0
+# === AUTH & SECURITY ===
+PyJWT==2.8.0
+cryptography==41.0.8
+passlib[bcrypt]==1.7.4
 
-# ============================================================================
-# TESTING & DEVELOPMENT: mover a requirements-dev.txt (pytest, pytest-asyncio, black, isort)
-# ============================================================================
+# === DATABASE ===
+sqlalchemy==2.0.23
+alembic==1.13.0
+asyncpg==0.29.0
+
+# === COMMUNICATION ===
+twilio==8.11.0
+slack-sdk==3.26.0
+
+# === UTILITIES ===
+python-json-logger==2.0.7
+pyyaml==6.0.1
+jinja2==3.1.2
+click==8.1.7
+rich==13.7.0
+
+# === AUTOMATION ===
+celery==5.3.4
+redis==5.0.1
+
+# === MONITORING ===
+prometheus-client==0.19.0
+
+# === DEPLOYMENT ===
+gunicorn==21.2.0

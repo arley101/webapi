@@ -1,0 +1,31 @@
+{
+  "service": "Microsoft Teams Elite Dynamics Bot",
+  "manifest_version": "1.16",
+  "app_id": "com.elitedynamics.assistant",
+  "bot_endpoint": "/api/messages",
+  "features": [
+    "466+ acciones empresariales",
+    "5 workflows automatizados",
+    "Tarjetas adaptativas",
+    "Comandos interactivos",
+    "Integración nativa Teams"
+  ],
+  "commands": [
+    {
+      "title": "Lista workflows",
+      "description": "Ver workflows disponibles"
+    },
+    {
+      "title": "Ejecuta backup",
+      "description": "Backup completo empresarial"
+    },
+    {
+      "title": "Sincroniza marketing",
+      "description": "Dashboard marketing unificado"
+    },
+    {
+      "title": "Ayuda",
+      "description": "Ver todos los comandos"
+    }
+  ]
+}
