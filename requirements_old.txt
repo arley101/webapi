@@ -1,0 +1,77 @@
+# Requirements Final para Asistente Inteligente
+# Optimizado para producción con todas las integraciones
+
+# === FRAMEWORK CORE ===
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+python-multipart==0.0.6
+
+# === HTTP & API ===
+requests==2.31.0
+aiohttp==3.9.1
+httpx==0.25.2
+
+# === MICROSOFT ECOSYSTEM ===
+azure-identity==1.15.0
+azure-mgmt-resource==23.0.1
+azure-mgmt-logic==10.0.0
+azure-mgmt-web==7.2.0
+msal==1.26.0
+msgraph-core==0.2.2
+
+# === GOOGLE ECOSYSTEM ===
+google-auth==2.25.2
+google-auth-oauthlib==1.1.0
+google-api-python-client==2.110.0
+google-ads==23.1.0
+google-generativeai==0.3.2
+
+# === SOCIAL MEDIA APIS ===
+facebook-business==19.0.0
+linkedin-api==2.2.0
+tweepy==4.14.0
+tiktok-business-api==1.9
+
+# === AI & ML ===
+openai==1.6.1
+
+# === DATA PROCESSING ===
+pandas==2.1.4
+numpy==1.25.2
+openpyxl==3.1.2
+xlsxwriter==3.1.9
+PyPDF2==3.0.1
+python-docx==1.1.0
+
+# === WEB SCRAPING ===
+beautifulsoup4==4.12.2
+lxml==4.9.3
+readability-lxml==0.8.1
+
+# === CRM & PRODUCTIVITY ===
+hubspot-api-client==7.4.0
+notion-client==2.2.1
+
+# === UTILITIES ===
+PyYAML==6.0.1
+python-dateutil==2.8.2
+python-slugify==8.0.1
+validators==0.22.0
+pytz==2023.3
+
+# === SECURITY ===
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# === LOGGING ===
+loguru==0.7.2
+
+# === PRODUCTION ===
+gunicorn==21.2.0
+
+# === DEVELOPMENT (opcional) ===
+# flask==3.0.0
+# flask-cors==4.0.0

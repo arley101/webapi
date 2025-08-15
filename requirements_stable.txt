@@ -1,0 +1,70 @@
+# Requirements Estable para Despliegue Azure
+# Versiones probadas y estables
+
+# === FRAMEWORK CORE ===
+fastapi>=0.100.0,<0.105.0
+uvicorn[standard]>=0.20.0,<0.25.0
+pydantic>=2.4.0,<2.6.0
+pydantic-settings>=2.0.0,<2.2.0
+python-dotenv>=1.0.0,<1.1.0
+python-multipart>=0.0.6,<0.1.0
+
+# === HTTP & API ===
+requests>=2.31.0,<2.32.0
+aiohttp>=3.8.0,<3.10.0
+httpx>=0.25.0,<0.26.0
+
+# === MICROSOFT ECOSYSTEM ===
+azure-identity>=1.15.0,<1.16.0
+azure-mgmt-resource>=23.0.0,<24.0.0
+azure-mgmt-logic>=10.0.0,<11.0.0
+azure-mgmt-web>=7.2.0,<8.0.0
+msal>=1.26.0,<1.27.0
+msgraph-core>=0.2.2,<0.3.0
+
+# === GOOGLE ECOSYSTEM ===
+google-auth>=2.20.0,<2.30.0
+google-auth-oauthlib>=1.0.0,<1.2.0
+google-api-python-client>=2.100.0,<2.120.0
+google-ads>=23.0.0,<24.0.0
+
+# === SOCIAL MEDIA APIS ===
+facebook-business>=19.0.0,<20.0.0
+linkedin-api>=2.2.0,<2.3.0
+tweepy>=4.14.0,<5.0.0
+
+# === AI & ML ===
+openai>=1.6.0,<1.7.0
+
+# === DATA PROCESSING ===
+pandas>=2.1.0,<2.2.0
+numpy>=1.25.0,<1.26.0
+openpyxl>=3.1.0,<3.2.0
+xlsxwriter>=3.1.0,<3.2.0
+PyPDF2>=3.0.0,<3.1.0
+python-docx>=1.1.0,<1.2.0
+
+# === WEB SCRAPING ===
+beautifulsoup4>=4.12.0,<4.13.0
+lxml>=4.9.0,<5.0.0
+
+# === CRM & PRODUCTIVITY ===
+hubspot-api-client>=7.4.0,<8.0.0
+notion-client>=2.2.0,<2.3.0
+
+# === UTILITIES ===
+PyYAML>=6.0.0,<6.1.0
+python-dateutil>=2.8.0,<2.9.0
+python-slugify>=8.0.0,<8.1.0
+validators>=0.22.0,<0.23.0
+pytz>=2023.3,<2024.0
+
+# === SECURITY ===
+python-jose[cryptography]>=3.3.0,<3.4.0
+passlib[bcrypt]>=1.7.4,<1.8.0
+
+# === LOGGING ===
+loguru>=0.7.0,<0.8.0
+
+# === PRODUCTION ===
+gunicorn>=21.2.0,<22.0.0

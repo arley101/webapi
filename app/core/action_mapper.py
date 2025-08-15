@@ -25,7 +25,7 @@ from app.actions import (
     userprofile_actions, users_actions, vivainsights_actions,
     youtube_channel_actions, gemini_actions, x_ads_actions, webresearch_actions, 
     wordpress_actions, resolver_actions, intelligent_assistant_actions,
-    whatsapp_actions, google_services_actions  # ✅ NUEVAS ACCIONES AGREGADAS
+    whatsapp_actions, google_services_actions  # ✅ RUNWAY UNIFICADO EN runway_actions
 )
 
 # Importar Enhanced Actions
@@ -43,11 +43,6 @@ try:
     from app.actions import wordpress_enhanced
 except ImportError:
     wordpress_enhanced = None
-
-try:
-    from app.actions import runway_enhanced
-except ImportError:
-    runway_enhanced = None
 
 # 🚀 IMPORTAR ACCIONES OPTIMIZADAS PARA OPENAI ASSISTANT
 try:
@@ -131,7 +126,6 @@ POWER_AUTOMATE_CATEGORY = "Power Automate"
 POWERBI_CATEGORY = "Power BI"
 RESOLVER_CATEGORY = "Resource Resolver"
 RUNWAY_CATEGORY = "Runway AI"
-RUNWAY_ENHANCED_CATEGORY = "Runway Enhanced"  # ✅ NUEVA CATEGORÍA
 SHAREPOINT_CATEGORY = "SharePoint"
 STREAM_CATEGORY = "Microsoft Stream"
 TEAMS_CATEGORY = "Microsoft Teams"
@@ -473,21 +467,6 @@ else:
     WORDPRESS_ENHANCED_ACTIONS: Dict[str, Callable] = {}
 
 # ============================================================================
-# RUNWAY ENHANCED ACTIONS - CREACIÓN PROFESIONAL
-# ============================================================================
-
-if runway_enhanced:
-    RUNWAY_ENHANCED_ACTIONS: Dict[str, Callable] = {
-        "runway_generate_video_advanced": runway_enhanced.runway_generate_video_advanced,
-        "runway_image_to_video_pro": runway_enhanced.runway_image_to_video_pro,
-        "runway_text_to_video_studio": runway_enhanced.runway_text_to_video_studio,
-        "runway_video_editing_suite": runway_enhanced.runway_video_editing_suite,
-        "runway_model_training_custom": runway_enhanced.runway_model_training_custom,
-    }
-else:
-    RUNWAY_ENHANCED_ACTIONS: Dict[str, Callable] = {}
-
-# ============================================================================
 # X (TWITTER) ENHANCED ACTIONS - GESTIÓN AVANZADA
 # ============================================================================
 
@@ -716,6 +695,11 @@ RUNWAY_ACTIONS: Dict[str, Callable] = {
     "runway_get_result_url": runway_actions.runway_get_result_url,
     "runway_list_models": runway_actions.runway_list_models,
     "runway_estimate_cost": runway_actions.runway_estimate_cost,
+    "runway_check_configuration": runway_actions.runway_check_configuration,
+    "runway_generate_video_advanced": runway_actions.runway_generate_video_advanced,
+    "runway_image_to_video_pro": runway_actions.runway_image_to_video_pro,
+    "runway_text_to_video_studio": runway_actions.runway_text_to_video_studio,
+    "runway_wait_and_save": runway_actions.runway_wait_and_save,
 }
 
 # ============================================================================
@@ -1110,7 +1094,6 @@ ACTION_MAP: Dict[str, Callable] = {
     **POWERBI_ACTIONS,
     **RESOLVER_ACTIONS,
     **RUNWAY_ACTIONS,
-    **RUNWAY_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - CREACIÓN PROFESIONAL
     **SHAREPOINT_ACTIONS,
     **STREAM_ACTIONS,
     **TEAMS_ACTIONS,
@@ -1915,7 +1898,6 @@ def get_all_actions() -> Dict[str, Callable]:
         # ⚡ ENHANCED PROFESSIONAL APIS (5 funciones cada uno)
         GOOGLE_MARKETING_ENHANCED_ACTIONS,  # ✅ NUEVO - Marketing Avanzado
         WORDPRESS_ENHANCED_ACTIONS,         # ✅ NUEVO - WordPress Completo
-        RUNWAY_ENHANCED_ACTIONS,            # ✅ NUEVO - Creación Profesional
         X_ENHANCED_ACTIONS,                 # ✅ NUEVO - X/Twitter Avanzado
         TIKTOK_ENHANCED_ACTIONS,            # ✅ NUEVO - TikTok Viral
         LINKEDIN_ENHANCED_ACTIONS,          # ✅ NUEVO - LinkedIn Profesional
