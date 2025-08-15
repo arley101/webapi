@@ -33,7 +33,7 @@ google-generativeai==0.3.2
 facebook-business==19.0.0
 linkedin-api==2.2.0
 tweepy==4.14.0
-tiktok-business-api==1.0.5
+tiktok-business-api==1.9
 
 # === AI & ML ===
 openai==1.6.1
