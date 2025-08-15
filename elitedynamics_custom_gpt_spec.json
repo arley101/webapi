@@ -1,0 +1,504 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "EliteDynamicsAPI",
+    "description": "API empresarial con 476+ integraciones - Cada acción es una ruta específica",
+    "version": "1.1"
+  },
+  "servers": [
+    {
+      "url": "https://elitedynamicsapi.azurewebsites.net",
+      "description": "Servidor de Producción"
+    }
+  ],
+  "paths": {
+    "/api/v1/runway/list-models": {
+      "post": {
+        "summary": "Listar modelos de Runway ML",
+        "description": "Obtiene todos los modelos disponibles en Runway ML",
+        "operationId": "runwayListModels",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {}
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de modelos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "models": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "name": { "type": "string" },
+                          "type": { "type": "string" }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runway/generate-video": {
+      "post": {
+        "summary": "Generar video con Runway ML",
+        "description": "Genera un video usando la API de Runway ML",
+        "operationId": "runwayGenerateVideo",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["prompt"],
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "description": "Descripción del video a generar"
+                  },
+                  "model": {
+                    "type": "string",
+                    "default": "gen3a_turbo"
+                  },
+                  "duration": {
+                    "type": "integer",
+                    "default": 5
+                  },
+                  "ratio": {
+                    "type": "string",
+                    "default": "1280:720"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Generación iniciada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "task_id": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/runway/get-video-status": {
+      "post": {
+        "summary": "Verificar estado de video",
+        "description": "Verifica el estado de generación de un video",
+        "operationId": "runwayGetVideoStatus",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["task_id"],
+                "properties": {
+                  "task_id": {
+                    "type": "string",
+                    "description": "ID de la tarea de generación"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Estado del video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string" },
+                    "task_status": { "type": "string" },
+                    "progress": { "type": "number" },
+                    "video_url": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/email/send": {
+      "post": {
+        "summary": "Enviar email",
+        "description": "Envía un email usando Microsoft Graph",
+        "operationId": "emailSend",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["to", "subject", "body"],
+                "properties": {
+                  "to": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  },
+                  "subject": { "type": "string" },
+                  "body": { "type": "string" },
+                  "importance": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Email enviado"
+          }
+        }
+      }
+    },
+    "/api/v1/email/list": {
+      "post": {
+        "summary": "Listar emails",
+        "description": "Lista emails del buzón",
+        "operationId": "emailList",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "folder": { "type": "string" },
+                  "limit": { "type": "integer" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de emails"
+          }
+        }
+      }
+    },
+    "/api/v1/calendar/create-event": {
+      "post": {
+        "summary": "Crear evento en calendario",
+        "description": "Crea un evento en el calendario",
+        "operationId": "calendarCreateEvent",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["subject", "start", "end"],
+                "properties": {
+                  "subject": { "type": "string" },
+                  "start": { "type": "string", "format": "date-time" },
+                  "end": { "type": "string", "format": "date-time" },
+                  "attendees": {
+                    "type": "array",
+                    "items": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evento creado"
+          }
+        }
+      }
+    },
+    "/api/v1/notion/create-page": {
+      "post": {
+        "summary": "Crear página en Notion",
+        "description": "Crea una nueva página en Notion",
+        "operationId": "notionCreatePage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "parent_id": { "type": "string" },
+                  "content": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Página creada"
+          }
+        }
+      }
+    },
+    "/api/v1/openai/generate-text": {
+      "post": {
+        "summary": "Generar texto con OpenAI",
+        "description": "Genera texto usando OpenAI",
+        "operationId": "openaiGenerateText",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["prompt"],
+                "properties": {
+                  "prompt": { "type": "string" },
+                  "model": { "type": "string", "default": "gpt-4" },
+                  "max_tokens": { "type": "integer", "default": 1500 },
+                  "temperature": { "type": "number", "default": 0.7 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Texto generado"
+          }
+        }
+      }
+    },
+    "/api/v1/google-ads/get-campaigns": {
+      "post": {
+        "summary": "Obtener campañas de Google Ads",
+        "description": "Lista campañas de Google Ads",
+        "operationId": "googleAdsGetCampaigns",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customer_id"],
+                "properties": {
+                  "customer_id": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de campañas"
+          }
+        }
+      }
+    },
+    "/api/v1/meta-ads/get-insights": {
+      "post": {
+        "summary": "Obtener insights de Meta Ads",
+        "description": "Obtiene insights de Facebook/Instagram Ads",
+        "operationId": "metaAdsGetInsights",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["account_id"],
+                "properties": {
+                  "account_id": { "type": "string" },
+                  "date_range": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Insights de Meta Ads"
+          }
+        }
+      }
+    },
+    "/api/v1/wordpress/create-post": {
+      "post": {
+        "summary": "Crear post en WordPress",
+        "description": "Crea un nuevo post en WordPress",
+        "operationId": "wordpressCreatePost",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["title", "content"],
+                "properties": {
+                  "title": { "type": "string" },
+                  "content": { "type": "string" },
+                  "status": { "type": "string", "default": "publish" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Post creado"
+          }
+        }
+      }
+    },
+    "/api/v1/hubspot/create-contact": {
+      "post": {
+        "summary": "Crear contacto en HubSpot",
+        "description": "Crea un nuevo contacto en HubSpot CRM",
+        "operationId": "hubspotCreateContact",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email"],
+                "properties": {
+                  "email": { "type": "string" },
+                  "firstname": { "type": "string" },
+                  "lastname": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contacto creado"
+          }
+        }
+      }
+    },
+    "/api/v1/teams/send-message": {
+      "post": {
+        "summary": "Enviar mensaje en Teams",
+        "description": "Envía mensaje en Microsoft Teams",
+        "operationId": "teamsSendMessage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["team_id", "channel_id", "message"],
+                "properties": {
+                  "team_id": { "type": "string" },
+                  "channel_id": { "type": "string" },
+                  "message": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mensaje enviado"
+          }
+        }
+      }
+    },
+    "/api/v1/youtube/get-videos": {
+      "post": {
+        "summary": "Obtener videos de YouTube",
+        "description": "Lista videos del canal de YouTube",
+        "operationId": "youtubeGetVideos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["channel_id"],
+                "properties": {
+                  "channel_id": { "type": "string" },
+                  "max_results": { "type": "integer", "default": 25 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de videos"
+          }
+        }
+      }
+    },
+    "/api/v1/powerbi/get-reports": {
+      "post": {
+        "summary": "Obtener reportes de Power BI",
+        "description": "Lista reportes de Power BI",
+        "operationId": "powerbiGetReports",
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "workspace_id": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lista de reportes"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}

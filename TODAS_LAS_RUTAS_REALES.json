@@ -1,0 +1,562 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "EliteDynamicsAPI - Todas las Rutas Reales",
+    "description": "API completa con todas las rutas del backend real",
+    "version": "1.1"
+  },
+  "servers": [
+    {
+      "url": "https://elitedynamicsapi.azurewebsites.net"
+    }
+  ],
+  "paths": {
+    "/api/v1/dynamics": {
+      "post": {
+        "summary": "Procesar acción dinámica",
+        "description": "RUTA PRINCIPAL - Ejecuta cualquiera de las 476+ acciones disponibles",
+        "operationId": "processDynamicAction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["action"],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "Nombre de la acción a ejecutar"
+                  },
+                  "params": {
+                    "type": "object",
+                    "description": "Parámetros para la acción"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acción completada exitosamente"
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "summary": "Consultar estado del trabajo",
+        "description": "Consulta el estado de un job asíncrono",
+        "operationId": "getJobStatus",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado/resultado del job"
+          }
+        }
+      }
+    },
+    "/api/v1/chatgpt": {
+      "get": {
+        "summary": "ChatGPT Proxy GET",
+        "description": "Endpoint GET para ChatGPT proxy",
+        "operationId": "chatgptProxyGet",
+        "responses": {
+          "200": {
+            "description": "Respuesta del proxy"
+          }
+        }
+      },
+      "post": {
+        "summary": "ChatGPT Proxy POST",
+        "description": "Endpoint POST para ChatGPT proxy",
+        "operationId": "chatgptProxyPost",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "Mensaje para ChatGPT"
+                  },
+                  "conversation_id": {
+                    "type": "string",
+                    "description": "ID de conversación opcional"
+                  }
+                },
+                "required": ["message"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Respuesta del proxy"
+          }
+        }
+      }
+    },
+    "/api/v1/chatgpt/help": {
+      "get": {
+        "summary": "Ayuda ChatGPT",
+        "description": "Información de ayuda para ChatGPT",
+        "operationId": "chatgptHelp",
+        "responses": {
+          "200": {
+            "description": "Información de ayuda"
+          }
+        }
+      }
+    },
+    "/api/v1/chatgpt/actions": {
+      "get": {
+        "summary": "Acciones ChatGPT",
+        "description": "Lista de acciones disponibles para ChatGPT",
+        "operationId": "chatgptActions",
+        "responses": {
+          "200": {
+            "description": "Lista de acciones"
+          }
+        }
+      }
+    },
+    "/api/v1/workflows": {
+      "get": {
+        "summary": "Listar workflows",
+        "description": "Lista todos los workflows disponibles",
+        "operationId": "listWorkflows",
+        "responses": {
+          "200": {
+            "description": "Lista de workflows"
+          }
+        }
+      }
+    },
+    "/api/v1/workflows/{workflow_id}/execute": {
+      "post": {
+        "summary": "Ejecutar workflow",
+        "description": "Ejecuta un workflow específico",
+        "operationId": "executeWorkflow",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "input_data": {
+                    "type": "object",
+                    "description": "Datos de entrada para el workflow"
+                  },
+                  "priority": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high"],
+                    "description": "Prioridad de ejecución"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Workflow ejecutado"
+          }
+        }
+      }
+    },
+    "/api/v1/workflows/status/{execution_id}": {
+      "get": {
+        "summary": "Estado del workflow",
+        "description": "Consulta el estado de ejecución de un workflow",
+        "operationId": "getWorkflowStatus",
+        "parameters": [
+          {
+            "name": "execution_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado del workflow"
+          }
+        }
+      }
+    },
+    "/api/v1/workflows/history": {
+      "get": {
+        "summary": "Historial de workflows",
+        "description": "Historial de ejecuciones de workflows",
+        "operationId": "getWorkflowHistory",
+        "responses": {
+          "200": {
+            "description": "Historial de workflows"
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/chat": {
+      "post": {
+        "summary": "Chat con asistente",
+        "description": "Interfaz de chat con el asistente unificado",
+        "operationId": "assistantChat",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["message"],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "Mensaje para el asistente"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Respuesta del asistente"
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/interface": {
+      "get": {
+        "summary": "Interfaz del asistente",
+        "description": "Interfaz web del asistente",
+        "operationId": "assistantInterface",
+        "responses": {
+          "200": {
+            "description": "Interfaz del asistente"
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/status": {
+      "get": {
+        "summary": "Estado del asistente",
+        "description": "Estado actual del asistente",
+        "operationId": "assistantStatus",
+        "responses": {
+          "200": {
+            "description": "Estado del asistente"
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/learn": {
+      "get": {
+        "summary": "Aprendizaje del asistente",
+        "description": "Información de aprendizaje del asistente",
+        "operationId": "assistantLearn",
+        "responses": {
+          "200": {
+            "description": "Información de aprendizaje"
+          }
+        }
+      }
+    },
+    "/api/v1/selector/auto": {
+      "post": {
+        "summary": "Selector automático",
+        "description": "Selector automático de asistente",
+        "operationId": "selectorAuto",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "description": "Consulta para el selector automático"
+                  },
+                  "context": {
+                    "type": "object",
+                    "description": "Contexto adicional"
+                  }
+                },
+                "required": ["query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado del selector"
+          }
+        }
+      }
+    },
+    "/api/v1/selector/manual": {
+      "post": {
+        "summary": "Selector manual",
+        "description": "Selector manual de asistente",
+        "operationId": "selectorManual",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "assistant_type": {
+                    "type": "string",
+                    "enum": ["openai", "gemini", "azure"],
+                    "description": "Tipo de asistente a seleccionar"
+                  },
+                  "query": {
+                    "type": "string",
+                    "description": "Consulta para el asistente"
+                  }
+                },
+                "required": ["assistant_type", "query"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Resultado del selector"
+          }
+        }
+      }
+    },
+    "/api/v1/selector/compare": {
+      "get": {
+        "summary": "Comparar selectores",
+        "description": "Comparación de selectores de asistente",
+        "operationId": "selectorCompare",
+        "responses": {
+          "200": {
+            "description": "Comparación de selectores"
+          }
+        }
+      }
+    },
+    "/api/v1/selector/interface": {
+      "get": {
+        "summary": "Interfaz del selector",
+        "description": "Interfaz web del selector",
+        "operationId": "selectorInterface",
+        "responses": {
+          "200": {
+            "description": "Interfaz del selector"
+          }
+        }
+      }
+    },
+    "/api/v1/selector/status": {
+      "get": {
+        "summary": "Estado del selector",
+        "description": "Estado actual del selector",
+        "operationId": "selectorStatus",
+        "responses": {
+          "200": {
+            "description": "Estado del selector"
+          }
+        }
+      }
+    },
+    "/api/v1/intelligent-assistant/session/start": {
+      "post": {
+        "summary": "Iniciar sesión de asistente inteligente",
+        "description": "Inicia una nueva sesión con el asistente inteligente",
+        "operationId": "startIntelligentAssistantSession",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "user_id": {
+                    "type": "string",
+                    "description": "ID del usuario"
+                  },
+                  "session_type": {
+                    "type": "string",
+                    "enum": ["chat", "voice", "mixed"],
+                    "description": "Tipo de sesión"
+                  },
+                  "preferences": {
+                    "type": "object",
+                    "description": "Preferencias del usuario"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Sesión iniciada"
+          }
+        }
+      }
+    },
+    "/api/v1/intelligent-assistant/status": {
+      "get": {
+        "summary": "Estado del asistente inteligente",
+        "description": "Estado del asistente inteligente",
+        "operationId": "intelligentAssistantStatus",
+        "responses": {
+          "200": {
+            "description": "Estado del asistente inteligente"
+          }
+        }
+      }
+    },
+    "/whatsapp": {
+      "get": {
+        "summary": "Verificación WhatsApp",
+        "description": "Verificación del webhook de WhatsApp",
+        "operationId": "whatsappVerification",
+        "parameters": [
+          {
+            "name": "hub.mode",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hub.verify_token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hub.challenge",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verificación exitosa"
+          }
+        }
+      },
+      "post": {
+        "summary": "Webhook WhatsApp",
+        "description": "Recibe mensajes del webhook de WhatsApp",
+        "operationId": "whatsappWebhook",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "object": {
+                    "type": "string",
+                    "description": "Tipo de objeto (whatsapp_business_account)"
+                  },
+                  "entry": {
+                    "type": "array",
+                    "description": "Array de entradas de webhook",
+                    "items": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mensaje procesado"
+          }
+        }
+      }
+    },
+    "/": {
+      "get": {
+        "summary": "Raíz de la API",
+        "description": "Información básica de la API",
+        "operationId": "root",
+        "responses": {
+          "200": {
+            "description": "Información de la API"
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Health check básico",
+        "description": "Verificación básica de salud",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "Estado de salud"
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health check detallado",
+        "description": "Verificación detallada de salud del sistema",
+        "operationId": "apiHealthCheck",
+        "responses": {
+          "200": {
+            "description": "Estado detallado de salud"
+          }
+        }
+      }
+    },
+    "/chat": {
+      "get": {
+        "summary": "Interfaz de chat",
+        "description": "Interfaz web de chat con audio",
+        "operationId": "chatInterface",
+        "responses": {
+          "200": {
+            "description": "Interfaz de chat"
+          }
+        }
+      }
+    }
+  }
+}

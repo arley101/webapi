@@ -1,0 +1,665 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "EliteDynamicsAPI",
+    "description": "API empresarial con 476+ integraciones - Backend completo",
+    "version": "1.2.0"
+  },
+  "servers": [
+    {
+      "url": "https://elitedynamicsapi.azurewebsites.net",
+      "description": "Servidor de Producción"
+    }
+  ],
+  "paths": {
+    "/api/v1/dynamics": {
+      "post": {
+        "summary": "Ejecutar acción dinámica",
+        "description": "RUTA PRINCIPAL - Ejecuta cualquiera de las 476+ acciones disponibles",
+        "operationId": "executeAction",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acción ejecutada exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error en la solicitud",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/jobs/{job_id}": {
+      "get": {
+        "summary": "Obtener estado del trabajo",
+        "description": "Consulta el estado de un trabajo en ejecución",
+        "operationId": "getJobStatus",
+        "parameters": [
+          {
+            "name": "job_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID único del trabajo"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado del trabajo",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/assistant/process": {
+      "post": {
+        "summary": "Procesar mensaje del asistente",
+        "description": "Procesa mensajes del asistente inteligente",
+        "operationId": "processAssistantMessage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssistantMessage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mensaje procesado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssistantResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/workflows/execute": {
+      "post": {
+        "summary": "Ejecutar flujo de trabajo",
+        "description": "Ejecuta un flujo de trabajo predefinido",
+        "operationId": "executeWorkflow",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Flujo ejecutado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp": {
+      "get": {
+        "summary": "Verificación WhatsApp",
+        "description": "Verifica el webhook de WhatsApp",
+        "operationId": "verifyWhatsApp",
+        "parameters": [
+          {
+            "name": "hub.mode",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hub.verify_token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hub.challenge",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Verificación exitosa",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Webhook WhatsApp",
+        "description": "Recibe mensajes del webhook de WhatsApp",
+        "operationId": "whatsAppWebhook",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppWebhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mensaje procesado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/teams": {
+      "post": {
+        "summary": "Webhook Teams",
+        "description": "Recibe mensajes del bot de Teams",
+        "operationId": "teamsWebhook",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamsWebhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mensaje procesado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "Verificación de salud",
+        "description": "Verifica el estado del servicio",
+        "operationId": "healthCheck",
+        "responses": {
+          "200": {
+            "description": "Servicio saludable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActionRequest": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Nombre de la acción a ejecutar",
+            "examples": [
+              "runway_list_models",
+              "runway_generate_video",
+              "runway_get_video_status",
+              "email_send_message",
+              "calendario_create_event",
+              "notion_create_page",
+              "openai_generate_text",
+              "google_ads_get_campaigns",
+              "meta_ads_get_insights",
+              "wp_create_post",
+              "hubspot_create_contact",
+              "teams_send_message",
+              "youtube_channel_get_videos",
+              "powerbi_get_reports"
+            ]
+          },
+          "params": {
+            "type": "object",
+            "description": "Parámetros específicos para la acción",
+            "additionalProperties": true
+          }
+        }
+      },
+      "ActionResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["success", "error"]
+          },
+          "data": {
+            "type": "object",
+            "description": "Datos de respuesta específicos de la acción",
+            "additionalProperties": true
+          },
+          "task_id": {
+            "type": "string",
+            "description": "ID del trabajo para seguimiento asyncrono"
+          },
+          "message": {
+            "type": "string",
+            "description": "Mensaje descriptivo del resultado"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "required": ["status", "message"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["error"]
+          },
+          "message": {
+            "type": "string",
+            "description": "Descripción del error"
+          },
+          "error_code": {
+            "type": "string",
+            "description": "Código específico del error"
+          },
+          "details": {
+            "type": "object",
+            "description": "Detalles adicionales del error",
+            "additionalProperties": true
+          }
+        }
+      },
+      "JobStatus": {
+        "type": "object",
+        "required": ["job_id", "status"],
+        "properties": {
+          "job_id": {
+            "type": "string",
+            "description": "ID único del trabajo"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "running", "completed", "failed"],
+            "description": "Estado actual del trabajo"
+          },
+          "progress": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "Porcentaje de completado"
+          },
+          "result": {
+            "type": "object",
+            "description": "Resultado del trabajo si está completado",
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha de creación del trabajo"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Última actualización del trabajo"
+          }
+        }
+      },
+      "AssistantMessage": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Mensaje del usuario al asistente"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "ID del usuario"
+          },
+          "context": {
+            "type": "object",
+            "description": "Contexto adicional de la conversación",
+            "additionalProperties": true
+          }
+        }
+      },
+      "AssistantResponse": {
+        "type": "object",
+        "required": ["response"],
+        "properties": {
+          "response": {
+            "type": "string",
+            "description": "Respuesta del asistente"
+          },
+          "actions_executed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Lista de acciones ejecutadas por el asistente"
+          },
+          "memory_updated": {
+            "type": "boolean",
+            "description": "Indica si se actualizó la memoria conversacional"
+          }
+        }
+      },
+      "WorkflowRequest": {
+        "type": "object",
+        "required": ["workflow_name"],
+        "properties": {
+          "workflow_name": {
+            "type": "string",
+            "description": "Nombre del flujo de trabajo a ejecutar"
+          },
+          "inputs": {
+            "type": "object",
+            "description": "Parámetros de entrada para el flujo",
+            "additionalProperties": true
+          },
+          "async": {
+            "type": "boolean",
+            "default": false,
+            "description": "Ejecutar de forma asíncrona"
+          }
+        }
+      },
+      "WorkflowResponse": {
+        "type": "object",
+        "required": ["workflow_id", "status"],
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "description": "ID del flujo ejecutado"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["started", "completed", "failed"]
+          },
+          "job_id": {
+            "type": "string",
+            "description": "ID del trabajo si es asíncrono"
+          },
+          "results": {
+            "type": "object",
+            "description": "Resultados del flujo si está completado",
+            "additionalProperties": true
+          }
+        }
+      },
+      "WhatsAppWebhook": {
+        "type": "object",
+        "required": ["object"],
+        "properties": {
+          "object": {
+            "type": "string",
+            "description": "Tipo de objeto del webhook"
+          },
+          "entry": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ID de la entrada"
+                },
+                "changes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "object",
+                        "properties": {
+                          "messaging_product": {
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "type": "object",
+                            "additionalProperties": true
+                          },
+                          "contacts": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "additionalProperties": true
+                            }
+                          },
+                          "messages": {
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "from": {
+                                  "type": "string"
+                                },
+                                "id": {
+                                  "type": "string"
+                                },
+                                "timestamp": {
+                                  "type": "string"
+                                },
+                                "type": {
+                                  "type": "string"
+                                },
+                                "text": {
+                                  "type": "object",
+                                  "properties": {
+                                    "body": {
+                                      "type": "string"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "field": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "TeamsWebhook": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "Tipo de actividad de Teams"
+          },
+          "id": {
+            "type": "string",
+            "description": "ID de la actividad"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Marca de tiempo de la actividad"
+          },
+          "from": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "text": {
+            "type": "string",
+            "description": "Texto del mensaje"
+          },
+          "conversation": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["success"]
+          },
+          "message": {
+            "type": "string",
+            "description": "Mensaje de confirmación"
+          }
+        }
+      },
+      "HealthStatus": {
+        "type": "object",
+        "required": ["status", "timestamp"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["healthy", "degraded", "unhealthy"]
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Fecha y hora de la verificación"
+          },
+          "version": {
+            "type": "string",
+            "description": "Versión del servicio"
+          },
+          "checks": {
+            "type": "object",
+            "description": "Resultados de verificaciones específicas",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "status": {
+                  "type": "string",
+                  "enum": ["pass", "fail"]
+                },
+                "message": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token JWT para autenticación"
+      },
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Clave API para autenticación"
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    },
+    {
+      "ApiKeyAuth": []
+    }
+  ]
+}

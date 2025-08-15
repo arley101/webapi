@@ -29,9 +29,18 @@ def _get_headers() -> Dict[str, str]:
     """
     Obtiene headers de autenticación para RunwayML.
     """
-    api_key = getattr(settings, "RUNWAY_API_KEY", None) or os.getenv("RUNWAY_API_KEY")
+    # Intentar múltiples nombres de variables según documentación oficial
+    api_key = (
+        getattr(settings, "RUNWAYML_API_SECRET", None) or 
+        os.getenv("RUNWAYML_API_SECRET") or
+        getattr(settings, "RUNWAYML_API_TOKEN", None) or 
+        os.getenv("RUNWAYML_API_TOKEN") or
+        getattr(settings, "RUNWAY_API_KEY", None) or 
+        os.getenv("RUNWAY_API_KEY")
+    )
+    
     if not api_key:
-        raise ValueError("RUNWAY_API_KEY no configurada. Configura la variable de entorno RUNWAY_API_KEY.")
+        raise ValueError("API Key de Runway no configurada. Configura la variable de entorno RUNWAYML_API_SECRET o RUNWAYML_API_TOKEN.")
     
     return {
         "Authorization": f"Bearer {api_key}",
@@ -541,17 +550,41 @@ def runway_check_configuration(client: AuthenticatedHttpClient, params: Dict[str
     Verificar la configuración actual de Runway
     """
     try:
-        api_key = getattr(settings, "RUNWAY_API_KEY", None) or os.getenv("RUNWAY_API_KEY")
+        # Verificar múltiples nombres de variables según documentación oficial
+        api_key = (
+            getattr(settings, "RUNWAYML_API_SECRET", None) or 
+            os.getenv("RUNWAYML_API_SECRET") or
+            getattr(settings, "RUNWAYML_API_TOKEN", None) or 
+            os.getenv("RUNWAYML_API_TOKEN") or
+            getattr(settings, "RUNWAY_API_KEY", None) or 
+            os.getenv("RUNWAY_API_KEY")
+        )
+        
+        # Determinar la fuente de la API key
+        api_source = "none"
+        if os.getenv("RUNWAYML_API_SECRET"):
+            api_source = "environment (RUNWAYML_API_SECRET)"
+        elif os.getenv("RUNWAYML_API_TOKEN"):
+            api_source = "environment (RUNWAYML_API_TOKEN)"
+        elif os.getenv("RUNWAY_API_KEY"):
+            api_source = "environment (RUNWAY_API_KEY - deprecated)"
+        elif getattr(settings, "RUNWAYML_API_SECRET", None):
+            api_source = "settings (RUNWAYML_API_SECRET)"
+        elif getattr(settings, "RUNWAYML_API_TOKEN", None):
+            api_source = "settings (RUNWAYML_API_TOKEN)"
+        elif getattr(settings, "RUNWAY_API_KEY", None):
+            api_source = "settings (RUNWAY_API_KEY - deprecated)"
         
         return {
             "status": "success",
             "configuration": {
                 "api_key_configured": bool(api_key),
-                "api_key_source": "environment" if os.getenv("RUNWAY_API_KEY") else ("settings" if getattr(settings, "RUNWAY_API_KEY", None) else "none"),
+                "api_key_source": api_source,
                 "base_url": BASE_URL,
                 "api_version": RUNWAY_API_VERSION,
                 "timeout": REQUEST_TIMEOUT,
-                "mode": "REAL_API_ONLY"
+                "mode": "REAL_API_ONLY",
+                "recommended_var": "RUNWAYML_API_SECRET"
             },
             "endpoints": {
                 "image_to_video": f"{BASE_URL}/image_to_video",
