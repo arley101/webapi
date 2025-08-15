@@ -40,43 +40,90 @@ async def openai_direct_action(request: Request):
                 }
             )
         
-        # Extraer action y params de forma flexible
+        # Extraer action y params de forma ROBUSTA - Maneja TODOS los formatos de OpenAI
         action = None
         params = {}
         
-        # Intentar múltiples formatos
+        logger.info(f"OpenAI Direct: Raw body received: {body}")
+        
+        # Parsing robusto que maneja MÚLTIPLES formatos de OpenAI Custom GPT
         if isinstance(body, dict):
-            # Formato estándar: {"action": "...", "params": {...}}
+            # FORMATO 1: {"action": "X", "params": {...}}  
             if "action" in body:
                 action = body["action"]
-                params = body.get("params", {})
-            # Formato alternativo: {"message": "action_name", "params": {...}}
+                
+                # Si hay params explícitos, usarlos
+                if "params" in body and isinstance(body["params"], dict):
+                    params = body["params"]
+                # Si NO hay params explícitos, extraer TODOS los otros campos como params
+                else:
+                    # Excluir campos de control, tomar todo lo demás como parámetros
+                    reserved_fields = {"action", "function_name", "message", "operationId"}
+                    params = {k: v for k, v in body.items() if k not in reserved_fields}
+                    
+            # FORMATO 2: {"message": "action_name", "params": {...}} o {"message": "action_name", "field1": "value1"}
             elif "message" in body:
                 action = body["message"]
-                params = body.get("params", {})
-            # Formato directo: {"function_name": "...", "arguments": {...}}
+                
+                if "params" in body and isinstance(body["params"], dict):
+                    params = body["params"]
+                else:
+                    reserved_fields = {"action", "function_name", "message", "operationId"}
+                    params = {k: v for k, v in body.items() if k not in reserved_fields}
+                    
+            # FORMATO 3: {"function_name": "X", "arguments": {...}}
             elif "function_name" in body:
                 action = body["function_name"]
-                params = body.get("arguments", {})
+                
+                if "arguments" in body and isinstance(body["arguments"], dict):
+                    params = body["arguments"]
+                elif "params" in body and isinstance(body["params"], dict):
+                    params = body["params"]
+                else:
+                    reserved_fields = {"action", "function_name", "message", "operationId", "arguments"}
+                    params = {k: v for k, v in body.items() if k not in reserved_fields}
+                    
+            # FORMATO 4: Formato directo donde la primera clave podría ser la acción
             else:
-                # Si no hay action clara, usar la primera clave como action
                 keys = list(body.keys())
                 if keys:
-                    action = keys[0]
-                    params = body.get(keys[0], {}) if isinstance(body.get(keys[0]), dict) else {}
+                    # Intentar usar la primera clave como action si parece válida
+                    potential_action = keys[0]
+                    if isinstance(body[potential_action], dict):
+                        action = potential_action
+                        params = body[potential_action]
+                    else:
+                        # Si no es dict, asumir que todas las claves son parámetros y necesitamos una acción explícita
+                        action = None
         
-        if not action:
+        # Validación robusta de la acción extraída
+        if not action or not isinstance(action, str) or not action.strip():
+            available_formats = [
+                '{"action": "action_name", "param1": "value1"}',
+                '{"action": "action_name", "params": {"param1": "value1"}}',
+                '{"function_name": "action_name", "arguments": {"param1": "value1"}}',
+                '{"message": "action_name", "param1": "value1"}'
+            ]
             return JSONResponse(
                 status_code=400,
                 content={
                     "status": "error",
-                    "message": "No action specified. Use format: {'action': 'action_name', 'params': {...}}",
+                    "message": "No valid action specified. Use one of these formats:",
+                    "supported_formats": available_formats,
                     "received_body": body,
                     "timestamp": datetime.now().isoformat()
                 }
             )
         
-        logger.info(f"OpenAI Direct: Executing action '{action}' with params: {list(params.keys())}")
+        # Normalizar params (asegurar que sea dict)
+        if not isinstance(params, dict):
+            params = {}
+            
+        # Logging detallado para debugging
+        logger.info(f"OpenAI Direct: Action extracted: '{action}'")
+        logger.info(f"OpenAI Direct: Params extracted: {params}")
+        logger.info(f"OpenAI Direct: Params keys: {list(params.keys())}")
+        logger.info(f"OpenAI Direct: Params count: {len(params)}")
         
         # Obtener todas las acciones disponibles
         all_actions = get_all_actions()
@@ -113,13 +160,19 @@ async def openai_direct_action(request: Request):
                 }
             )
         
-        # Ejecutar la acción
+        # Ejecutar la acción con manejo robusto de errores
         try:
+            logger.info(f"OpenAI Direct: About to execute {action} with client type: {type(auth_client).__name__}")
+            
+            # Ejecutar la función de acción
             result = action_function(auth_client, params)
+            
+            logger.info(f"OpenAI Direct: Action {action} completed successfully")
             
             # Formatear respuesta para OpenAI
             if isinstance(result, dict):
                 if result.get("status") == "error":
+                    logger.warning(f"OpenAI Direct: Action {action} returned error: {result.get('message')}")
                     return JSONResponse(
                         status_code=400,
                         content={
@@ -127,6 +180,7 @@ async def openai_direct_action(request: Request):
                             "action": action,
                             "message": result.get("message", "Action execution failed"),
                             "details": result.get("details"),
+                            "params_used": params,
                             "timestamp": datetime.now().isoformat()
                         }
                     )
@@ -138,6 +192,7 @@ async def openai_direct_action(request: Request):
                             "status": "success",
                             "action": action,
                             "data": result,
+                            "params_used": list(params.keys()),
                             "timestamp": datetime.now().isoformat()
                         }
                     )
@@ -149,19 +204,62 @@ async def openai_direct_action(request: Request):
                         "status": "success",
                         "action": action,
                         "data": {"result": result},
+                        "params_used": list(params.keys()),
                         "timestamp": datetime.now().isoformat()
                     }
                 )
                 
+        except TypeError as type_error:
+            # Error de tipo - probablemente parámetros incorrectos
+            error_msg = str(type_error)
+            logger.error(f"TypeError in action '{action}': {error_msg}")
+            
+            # Información detallada para debugging
+            import inspect
+            sig = inspect.signature(action_function)
+            expected_params = list(sig.parameters.keys())
+            
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "action": action,
+                    "error_type": "TypeError",
+                    "message": f"Parameter mismatch for action '{action}'",
+                    "details": error_msg,
+                    "expected_signature": str(sig),
+                    "expected_params": expected_params,
+                    "provided_params": list(params.keys()),
+                    "params_received": params,
+                    "debugging_info": {
+                        "function_name": action_function.__name__,
+                        "function_module": action_function.__module__
+                    },
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+            
         except Exception as execution_error:
-            logger.error(f"Execution error for action '{action}': {execution_error}")
+            # Error general de ejecución
+            error_type = type(execution_error).__name__
+            error_msg = str(execution_error)
+            
+            logger.error(f"Execution error ({error_type}) for action '{action}': {error_msg}")
+            
             return JSONResponse(
                 status_code=500,
                 content={
                     "status": "error",
                     "action": action,
-                    "message": "Action execution failed",
-                    "details": str(execution_error),
+                    "error_type": error_type,
+                    "message": f"Failed to execute action '{action}'",
+                    "details": error_msg,
+                    "params_used": params,
+                    "debugging_info": {
+                        "function_name": action_function.__name__,
+                        "function_module": action_function.__module__,
+                        "total_available_actions": len(all_actions)
+                    },
                     "timestamp": datetime.now().isoformat()
                 }
             )
