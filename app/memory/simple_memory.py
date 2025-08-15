@@ -65,6 +65,27 @@ class SimpleMemoryManager:
             logger.error(f"Error persistiendo en {provider}: {e}")
             return provider, {"success": False, "error": str(e)}
 
+    def store(self, key: str, value: Any) -> bool:
+        """Método store para compatibilidad con pruebas"""
+        try:
+            self.memory_storage[key] = {
+                "value": value,
+                "timestamp": datetime.now().isoformat()
+            }
+            return True
+        except Exception as e:
+            logger.error(f"Error almacenando en memoria: {e}")
+            return False
+    
+    def get(self, key: str) -> Any:
+        """Método get para compatibilidad con pruebas"""
+        try:
+            stored = self.memory_storage.get(key)
+            return stored["value"] if stored else None
+        except Exception as e:
+            logger.error(f"Error obteniendo de memoria: {e}")
+            return None
+
     def __init__(self):
         self.memory_storage = {}  # En memoria para simplificar
         self.sessions = {}
