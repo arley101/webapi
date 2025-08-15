@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 try:
     from app.core.config import settings  # noqa: F401 (reimport seguro)
+    from app.core.openapi_compatibility import optimize_for_custom_gpt
 except Exception as e:
     logger.warning("Fallo al importar settings; usando valores por defecto: %s", e)
     class _FallbackSettings:
@@ -32,7 +33,9 @@ except Exception as e:
         WP_SITE_URL = os.getenv("WP_SITE_URL", "")
         NOTION_API_KEY = os.getenv("NOTION_API_KEY", "")
         HUBSPOT_PRIVATE_APP_KEY = os.getenv("HUBSPOT_PRIVATE_APP_KEY", "")
+    
     settings = _FallbackSettings()
+    optimize_for_custom_gpt = lambda app: app  # Fallback function
 
 # Logging ya configurado arriba con fallback de settings
 logger = logging.getLogger(__name__)
@@ -56,6 +59,30 @@ except Exception as e:
     logger.warning("No se pudo cargar intelligent_assistant_router: %s", e)
     intelligent_assistant_router = None
 
+try:
+    from app.api.routes.workflow_manager import router as workflow_router
+except Exception as e:
+    logger.warning("No se pudo cargar workflow_manager: %s", e)
+    workflow_router = None
+
+try:
+    from app.api.routes.whatsapp_webhook import router as whatsapp_webhook_router
+except Exception as e:
+    logger.warning("No se pudo cargar whatsapp_webhook: %s", e)
+    whatsapp_webhook_router = None
+
+try:
+    from app.api.routes.unified_assistant import router as unified_assistant_router
+except Exception as e:
+    logger.warning("No se pudo cargar unified_assistant: %s", e)
+    unified_assistant_router = None
+
+try:
+    from app.api.routes.assistant_selector import router as assistant_selector_router
+except Exception as e:
+    logger.warning("No se pudo cargar assistant_selector: %s", e)
+    assistant_selector_router = None
+
 # Lifespan manager (reemplaza @app.on_event)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -70,13 +97,16 @@ async def lifespan(app: FastAPI):
 # Crear la instancia de la aplicación FastAPI con lifespan
 app = FastAPI(
     title="EliteDynamicsAPI",
-    description="API de Elite Dynamics para acciones empresariales",
+    description="API empresarial avanzada con 476+ integraciones - Optimizada para Custom GPT",
     version="1.1",
     docs_url="/api/v1/docs",
     redoc_url="/api/v1/redoc",
     openapi_url="/api/v1/openapi.json",
     lifespan=lifespan  # Usar lifespan en lugar de on_event
 )
+
+# 🚀 OPTIMIZAR PARA CUSTOM GPT - CAMBIAR OPENAPI DE 3.1.0 A 3.0.3
+app = optimize_for_custom_gpt(app)
 
 # CORS (ajústelo para producción: dominios específicos)
 app.add_middleware(
@@ -132,6 +162,30 @@ if intelligent_assistant_router is not None:
     logger.info("Router Asistente Inteligente incluido bajo el prefijo: /api/v1/intelligent-assistant")
 else:
     logger.warning("Router Asistente Inteligente NO cargó; la app seguirá viva con endpoints de health.")
+
+if workflow_router is not None:
+    app.include_router(workflow_router, prefix="/api/v1")
+    logger.info("Router Workflow Manager incluido bajo el prefijo: /api/v1")
+else:
+    logger.warning("Router Workflow Manager NO cargó; la app seguirá viva con endpoints de health.")
+
+if whatsapp_webhook_router is not None:
+    app.include_router(whatsapp_webhook_router)
+    logger.info("Router WhatsApp Webhook incluido")
+else:
+    logger.warning("Router WhatsApp Webhook NO cargó; la app seguirá viva con endpoints de health.")
+
+if unified_assistant_router is not None:
+    app.include_router(unified_assistant_router, prefix="/api/v1")
+    logger.info("Router Unified Assistant incluido bajo el prefijo: /api/v1")
+else:
+    logger.warning("Router Unified Assistant NO cargó; la app seguirá viva con endpoints de health.")
+
+if assistant_selector_router is not None:
+    app.include_router(assistant_selector_router, prefix="/api/v1")
+    logger.info("Router Assistant Selector incluido bajo el prefijo: /api/v1")
+else:
+    logger.warning("Router Assistant Selector NO cargó; la app seguirá viva con endpoints de health.")
 
 # Configurar archivos estáticos para la interfaz de chat
 try:

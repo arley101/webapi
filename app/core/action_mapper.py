@@ -24,8 +24,60 @@ from app.actions import (
     stream_actions, teams_actions, tiktok_ads_actions, todo_actions,
     userprofile_actions, users_actions, vivainsights_actions,
     youtube_channel_actions, gemini_actions, x_ads_actions, webresearch_actions, 
-    wordpress_actions, resolver_actions, intelligent_assistant_actions  # ✅ AGREGADO INTELLIGENT_ASSISTANT_ACTIONS
+    wordpress_actions, resolver_actions, intelligent_assistant_actions,
+    whatsapp_actions, google_services_actions  # ✅ NUEVAS ACCIONES AGREGADAS
 )
+
+# Importar Enhanced Actions
+try:
+    from app.actions import linkedin_enhanced_actions
+except ImportError:
+    linkedin_enhanced_actions = None
+
+try:
+    from app.actions import google_marketing_enhanced
+except ImportError:
+    google_marketing_enhanced = None
+
+try:
+    from app.actions import wordpress_enhanced
+except ImportError:
+    wordpress_enhanced = None
+
+try:
+    from app.actions import runway_enhanced
+except ImportError:
+    runway_enhanced = None
+
+# 🚀 IMPORTAR ACCIONES OPTIMIZADAS PARA OPENAI ASSISTANT
+try:
+    from app.actions import email_optimized_actions
+    logger.info("✅ Acciones de correo optimizadas para OpenAI Assistant cargadas")
+except ImportError as e:
+    email_optimized_actions = None
+    logger.warning(f"⚠️ No se pudieron cargar las acciones de correo optimizadas: {e}")
+
+# 🔄 IMPORTAR WORKFLOWS EMPRESARIALES
+try:
+    from app.workflows import auto_workflow
+    from app.workflows import simple_workflow
+    from app.workflows import workflow_functions
+    logger.info("✅ Workflows empresariales cargados exitosamente")
+except ImportError as e:
+    auto_workflow = None
+    simple_workflow = None
+    workflow_functions = None
+    logger.warning(f"⚠️ No se pudieron cargar los workflows: {e}")
+
+try:
+    from app.actions import x_enhanced
+except ImportError:
+    x_enhanced = None
+
+try:
+    from app.actions import tiktok_enhanced
+except ImportError:
+    tiktok_enhanced = None
 
 # Importar workflows (lazy import para evitar circular imports)
 def _import_workflow_functions():
@@ -59,13 +111,16 @@ AZURE_MGMT_CATEGORY = "Azure Management"
 BOOKINGS_CATEGORY = "Bookings"
 CALENDAR_CATEGORY = "Calendar"
 EMAIL_CATEGORY = "Email"
+EMAIL_OPTIMIZED_CATEGORY = "Email Optimized"  # 🚀 NUEVA CATEGORÍA - OPTIMIZADO PARA OPENAI
 FORMS_CATEGORY = "Forms"
 GEMINI_CATEGORY = "Gemini AI"
 GITHUB_CATEGORY = "GitHub"
 GOOGLEADS_CATEGORY = "Google Ads"
+GOOGLE_MARKETING_ENHANCED_CATEGORY = "Google Marketing Enhanced"  # ✅ NUEVA CATEGORÍA
 GRAPH_CATEGORY = "Microsoft Graph"
 HUBSPOT_CATEGORY = "HubSpot CRM"
 LINKEDIN_CATEGORY = "LinkedIn Ads"
+LINKEDIN_ENHANCED_CATEGORY = "LinkedIn Enhanced"  # ✅ NUEVA CATEGORÍA
 META_CATEGORY = "Meta Ads"
 NOTION_CATEGORY = "Notion"
 OFFICE_CATEGORY = "Office"
@@ -76,21 +131,25 @@ POWER_AUTOMATE_CATEGORY = "Power Automate"
 POWERBI_CATEGORY = "Power BI"
 RESOLVER_CATEGORY = "Resource Resolver"
 RUNWAY_CATEGORY = "Runway AI"
+RUNWAY_ENHANCED_CATEGORY = "Runway Enhanced"  # ✅ NUEVA CATEGORÍA
 SHAREPOINT_CATEGORY = "SharePoint"
 STREAM_CATEGORY = "Microsoft Stream"
 TEAMS_CATEGORY = "Microsoft Teams"
 TIKTOK_CATEGORY = "TikTok Ads"
+TIKTOK_ENHANCED_CATEGORY = "TikTok Enhanced"  # ✅ NUEVA CATEGORÍA
 TODO_CATEGORY = "Microsoft To Do"
 USER_PROFILE_CATEGORY = "User Profile"
 USERS_CATEGORY = "Users & Directory"
 VIVA_CATEGORY = "Viva Insights"
-YOUTUBE_CATEGORY = "YouTube Channel"
+WORDPRESS_CATEGORY = "WordPress"
+WORDPRESS_ENHANCED_CATEGORY = "WordPress Enhanced"  # ✅ NUEVA CATEGORÍA
+WOOCOMMERCE_CATEGORY = "WooCommerce"
 X_ADS_CATEGORY = "X (Twitter) Ads"
+X_ENHANCED_CATEGORY = "X Enhanced"  # ✅ NUEVA CATEGORÍA
+YOUTUBE_CATEGORY = "YouTube Channel"
 WEBRESEARCH_CATEGORY = "Web Research"
 WORKFLOW_CATEGORY = "Workflows"
 MEMORY_CATEGORY = "Memory System"
-WORDPRESS_CATEGORY = "WordPress"
-WOOCOMMERCE_CATEGORY = "WooCommerce"
 INTELLIGENT_ASSISTANT_CATEGORY = "Intelligent AI Assistant"  # ✅ NUEVA CATEGORÍA
 
 # ============================================================================
@@ -209,6 +268,24 @@ EMAIL_ACTIONS: Dict[str, Callable] = {
     "correo_create_mail_folder": correo_actions.correo_create_mail_folder,
     "correo_get_mail_rules": correo_actions.correo_get_mail_rules,
 }
+
+# ============================================================================
+# 🚀 MAPEO DE ACCIONES - EMAIL OPTIMIZADO PARA OPENAI ASSISTANT (5 acciones)
+# ============================================================================
+
+EMAIL_OPTIMIZED_ACTIONS: Dict[str, Callable] = {}
+if email_optimized_actions:
+    EMAIL_OPTIMIZED_ACTIONS = {
+        # VERSIONES OPTIMIZADAS PARA OPENAI ASSISTANT - RESPUESTAS PEQUEÑAS
+        "email_list_messages_summary": email_optimized_actions.email_list_messages_summary,
+        "email_get_message_preview": email_optimized_actions.email_get_message_preview,
+        "email_get_latest_messages": email_optimized_actions.email_get_latest_messages,
+        "email_search_messages_optimized": email_optimized_actions.email_search_messages_optimized,
+        "email_get_unread_count": email_optimized_actions.email_get_unread_count,
+    }
+    logger.info("✅ EMAIL_OPTIMIZED_ACTIONS cargadas: 5 acciones para OpenAI Assistant")
+else:
+    logger.warning("⚠️ EMAIL_OPTIMIZED_ACTIONS no disponibles - módulo email_optimized_actions no encontrado")
 
 # ============================================================================
 # MAPEO DE ACCIONES - FORMS (3 acciones)
@@ -350,10 +427,109 @@ LINKEDIN_ADS_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
+# LINKEDIN ENHANCED ACTIONS - ACCIONES PROFESIONALES
+# ============================================================================
+
+# Conditional LinkedIn Enhanced Actions
+if linkedin_enhanced_actions:
+    LINKEDIN_ENHANCED_ACTIONS: Dict[str, Callable] = {
+        "linkedin_post_update": linkedin_enhanced_actions.linkedin_post_update,
+        "linkedin_schedule_post": linkedin_enhanced_actions.linkedin_schedule_post,
+        "linkedin_get_engagement_metrics": linkedin_enhanced_actions.linkedin_get_engagement_metrics,
+        "linkedin_send_connection_requests": linkedin_enhanced_actions.linkedin_send_connection_requests,
+        "linkedin_message_new_connections": linkedin_enhanced_actions.linkedin_message_new_connections,
+    }
+else:
+    LINKEDIN_ENHANCED_ACTIONS: Dict[str, Callable] = {}
+
+# ============================================================================
+# GOOGLE MARKETING ENHANCED ACTIONS - AUTOMATIZACIÓN AVANZADA
+# ============================================================================
+
+if google_marketing_enhanced:
+    GOOGLE_MARKETING_ENHANCED_ACTIONS: Dict[str, Callable] = {
+        "google_ads_setup_conversion_tracking": google_marketing_enhanced.google_ads_setup_conversion_tracking,
+        "google_ads_create_dynamic_campaigns": google_marketing_enhanced.google_ads_create_dynamic_campaigns,
+        "google_ads_setup_enhanced_analytics": google_marketing_enhanced.google_ads_setup_enhanced_analytics,
+        "google_ads_automate_bid_management": google_marketing_enhanced.google_ads_automate_bid_management,
+        "google_ads_sync_with_crm": google_marketing_enhanced.google_ads_sync_with_crm,
+    }
+else:
+    GOOGLE_MARKETING_ENHANCED_ACTIONS: Dict[str, Callable] = {}
+
+# ============================================================================
+# WORDPRESS ENHANCED ACTIONS - GESTIÓN COMPLETA
+# ============================================================================
+
+if wordpress_enhanced:
+    WORDPRESS_ENHANCED_ACTIONS: Dict[str, Callable] = {
+        "wordpress_create_advanced_post": wordpress_enhanced.wordpress_create_advanced_post,
+        "wordpress_manage_plugins_advanced": wordpress_enhanced.wordpress_manage_plugins_advanced,
+        "wordpress_optimize_performance": wordpress_enhanced.wordpress_optimize_performance,
+        "wordpress_manage_users_advanced": wordpress_enhanced.wordpress_manage_users_advanced,
+        "wordpress_backup_and_restore": wordpress_enhanced.wordpress_backup_and_restore,
+    }
+else:
+    WORDPRESS_ENHANCED_ACTIONS: Dict[str, Callable] = {}
+
+# ============================================================================
+# RUNWAY ENHANCED ACTIONS - CREACIÓN PROFESIONAL
+# ============================================================================
+
+if runway_enhanced:
+    RUNWAY_ENHANCED_ACTIONS: Dict[str, Callable] = {
+        "runway_generate_video_advanced": runway_enhanced.runway_generate_video_advanced,
+        "runway_image_to_video_pro": runway_enhanced.runway_image_to_video_pro,
+        "runway_text_to_video_studio": runway_enhanced.runway_text_to_video_studio,
+        "runway_video_editing_suite": runway_enhanced.runway_video_editing_suite,
+        "runway_model_training_custom": runway_enhanced.runway_model_training_custom,
+    }
+else:
+    RUNWAY_ENHANCED_ACTIONS: Dict[str, Callable] = {}
+
+# ============================================================================
+# X (TWITTER) ENHANCED ACTIONS - GESTIÓN AVANZADA
+# ============================================================================
+
+if x_enhanced:
+    X_ENHANCED_ACTIONS: Dict[str, Callable] = {
+        "x_post_advanced_tweet": x_enhanced.x_post_advanced_tweet,
+        "x_audience_analytics_pro": x_enhanced.x_audience_analytics_pro,
+        "x_campaign_management_suite": x_enhanced.x_campaign_management_suite,
+        "x_community_management_pro": x_enhanced.x_community_management_pro,
+        "x_viral_content_optimizer": x_enhanced.x_viral_content_optimizer,
+    }
+else:
+    X_ENHANCED_ACTIONS: Dict[str, Callable] = {}
+
+# ============================================================================
+# TIKTOK ENHANCED ACTIONS - CONTENIDO VIRAL
+# ============================================================================
+
+if tiktok_enhanced:
+    TIKTOK_ENHANCED_ACTIONS: Dict[str, Callable] = {
+        "tiktok_post_advanced_video": tiktok_enhanced.tiktok_post_advanced_video,
+        "tiktok_trending_analytics_pro": tiktok_enhanced.tiktok_trending_analytics_pro,
+        "tiktok_audience_growth_suite": tiktok_enhanced.tiktok_audience_growth_suite,
+        "tiktok_campaign_automation_pro": tiktok_enhanced.tiktok_campaign_automation_pro,
+        "tiktok_viral_content_factory": tiktok_enhanced.tiktok_viral_content_factory,
+    }
+else:
+    TIKTOK_ENHANCED_ACTIONS: Dict[str, Callable] = {}
+
+# ============================================================================
 # MAPEO DE ACCIONES - META ADS (29 acciones) ✅ RESTAURADO
 # ============================================================================
 
 METAADS_ACTIONS: Dict[str, Callable] = {
+    # Acciones mejoradas nuevas - Enhanced Meta Ads
+    "meta_create_campaign": metaads_actions.meta_create_campaign,
+    "meta_create_ad_set": metaads_actions.meta_create_ad_set,
+    "meta_upload_creatives": metaads_actions.meta_upload_creatives,
+    "meta_get_campaign_metrics": metaads_actions.meta_get_campaign_metrics,
+    "meta_update_budget_and_schedule": metaads_actions.meta_update_budget_and_schedule,
+    
+    # Acciones existentes mantenidas para compatibilidad
     "metaads_get_business_details": metaads_actions.metaads_get_business_details,
     "metaads_list_owned_pages": metaads_actions.metaads_list_owned_pages,
     "metaads_get_page_engagement": metaads_actions.metaads_get_page_engagement,
@@ -709,6 +885,7 @@ VIVA_INSIGHTS_ACTIONS: Dict[str, Callable] = {
 # ============================================================================
 
 YOUTUBE_CHANNEL_ACTIONS: Dict[str, Callable] = {
+    # Acciones originales
     "youtube_upload_video": youtube_channel_actions.youtube_upload_video,
     "youtube_update_video_metadata": youtube_channel_actions.youtube_update_video_metadata,
     "youtube_set_video_thumbnail": youtube_channel_actions.youtube_set_video_thumbnail,
@@ -722,9 +899,14 @@ YOUTUBE_CHANNEL_ACTIONS: Dict[str, Callable] = {
     "youtube_get_video_analytics": youtube_channel_actions.youtube_get_video_analytics,
     "youtube_get_channel_analytics": youtube_channel_actions.youtube_get_channel_analytics,
     "youtube_get_audience_demographics": youtube_channel_actions.youtube_get_audience_demographics,
-    # NUEVAS FUNCIONES AGREGADAS
     "youtube_get_channel_info": youtube_channel_actions.youtube_get_channel_info,
     "youtube_list_channel_videos": youtube_channel_actions.youtube_list_channel_videos,
+    
+    # ✅ NUEVAS ACCIONES MEJORADAS (6 acciones)
+    "youtube_get_analytics": youtube_channel_actions.youtube_get_analytics,
+    "youtube_schedule_video": youtube_channel_actions.youtube_schedule_video,
+    "youtube_bulk_upload_from_folder": youtube_channel_actions.youtube_bulk_upload_from_folder,
+    "youtube_manage_comments": youtube_channel_actions.youtube_manage_comments,
 }
 
 # ============================================================================
@@ -793,6 +975,110 @@ WORDPRESS_ACTIONS: Dict[str, Callable] = {
 }
 
 # ============================================================================
+# MAPEO DE ACCIONES - WHATSAPP BUSINESS API (13 acciones) - NUEVO
+# ============================================================================
+
+WHATSAPP_ACTIONS: Dict[str, Callable] = {
+    # Envío de mensajes (5 acciones)
+    "whatsapp_send_text": whatsapp_actions.whatsapp_send_text,
+    "whatsapp_send_template": whatsapp_actions.whatsapp_send_template,
+    "whatsapp_send_media": whatsapp_actions.whatsapp_send_media,
+    "whatsapp_send_interactive": whatsapp_actions.whatsapp_send_interactive,
+    "whatsapp_mark_read": whatsapp_actions.whatsapp_mark_read,
+    
+    # Gestión de media (3 acciones)
+    "whatsapp_upload_media": whatsapp_actions.whatsapp_upload_media,
+    "whatsapp_get_media": whatsapp_actions.whatsapp_get_media,
+    "whatsapp_download_media": whatsapp_actions.whatsapp_download_media,
+    
+    # Templates y conversación (3 acciones)
+    "whatsapp_list_templates": whatsapp_actions.whatsapp_list_templates,
+    "whatsapp_create_template": whatsapp_actions.whatsapp_create_template,
+    "whatsapp_get_message_status": whatsapp_actions.whatsapp_get_message_status,
+    
+    # Broadcast y gestión (2 acciones)
+    "whatsapp_broadcast_segment": whatsapp_actions.whatsapp_broadcast_segment,
+    "whatsapp_handover_to_human": whatsapp_actions.whatsapp_handover_to_human,
+    "whatsapp_close_ticket": whatsapp_actions.whatsapp_close_ticket,
+}
+
+# ============================================================================
+# FUNCIONES HELPER PARA WORKFLOWS - EVITAR IMPORTACIÓN CIRCULAR
+# ============================================================================
+
+def _execute_workflow_safe(workflow_name: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Ejecuta un workflow de forma segura, evitando importaciones circulares"""
+    try:
+        # Importación lazy para evitar círculos
+        from app.workflows.auto_workflow import workflow_manager
+        return workflow_manager.execute_workflow(workflow_name, params)
+    except ImportError as e:
+        return {
+            "status": "error",
+            "error": f"Workflows no disponibles: {e}",
+            "workflow_requested": workflow_name
+        }
+    except Exception as e:
+        return {
+            "status": "error", 
+            "error": f"Error ejecutando workflow {workflow_name}: {e}",
+            "workflow_requested": workflow_name
+        }
+
+def _list_workflows_safe() -> Dict[str, Any]:
+    """Lista workflows disponibles de forma segura"""
+    try:
+        from app.workflows.auto_workflow import workflow_manager
+        return workflow_manager.list_workflows()
+    except ImportError as e:
+        return {
+            "status": "error",
+            "error": f"Workflows no disponibles: {e}",
+            "available_workflows": []
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Error listando workflows: {e}",
+            "available_workflows": []
+        }
+
+def _create_workflow_safe(natural_request: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    """Crea workflow personalizado de forma segura"""
+    try:
+        from app.workflows.auto_workflow import workflow_manager
+        return workflow_manager.create_custom_workflow(natural_request, params)
+    except ImportError as e:
+        return {
+            "status": "error",
+            "error": f"Workflows no disponibles: {e}",
+            "request": natural_request
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": f"Error creando workflow personalizado: {e}",
+            "request": natural_request
+        }
+
+# ============================================================================
+# MAPEO DE ACCIONES - GOOGLE SERVICES MEJORADO (5 acciones) - NUEVO
+# ============================================================================
+
+GOOGLE_SERVICES_ACTIONS: Dict[str, Callable] = {
+    # Gmail mejorado (2 acciones)
+    "gmail_send_bulk": google_services_actions.gmail_send_bulk,
+    "gmail_get_leads_from_inbox": google_services_actions.gmail_get_leads_from_inbox,
+    
+    # Calendar mejorado (1 acción)
+    "calendar_schedule_event_with_meet": google_services_actions.calendar_schedule_event_with_meet,
+    
+    # Drive mejorado (2 acciones)
+    "drive_upload_to_campaign_folder": google_services_actions.drive_upload_to_campaign_folder,
+    "drive_sync_assets_with_wordpress": google_services_actions.drive_sync_assets_with_wordpress,
+}
+
+# ============================================================================
 # CONSOLIDACIÓN DE TODAS LAS ACCIONES
 # ============================================================================
 
@@ -802,13 +1088,18 @@ ACTION_MAP: Dict[str, Callable] = {
     **BOOKINGS_ACTIONS,
     **CALENDAR_ACTIONS,
     **EMAIL_ACTIONS,
+    **EMAIL_OPTIMIZED_ACTIONS,  # 🚀 NUEVA SECCIÓN - ACCIONES OPTIMIZADAS PARA OPENAI
     **FORMS_ACTIONS,
     **GEMINI_ACTIONS,
     **GITHUB_ACTIONS,
     **GOOGLEADS_ACTIONS,
+    **GOOGLE_MARKETING_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - MARKETING AVANZADO
+    **GOOGLE_SERVICES_ACTIONS,  # ✅ NUEVA SECCIÓN
     **GRAPH_ACTIONS,
     **HUBSPOT_ACTIONS,
+    **INTELLIGENT_ASSISTANT_ACTIONS,  # ✅ NUEVA SECCIÓN - ASISTENTE INTELIGENTE
     **LINKEDIN_ADS_ACTIONS,
+    **LINKEDIN_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - ACCIONES PROFESIONALES
     **METAADS_ACTIONS,
     **NOTION_ACTIONS,
     **OFFICE_ACTIONS,
@@ -819,20 +1110,34 @@ ACTION_MAP: Dict[str, Callable] = {
     **POWERBI_ACTIONS,
     **RESOLVER_ACTIONS,
     **RUNWAY_ACTIONS,
+    **RUNWAY_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - CREACIÓN PROFESIONAL
     **SHAREPOINT_ACTIONS,
     **STREAM_ACTIONS,
     **TEAMS_ACTIONS,
     **TIKTOK_ADS_ACTIONS,
+    **TIKTOK_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - CONTENIDO VIRAL
     **TODO_ACTIONS,
     **USER_PROFILE_ACTIONS,
     **USERS_ACTIONS,
     **VIVA_INSIGHTS_ACTIONS,
-    **YOUTUBE_CHANNEL_ACTIONS,    # Ahora incluye 15 acciones
-    **X_ADS_ACTIONS,
-    **WEBRESEARCH_ACTIONS,
+    **WHATSAPP_ACTIONS,          # ✅ NUEVA SECCIÓN
     **WORDPRESS_ACTIONS,
+    **WORDPRESS_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - GESTIÓN COMPLETA
+    **X_ADS_ACTIONS,
+    **X_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - GESTIÓN AVANZADA
+    **WEBRESEARCH_ACTIONS,
+    **YOUTUBE_CHANNEL_ACTIONS,    # Ahora incluye las nuevas acciones
     **WORKFLOW_ACTIONS,  # ✅ AGREGADO
     **MEMORY_ACTIONS,    # ✅ AGREGADO
+    
+    # 🚀 WORKFLOWS EMPRESARIALES ESPECÍFICOS
+    "workflow_execute_backup_completo": lambda auth_client, params: _execute_workflow_safe("backup_completo", params),
+    "workflow_execute_sync_marketing": lambda auth_client, params: _execute_workflow_safe("sync_marketing", params),
+    "workflow_execute_content_creation": lambda auth_client, params: _execute_workflow_safe("content_creation", params),
+    "workflow_execute_youtube_pipeline": lambda auth_client, params: _execute_workflow_safe("youtube_pipeline", params),
+    "workflow_execute_client_onboarding": lambda auth_client, params: _execute_workflow_safe("client_onboarding", params),
+    "workflow_list_available": lambda auth_client, params: _list_workflows_safe(),
+    "workflow_create_custom": lambda auth_client, params: _create_workflow_safe(params.get("natural_request", ""), params),
 }
 
 # ============================================================================
@@ -844,6 +1149,7 @@ category_counts = {
     BOOKINGS_CATEGORY: len(BOOKINGS_ACTIONS),
     CALENDAR_CATEGORY: len(CALENDAR_ACTIONS),
     EMAIL_CATEGORY: len(EMAIL_ACTIONS),
+    EMAIL_OPTIMIZED_CATEGORY: len(EMAIL_OPTIMIZED_ACTIONS),  # 🚀 NUEVA CATEGORÍA - 5 acciones optimizadas
     FORMS_CATEGORY: len(FORMS_ACTIONS),
     GEMINI_CATEGORY: len(GEMINI_ACTIONS),
     GITHUB_CATEGORY: len(GITHUB_ACTIONS),
@@ -1235,6 +1541,7 @@ class WorkflowExecutor:
         # Combinar todos los mapas de acciones
         for action_category in [
             AZURE_MGMT_ACTIONS, BOOKINGS_ACTIONS, CALENDAR_ACTIONS, EMAIL_ACTIONS,
+            EMAIL_OPTIMIZED_ACTIONS,  # 🚀 NUEVA CATEGORÍA - ACCIONES OPTIMIZADAS
             FORMS_ACTIONS, GEMINI_ACTIONS, GITHUB_ACTIONS, GOOGLEADS_ACTIONS,
             GRAPH_ACTIONS, HUBSPOT_ACTIONS, LINKEDIN_ADS_ACTIONS, METAADS_ACTIONS,
             NOTION_ACTIONS, OFFICE_ACTIONS, ONEDRIVE_ACTIONS, OPENAI_ACTIONS,
@@ -1605,6 +1912,14 @@ def get_all_actions() -> Dict[str, Callable]:
         TEAMS_ACTIONS,         # 18 funciones - Teams
         ONEDRIVE_ACTIONS,      # 18 funciones - OneDrive
         
+        # ⚡ ENHANCED PROFESSIONAL APIS (5 funciones cada uno)
+        GOOGLE_MARKETING_ENHANCED_ACTIONS,  # ✅ NUEVO - Marketing Avanzado
+        WORDPRESS_ENHANCED_ACTIONS,         # ✅ NUEVO - WordPress Completo
+        RUNWAY_ENHANCED_ACTIONS,            # ✅ NUEVO - Creación Profesional
+        X_ENHANCED_ACTIONS,                 # ✅ NUEVO - X/Twitter Avanzado
+        TIKTOK_ENHANCED_ACTIONS,            # ✅ NUEVO - TikTok Viral
+        LINKEDIN_ENHANCED_ACTIONS,          # ✅ NUEVO - LinkedIn Profesional
+        
         # ⚡ STANDARD APIS (10-14 funciones cada uno)
         USERS_ACTIONS,         # 13 funciones - Users
         OFFICE_ACTIONS,        # 13 funciones - Office
@@ -1614,6 +1929,8 @@ def get_all_actions() -> Dict[str, Callable]:
         
         # 🔧 CORE APIS (5-9 funciones cada uno)
         INTELLIGENT_ASSISTANT_ACTIONS, # 10 funciones - AI Assistant  # ✅ NUEVO
+        GOOGLE_SERVICES_ACTIONS,       # 10 funciones - Google Services  # ✅ NUEVO
+        WHATSAPP_ACTIONS,             # 10 funciones - WhatsApp  # ✅ NUEVO
         TODO_ACTIONS,          # 9 funciones - To Do
         TIKTOK_ADS_ACTIONS,    # 9 funciones - TikTok
         POWER_AUTOMATE_ACTIONS, # 9 funciones - Power Automate
@@ -1632,6 +1949,10 @@ def get_all_actions() -> Dict[str, Callable]:
         GRAPH_ACTIONS,         # 5 funciones - Graph
         GITHUB_ACTIONS,        # 4 funciones - GitHub
         VIVA_INSIGHTS_ACTIONS, # 3 funciones - Viva
+        
+        # 🎯 SYSTEM APIS
+        WORKFLOW_ACTIONS,      # ✅ NUEVO - Workflows
+        MEMORY_ACTIONS,        # ✅ NUEVO - Memoria Persistente
     ]
     
     # 🔄 INTEGRACIÓN SISTEMÁTICA

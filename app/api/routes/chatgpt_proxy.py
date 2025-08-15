@@ -1,19 +1,25 @@
 # app/api/routes/chatgpt_proxy.py
 """
-Endpoint especial para ChatGPT - Interface simplificada
-Este endpoint recibe consultas en lenguaje natural y las convierte automáticamente
+🤖 ENDPOINT OPTIMIZADO PARA OPENAI CUSTOM GPT
+Este endpoint está específicamente diseñado para compatibilidad total con Custom GPT.
+Convierte lenguaje natural en acciones ejecutables de forma automática.
+
+✅ COMPATIBLE CON: OpenAPI 3.0.3
+✅ DISEÑADO PARA: OpenAI Custom GPT con OAuth 2.0
+✅ FUNCIONES: 476+ acciones integradas con lenguaje natural
 """
 
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 import json
 import re
 import os
 
 from app.core.action_mapper import ACTION_MAP
+from app.core.auth_manager import get_current_user, AuthenticatedUser
 
 # Importación segura con fallback (similar a main.py)
 try:
@@ -282,8 +288,32 @@ async def chatgpt_proxy_get(query: str):
             "chatgpt_friendly": True
         })
 
-@router.post("/chatgpt")
-async def chatgpt_proxy_post(request: Request):
+@router.post("/chatgpt", 
+            tags=["🤖 Custom GPT Optimized"],
+            summary="Interfaz principal para Custom GPT - Lenguaje natural a acciones",
+            description="""
+            **🎯 ENDPOINT PRINCIPAL PARA OPENAI CUSTOM GPT**
+            
+            Convierte consultas en lenguaje natural en acciones ejecutables.
+            Optimizado para compatibilidad total con OpenAI Custom GPT.
+            
+            **📝 Ejemplos de uso:**
+            ```json
+            {
+                "query": "envía un email a juan@empresa.com con asunto 'Reunión' y mensaje 'Confirmemos mañana'"
+            }
+            ```
+            
+            **🚀 Funcionalidades disponibles:**
+            - 📧 Gestión de emails y calendario  
+            - 📊 Marketing digital (Google Ads, Meta, LinkedIn)
+            - 💼 Productividad (Teams, SharePoint, OneDrive)
+            - 🤖 IA y automatización
+            - 📱 Redes sociales y contenido
+            
+            **✅ Total de acciones disponibles: 476+**
+            """)
+async def chatgpt_proxy_post(request: Request, current_user: AuthenticatedUser = Depends(get_current_user)):
     """
     Endpoint POST para ChatGPT - Consultas con cuerpo JSON
     """
