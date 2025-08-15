@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🤖 Chat Widget para Tu Sitio Web</title>
+    <style>
+        /* Widget de chat flotante */
+        .chat-widget-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 9999;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .chat-widget-button {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            cursor: pointer;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .chat-widget-button:hover {
+            transform: scale(1.1);
+            box-shadow: 0 6px 25px rgba(0,0,0,0.4);
+        }
+
+        .chat-widget-window {
+            position: absolute;
+            bottom: 80px;
+            right: 0;
+            width: 350px;
+            height: 500px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .chat-widget-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-widget-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .chat-widget-iframe {
+            flex: 1;
+            border: none;
+            width: 100%;
+        }
+
+        .chat-widget-notification {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background: #e74c3c;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        @media (max-width: 768px) {
+            .chat-widget-window {
+                width: calc(100vw - 40px);
+                height: calc(100vh - 100px);
+                bottom: 80px;
+                right: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Tu contenido web normal aquí -->
+    <h1>Mi Sitio Web</h1>
+    <p>Este es tu sitio web normal con el chat widget integrado.</p>
+
+    <!-- Widget de Chat -->
+    <div class="chat-widget-container">
+        <button class="chat-widget-button" id="chatButton" onclick="toggleChat()">
+            🤖
+            <div class="chat-widget-notification" id="notification">1</div>
+        </button>
+        
+        <div class="chat-widget-window" id="chatWindow">
+            <div class="chat-widget-header">
+                <span>🤖 Tu Asistente IA</span>
+                <button class="chat-widget-close" onclick="toggleChat()">×</button>
+            </div>
+            <iframe 
+                id="chatIframe"
+                class="chat-widget-iframe"
+                src="https://tu-app.azurewebsites.net/chat"
+                title="Chat con Asistente IA">
+            </iframe>
+        </div>
+    </div>
+
+    <script>
+        let chatOpen = false;
+        let hasNewMessage = true;
+
+        function toggleChat() {
+            const chatWindow = document.getElementById('chatWindow');
+            const notification = document.getElementById('notification');
+            
+            if (chatOpen) {
+                chatWindow.style.display = 'none';
+                chatOpen = false;
+            } else {
+                chatWindow.style.display = 'flex';
+                chatOpen = true;
+                notification.style.display = 'none';
+                hasNewMessage = false;
+            }
+        }
+
+        // Simular notificación de mensaje nuevo
+        function showNotification() {
+            if (!chatOpen) {
+                document.getElementById('notification').style.display = 'flex';
+                hasNewMessage = true;
+            }
+        }
+
+        // Configurar la URL de tu API cuando esté desplegada
+        function updateChatURL(apiUrl) {
+            document.getElementById('chatIframe').src = apiUrl + '/chat';
+        }
+
+        // Para desarrollo local
+        // updateChatURL('http://localhost:8000');
+
+        // Para producción en Azure
+        // updateChatURL('https://tu-app.azurewebsites.net');
+
+        // Ejemplo de uso con postMessage para comunicación avanzada
+        window.addEventListener('message', function(event) {
+            // Verificar origen por seguridad
+            if (event.origin !== 'https://tu-app.azurewebsites.net') return;
+            
+            if (event.data.type === 'chat-message') {
+                // Manejar mensajes del chat
+                console.log('Mensaje del chat:', event.data.message);
+            }
+        });
+    </script>
+</body>
+</html>

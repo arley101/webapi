@@ -56,6 +56,12 @@ except Exception as e:
     logger.warning("No se pudo cargar intelligent_assistant_router: %s", e)
     intelligent_assistant_router = None
 
+try:
+    from app.api.routes.whatsapp_webhook import router as whatsapp_webhook_router
+except Exception as e:
+    logger.warning("No se pudo cargar whatsapp_webhook: %s", e)
+    whatsapp_webhook_router = None
+
 # Lifespan manager (reemplaza @app.on_event)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -132,6 +138,12 @@ if intelligent_assistant_router is not None:
     logger.info("Router Asistente Inteligente incluido bajo el prefijo: /api/v1/intelligent-assistant")
 else:
     logger.warning("Router Asistente Inteligente NO cargó; la app seguirá viva con endpoints de health.")
+
+if whatsapp_webhook_router is not None:
+    app.include_router(whatsapp_webhook_router)
+    logger.info("Router WhatsApp Webhook incluido")
+else:
+    logger.warning("Router WhatsApp Webhook NO cargó; la app seguirá viva con endpoints de health.")
 
 # Configurar archivos estáticos para la interfaz de chat
 try:

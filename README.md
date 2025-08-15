@@ -1,91 +1,63 @@
-# 🚀 Asistente Inteligente - API de Automatización
+# Asistente Inteligente - API de Automatización
 
-API robusta para automatización empresarial con **512 acciones completamente funcionales**.
+API robusta para automatización empresarial con integraciones múltiples.
 
-## ✨ Características Principales
+## 🚀 Características
 
-- **🎯 512 acciones automatizadas** verificadas y funcionando
-- **🏢 Integraciones empresariales**: Microsoft 365, Google Workspace, Azure, AWS
-- **📱 Social Media**: LinkedIn, Meta, TikTok, X (Twitter), YouTube
-- **🔧 CRM & Marketing**: HubSpot, Notion, WordPress
-- **🤖 IA & ML**: OpenAI, Gemini, análisis inteligente
-- **💬 Comunicación**: Teams, WhatsApp bots
-- **📅 Gestión**: Calendarios, tareas, formularios, planner
+- **512 acciones automatizadas** completamente funcionales
+- **Integraciones empresariales**: Microsoft 365, Google Workspace, Azure, AWS
+- **Social Media**: LinkedIn, Meta, TikTok, X (Twitter), YouTube
+- **CRM & Marketing**: HubSpot, Notion, WordPress
+- **IA & ML**: OpenAI, Gemini, análisis inteligente
+- **Comunicación**: Teams, WhatsApp bots
+- **Gestión**: Calendarios, tareas, formularios
 
-## 🛠️ Tecnologías
-
-- **Backend**: FastAPI + Python 3.11+
-- **Autenticación**: Azure AD, OAuth2, JWT
-- **Base de datos**: Configuración flexible
-- **Infraestructura**: Azure App Service compatible
-- **APIs**: REST + WebSocket para tiempo real
-
-## 📦 Instalación Rápida
+## 📦 Instalación
 
 ```bash
 # Clonar repositorio
-git clone https://github.com/arley101/webapi.git
-cd webapi
+git clone [URL_DEL_REPO]
+cd assistant_clean
 
 # Crear entorno virtual
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+source venv/bin/activate  # En Windows: venv\Scripts\activate
 
-# Instalar dependencias optimizadas
+# Instalar dependencias
 pip install -r requirements.txt
 
 # Configurar variables de entorno
 cp ENV_VARIABLES.md .env
 # Editar .env con tus credenciales
 
-# Ejecutar la aplicación
+# Ejecutar
 python main.py
 ```
 
-## 🚀 Endpoints Principales
+## 🛠️ Despliegue
 
-- **GET** `/health` - Estado del sistema y verificación
-- **POST** `/chat` - Interface de chat principal
-- **GET** `/actions` - Listado completo de 512 acciones
-- **POST** `/execute` - Ejecutar acciones específicas
-- **GET** `/docs` - Documentación interactiva Swagger
+Ver `DEPLOYMENT_GUIDE_NO_DOCKER.md` para instrucciones detalladas.
 
-## 📊 Integraciones Verificadas
+## 📚 Documentación
 
-| Categoría | Servicios | Estado |
-|-----------|-----------|--------|
-| **Microsoft** | Graph API, Teams, Outlook, SharePoint, OneDrive, Power BI | ✅ |
-| **Google** | Gmail, Calendar, Drive, Ads, Analytics, YouTube | ✅ |
-| **Social Media** | LinkedIn, Meta, TikTok, X, YouTube | ✅ |
-| **CRM/Marketing** | HubSpot, Notion, WordPress | ✅ |
-| **Cloud** | Azure, AWS servicios principales | ✅ |
-| **IA/ML** | OpenAI GPT-4, Gemini, análisis de datos | ✅ |
+- `INTEGRATION_GUIDE.md` - Guía de integraciones
+- `ENV_VARIABLES.md` - Variables de entorno requeridas
+- `DEPLOYMENT_GUIDE_NO_DOCKER.md` - Guía de despliegue
 
-## 🔧 Configuración de Producción
+## 🎯 Endpoints Principales
 
-Ver documentación detallada:
-- 📖 `DEPLOYMENT_GUIDE_NO_DOCKER.md` - Guía de despliegue
-- 🔑 `ENV_VARIABLES.md` - Variables de entorno
-- 🔗 `INTEGRATION_GUIDE.md` - Configuración de integraciones
+- `/health` - Estado del sistema
+- `/chat` - Interface de chat
+- `/actions` - Listado de acciones disponibles
+- `/execute` - Ejecutar acciones específicas
 
-## 📈 Rendimiento
+## 🔧 Tecnologías
 
-- **Respuesta promedio**: < 500ms
-- **Concurrencia**: 100+ usuarios simultáneos
-- **Disponibilidad**: 99.9% uptime
-- **Acciones/segundo**: 50+ operaciones
-
-## 🔒 Seguridad
-
-- Autenticación OAuth2 + JWT
-- Encriptación en tránsito y reposo
-- Rate limiting automático
-- Auditoría completa de acciones
+- **Backend**: FastAPI + Python 3.11+
+- **Base de datos**: Configuración flexible
+- **Autenticación**: Azure AD, OAuth2
+- **Infraestructura**: Azure App Service compatible
 
 ## 📄 Licencia
 
-Proyecto privado - © 2025 Todos los derechos reservados
-
----
-
-**🎯 Ready for Production** | **✅ 512 Actions Verified** | **🚀 Optimized & Clean**
+Proyecto privado - Todos los derechos reservados

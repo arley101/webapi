@@ -2,13 +2,17 @@ import logging
 from typing import Any, Dict, List, Optional, Union
 from datetime import datetime
 import os
+import time
+import requests
+from io import BytesIO
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build, Resource
-from googleapiclient.http import MediaFileUpload
+from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from googleapiclient.errors import HttpError
 
 from app.core.config import settings
+from app.services.auth.youtube_auth import get_youtube_client, format_video_metadata, validate_video_privacy
 
 # Implementamos una función de validación local para evitar la dependencia externa
 def validate_date_format(date_str):
@@ -639,7 +643,479 @@ def youtube_list_channel_videos(client: Any, params: Dict[str, Any]) -> Dict[str
                 "error_type": "configuration_required",
                 "solution": str(config_error)
             },
-            "http_status": 503
         }
+
+# ============================================================================
+# NUEVAS ACCIONES YOUTUBE - SEGÚN ESPECIFICACIONES DEL DOCUMENTO
+# ============================================================================
+
+async def youtube_upload_video(client, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sube video a YouTube con metadata completa
+    Params: video_url, title, description, tags, playlist_id, privacy, schedule
+    """
+    try:
+        video_url = params.get("video_url", "")
+        video_path = params.get("video_path", "")
+        title = params.get("title", "Video sin título")
+        description = params.get("description", "")
+        tags = params.get("tags", [])
+        playlist_id = params.get("playlist_id", "")
+        privacy = validate_video_privacy(params.get("privacy", "private"))
+        scheduled_time = params.get("schedule", "")
+        category_id = params.get("category_id", "22")
+        
+        if not video_url and not video_path:
+            return {"status": "error", "message": "Se requiere 'video_url' o 'video_path'"}
+        
+        # Usar cliente YouTube mejorado
+        yt_client = get_youtube_client()
+        
+        # Obtener datos del video
+        if video_url:
+            # Descargar de URL
+            response = requests.get(video_url, timeout=300)  # 5 min timeout
+            response.raise_for_status()
+            video_data = response.content
+        else:
+            # Leer archivo local
+            with open(video_path, 'rb') as f:
+                video_data = f.read()
+        
+        # Formatear metadata
+        metadata = format_video_metadata(
+            title=title,
+            description=description,
+            tags=tags,
+            category_id=category_id,
+            privacy_status=privacy,
+            scheduled_time=scheduled_time
+        )
+        
+        # Upload usando cliente mejorado
+        result = yt_client.upload_video_multipart(video_data, metadata, "youtube_upload_video")
+        
+        # Si upload exitoso y hay playlist, agregar a playlist
+        if result.get("status") == "success" and playlist_id:
+            video_id = result.get("data", {}).get("id")
+            if video_id:
+                playlist_result = await youtube_add_video_to_playlist(client, {
+                    "playlist_id": playlist_id,
+                    "video_id": video_id
+                })
+                result["playlist_addition"] = playlist_result
+        
+        # Persistencia
+        if result.get("status") == "success":
+            result["persist_suggestion"] = {
+                "action": "save_memory",
+                "params": {
+                    "storage_type": "video",
+                    "file_name": f"youtube_upload_{int(time.time())}.json",
+                    "content": {
+                        "video_id": result.get("data", {}).get("id"),
+                        "title": title,
+                        "description": description,
+                        "tags": tags,
+                        "privacy": privacy,
+                        "source": video_url or video_path,
+                        "upload_time": time.time(),
+                        "youtube_url": f"https://youtube.com/watch?v={result.get('data', {}).get('id')}"
+                    },
+                    "tags": ["youtube", "upload", "video"]
+                }
+            }
+        
+        return result
+        
     except Exception as e:
-        return _handle_youtube_api_error(e, action_name)
+        logger.error(f"Error en youtube_upload_video: {str(e)}")
+        return {
+            "status": "error",
+            "action": "youtube_upload_video",
+            "message": f"Error subiendo video: {str(e)}",
+            "details": {}
+        }
+
+async def youtube_update_video_metadata(client, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Actualiza metadata de video existente
+    Params: video_id, title, description, tags, playlist_id
+    """
+    try:
+        video_id = params.get("video_id", "")
+        title = params.get("title", "")
+        description = params.get("description", "")
+        tags = params.get("tags", [])
+        privacy = params.get("privacy", "")
+        
+        if not video_id:
+            return {"status": "error", "message": "Parámetro 'video_id' requerido"}
+        
+        yt_client = get_youtube_client()
+        
+        # Preparar datos de actualización
+        update_body = {
+            "id": video_id,
+            "snippet": {}
+        }
+        
+        if title:
+            update_body["snippet"]["title"] = title
+        if description:
+            update_body["snippet"]["description"] = description
+        if tags:
+            update_body["snippet"]["tags"] = tags
+        
+        # Agregar status si se especifica privacy
+        if privacy:
+            privacy = validate_video_privacy(privacy)
+            update_body["status"] = {"privacyStatus": privacy}
+        
+        # Determinar parts según qué se está actualizando
+        parts = []
+        if update_body["snippet"]:
+            parts.append("snippet")
+        if "status" in update_body:
+            parts.append("status")
+        
+        if not parts:
+            return {"status": "error", "message": "No hay datos para actualizar"}
+        
+        # Ejecutar actualización
+        request = yt_client.service.videos().update(
+            part=",".join(parts),
+            body=update_body
+        )
+        
+        result = yt_client.execute_request(request, "youtube_update_video_metadata")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en youtube_update_video_metadata: {str(e)}")
+        return {
+            "status": "error",
+            "action": "youtube_update_video_metadata",
+            "message": f"Error actualizando metadata: {str(e)}",
+            "details": {}
+        }
+
+async def youtube_get_analytics(client, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Obtiene analytics de video/canal por rango de fechas
+    Params: video_id (opcional), start_date, end_date, metrics
+    """
+    try:
+        video_id = params.get("video_id", "")
+        start_date = params.get("start_date", "")
+        end_date = params.get("end_date", "")
+        metrics = params.get("metrics", ["views", "watchTime", "subscribersGained"])
+        
+        if not start_date or not end_date:
+            return {"status": "error", "message": "Se requieren 'start_date' y 'end_date' (formato: YYYY-MM-DD)"}
+        
+        yt_client = get_youtube_client()
+        
+        # Construir query de analytics
+        if video_id:
+            # Analytics específicos de video
+            filters = f"video=={video_id}"
+            dimensions = "day"
+        else:
+            # Analytics del canal
+            filters = ""
+            dimensions = "day"
+        
+        # Construir servicio de YouTube Analytics
+        try:
+            analytics_service = build('youtubeAnalytics', 'v2', credentials=yt_client._get_oauth_credentials())
+        except:
+            return {"status": "error", "message": "No se pudo acceder a YouTube Analytics API"}
+        
+        # Ejecutar query
+        request = analytics_service.reports().query(
+            ids="channel==MINE",
+            startDate=start_date,
+            endDate=end_date,
+            metrics=",".join(metrics),
+            dimensions=dimensions,
+            filters=filters if filters else None,
+            sort="day"
+        )
+        
+        result = yt_client.execute_request(request, "youtube_get_analytics")
+        
+        # Persistencia
+        if result.get("status") == "success":
+            result["persist_suggestion"] = {
+                "action": "save_memory",
+                "params": {
+                    "storage_type": "analytics",
+                    "file_name": f"youtube_analytics_{int(time.time())}.json",
+                    "content": {
+                        "video_id": video_id or "channel",
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "metrics": metrics,
+                        "analytics_data": result.get("data", {}),
+                        "generated_at": time.time()
+                    },
+                    "tags": ["youtube", "analytics", "metrics"]
+                }
+            }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en youtube_get_analytics: {str(e)}")
+        return {
+            "status": "error",
+            "action": "youtube_get_analytics",
+            "message": f"Error obteniendo analytics: {str(e)}",
+            "details": {}
+        }
+
+async def youtube_schedule_video(client, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Programa publicación de video
+    Params: video_id, scheduled_time (ISO format)
+    """
+    try:
+        video_id = params.get("video_id", "")
+        scheduled_time = params.get("scheduled_time", "")
+        
+        if not video_id or not scheduled_time:
+            return {"status": "error", "message": "Se requieren 'video_id' y 'scheduled_time'"}
+        
+        yt_client = get_youtube_client()
+        
+        # Actualizar status del video para scheduling
+        update_body = {
+            "id": video_id,
+            "status": {
+                "privacyStatus": "private",  # Debe ser private para scheduled
+                "publishAt": scheduled_time
+            }
+        }
+        
+        request = yt_client.service.videos().update(
+            part="status",
+            body=update_body
+        )
+        
+        result = yt_client.execute_request(request, "youtube_schedule_video")
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en youtube_schedule_video: {str(e)}")
+        return {
+            "status": "error",
+            "action": "youtube_schedule_video",
+            "message": f"Error programando video: {str(e)}",
+            "details": {}
+        }
+
+async def youtube_bulk_upload_from_folder(client, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Sube múltiples videos desde una carpeta usando STORAGE_RULES
+    Params: folder_path, default_title_template, default_description, playlist_id
+    """
+    try:
+        folder_path = params.get("folder_path", "")
+        title_template = params.get("default_title_template", "Video {index} - {filename}")
+        default_description = params.get("default_description", "")
+        playlist_id = params.get("playlist_id", "")
+        privacy = validate_video_privacy(params.get("privacy", "private"))
+        
+        if not folder_path:
+            return {"status": "error", "message": "Parámetro 'folder_path' requerido"}
+        
+        if not os.path.exists(folder_path):
+            return {"status": "error", "message": f"Carpeta no existe: {folder_path}"}
+        
+        # Buscar archivos de video
+        video_extensions = [".mp4", ".mov", ".avi", ".mkv", ".wmv"]
+        video_files = []
+        
+        for file in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, file)
+            if os.path.isfile(file_path) and any(file.lower().endswith(ext) for ext in video_extensions):
+                video_files.append(file_path)
+        
+        if not video_files:
+            return {"status": "error", "message": "No se encontraron archivos de video en la carpeta"}
+        
+        # Subir cada video
+        results = []
+        successful_uploads = 0
+        failed_uploads = 0
+        
+        for i, video_path in enumerate(video_files, 1):
+            try:
+                filename = os.path.basename(video_path)
+                title = title_template.format(index=i, filename=filename)
+                
+                upload_result = await youtube_upload_video(client, {
+                    "video_path": video_path,
+                    "title": title,
+                    "description": default_description,
+                    "privacy": privacy,
+                    "playlist_id": playlist_id
+                })
+                
+                if upload_result.get("status") == "success":
+                    successful_uploads += 1
+                else:
+                    failed_uploads += 1
+                
+                results.append({
+                    "file": filename,
+                    "status": upload_result.get("status"),
+                    "video_id": upload_result.get("data", {}).get("id"),
+                    "title": title
+                })
+                
+                # Delay entre uploads para evitar rate limits
+                time.sleep(2)
+                
+            except Exception as e:
+                failed_uploads += 1
+                results.append({
+                    "file": os.path.basename(video_path),
+                    "status": "error",
+                    "error": str(e)
+                })
+        
+        final_result = {
+            "status": "success",
+            "action": "youtube_bulk_upload_from_folder",
+            "data": {
+                "total_files": len(video_files),
+                "successful_uploads": successful_uploads,
+                "failed_uploads": failed_uploads,
+                "results": results
+            }
+        }
+        
+        # Persistencia del bulk upload
+        final_result["persist_suggestion"] = {
+            "action": "save_memory",
+            "params": {
+                "storage_type": "analytics",
+                "file_name": f"youtube_bulk_upload_{int(time.time())}.json",
+                "content": final_result["data"],
+                "tags": ["youtube", "bulk_upload", "batch"]
+            }
+        }
+        
+        return final_result
+        
+    except Exception as e:
+        logger.error(f"Error en youtube_bulk_upload_from_folder: {str(e)}")
+        return {
+            "status": "error",
+            "action": "youtube_bulk_upload_from_folder",
+            "message": f"Error en bulk upload: {str(e)}",
+            "details": {}
+        }
+
+async def youtube_manage_comments(client, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Gestiona comentarios: listar, responder, fijar, ocultar
+    Params: video_id, action (list|reply|pin|hide), comment_id, reply_text
+    """
+    try:
+        video_id = params.get("video_id", "")
+        action = params.get("action", "list")  # list|reply|pin|hide
+        comment_id = params.get("comment_id", "")
+        reply_text = params.get("reply_text", "")
+        
+        if not video_id:
+            return {"status": "error", "message": "Parámetro 'video_id' requerido"}
+        
+        yt_client = get_youtube_client()
+        
+        if action == "list":
+            # Listar comentarios
+            request = yt_client.service.commentThreads().list(
+                part="snippet,replies",
+                videoId=video_id,
+                maxResults=params.get("max_results", 20),
+                order=params.get("order", "time")
+            )
+            
+            result = yt_client.execute_request(request, "youtube_manage_comments_list")
+            
+        elif action == "reply":
+            # Responder comentario
+            if not comment_id or not reply_text:
+                return {"status": "error", "message": "Para responder se requieren 'comment_id' y 'reply_text'"}
+            
+            # Obtener el comment thread
+            thread_request = yt_client.service.commentThreads().list(
+                part="snippet",
+                id=comment_id
+            )
+            thread_result = yt_client.execute_request(thread_request, "get_comment_thread")
+            
+            if thread_result.get("status") != "success":
+                return thread_result
+            
+            # Crear respuesta
+            reply_body = {
+                "snippet": {
+                    "parentId": comment_id,
+                    "textOriginal": reply_text
+                }
+            }
+            
+            request = yt_client.service.comments().insert(
+                part="snippet",
+                body=reply_body
+            )
+            
+            result = yt_client.execute_request(request, "youtube_manage_comments_reply")
+            
+        elif action == "pin":
+            # Fijar comentario (requiere ser el propietario del video)
+            if not comment_id:
+                return {"status": "error", "message": "Para fijar se requiere 'comment_id'"}
+            
+            # Esta funcionalidad puede requerir API específicas adicionales
+            return {"status": "error", "message": "Funcionalidad de fijar comentarios no disponible en API actual"}
+            
+        elif action == "hide":
+            # Ocultar/moderar comentario
+            if not comment_id:
+                return {"status": "error", "message": "Para ocultar se requiere 'comment_id'"}
+            
+            # Actualizar status del comentario
+            update_body = {
+                "id": comment_id,
+                "snippet": {
+                    "moderationStatus": "rejected"
+                }
+            }
+            
+            request = yt_client.service.comments().update(
+                part="snippet",
+                body=update_body
+            )
+            
+            result = yt_client.execute_request(request, "youtube_manage_comments_hide")
+            
+        else:
+            return {"status": "error", "message": f"Acción no válida: {action}. Usar: list|reply|pin|hide"}
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error en youtube_manage_comments: {str(e)}")
+        return {
+            "status": "error",
+            "action": "youtube_manage_comments",
+            "message": f"Error gestionando comentarios: {str(e)}",
+            "details": {}
+        }
