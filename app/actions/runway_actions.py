@@ -68,7 +68,7 @@ def _make_request(method: str, url: str, data: Dict = None) -> Dict[str, Any]:
 # FUNCIONES PRINCIPALES DE RUNWAY
 # ============================================================================
 
-async def runway_generate_video(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_generate_video(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Generar video usando Runway ML (imagen a video o texto a video)
     
@@ -131,7 +131,7 @@ async def runway_generate_video(client: AuthenticatedHttpClient, params: Dict[st
             "message": str(e)
         }
 
-async def runway_get_video_status(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_get_video_status(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Obtener el estado de un video en generación
     
@@ -165,7 +165,7 @@ async def runway_get_video_status(client: AuthenticatedHttpClient, params: Dict[
             "task_id": params.get("task_id")
         }
 
-async def runway_cancel_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_cancel_task(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Cancelar una tarea de generación
     
@@ -194,41 +194,39 @@ async def runway_cancel_task(client: AuthenticatedHttpClient, params: Dict[str, 
             "task_id": params.get("task_id")
         }
 
-async def runway_list_models(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_list_models(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Listar modelos disponibles en Runway
+    Listar modelos disponibles en Runway ML - API REAL
     """
     try:
-        # Los modelos más comunes de Runway
-        models = [
-            {
-                "id": "gen3a_turbo",
-                "name": "Gen-3 Alpha Turbo",
-                "description": "Modelo rápido para generación de video",
-                "capabilities": ["image_to_video", "text_to_video"]
-            },
-            {
-                "id": "gen3",
-                "name": "Gen-3 Alpha",
-                "description": "Modelo estándar para generación de video de alta calidad",
-                "capabilities": ["image_to_video", "text_to_video"]
-            }
-        ]
+        logger.info("🎬 Obteniendo lista de modelos de Runway ML...")
         
-        return {
-            "status": "success",
-            "models": models,
-            "total_models": len(models)
-        }
+        response = _make_request("GET", f"{BASE_URL}/models")
+        
+        if response.get("models"):
+            logger.info(f"✅ Se obtuvieron {len(response['models'])} modelos de Runway ML")
+            return {
+                "status": "success",
+                "models": response["models"],
+                "total_models": len(response["models"])
+            }
+        else:
+            logger.warning("⚠️ No se encontraron modelos en la respuesta de la API")
+            return {
+                "status": "success",
+                "models": [],
+                "total_models": 0,
+                "message": "No se encontraron modelos disponibles"
+            }
         
     except Exception as e:
-        logger.error(f"Error listing models: {str(e)}")
+        logger.error(f"❌ Error obteniendo modelos de Runway: {str(e)}")
         return {
             "status": "error",
-            "message": str(e)
+            "message": f"Error obteniendo modelos: {str(e)}"
         }
 
-async def runway_estimate_cost(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_estimate_cost(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Estimar el costo de una generación de video
     
@@ -266,7 +264,7 @@ async def runway_estimate_cost(client: AuthenticatedHttpClient, params: Dict[str
 # FUNCIONES AVANZADAS DE RUNWAY
 # ============================================================================
 
-async def runway_generate_video_advanced(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_generate_video_advanced(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Generación avanzada de videos con parámetros extendidos
     
@@ -324,7 +322,7 @@ async def runway_generate_video_advanced(client: AuthenticatedHttpClient, params
             "message": str(e)
         }
 
-async def runway_image_to_video_pro(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_image_to_video_pro(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Conversión profesional de imagen a video con controles avanzados
     
@@ -380,7 +378,7 @@ async def runway_image_to_video_pro(client: AuthenticatedHttpClient, params: Dic
             "message": str(e)
         }
 
-async def runway_text_to_video_studio(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_text_to_video_studio(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Estudio de texto a video con capacidades narrativas
     
@@ -446,7 +444,7 @@ async def runway_text_to_video_studio(client: AuthenticatedHttpClient, params: D
 # FUNCIONES DE UTILIDAD
 # ============================================================================
 
-async def runway_get_result_url(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_get_result_url(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Obtener URL del resultado de un video generado
     """
@@ -455,7 +453,7 @@ async def runway_get_result_url(client: AuthenticatedHttpClient, params: Dict[st
         if not task_id:
             return {"status": "error", "message": "task_id requerido"}
         
-        status_result = await runway_get_video_status(client, {"task_id": task_id})
+        status_result = runway_get_video_status(client, {"task_id": task_id})
         
         if status_result.get("status") == "success" and status_result.get("video_url"):
             return {
@@ -481,7 +479,7 @@ async def runway_get_result_url(client: AuthenticatedHttpClient, params: Dict[st
             "task_id": params.get("task_id")
         }
 
-async def runway_wait_and_save(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_wait_and_save(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Esperar a que termine una generación y guardar el resultado
     
@@ -501,7 +499,7 @@ async def runway_wait_and_save(client: AuthenticatedHttpClient, params: Dict[str
         max_checks = (max_wait_minutes * 60) // check_interval_seconds
         
         for check in range(max_checks):
-            status_result = await runway_get_video_status(client, {"task_id": task_id})
+            status_result = runway_get_video_status(client, {"task_id": task_id})
             
             if status_result.get("task_status") == "succeeded":
                 # Video completado
@@ -521,7 +519,7 @@ async def runway_wait_and_save(client: AuthenticatedHttpClient, params: Dict[str
                 }
             
             # Esperar antes del siguiente check
-            await asyncio.sleep(check_interval_seconds)
+            time.sleep(check_interval_seconds)
         
         # Tiempo agotado
         return {
@@ -539,7 +537,7 @@ async def runway_wait_and_save(client: AuthenticatedHttpClient, params: Dict[str
             "task_id": params.get("task_id")
         }
 
-async def runway_check_configuration(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
+def runway_check_configuration(client: AuthenticatedHttpClient, params: Dict[str, Any]) -> Dict[str, Any]:
     """
     Verificar la configuración actual de Runway
     """
