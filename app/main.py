@@ -89,6 +89,12 @@ except Exception as e:
     logger.warning("No se pudo cargar openai_direct: %s", e)
     openai_direct_router = None
 
+try:
+    from app.api.routes.simple_assistant import router as simple_assistant_router
+except Exception as e:
+    logger.warning("No se pudo cargar simple_assistant: %s", e)
+    simple_assistant_router = None
+
 # Lifespan manager (reemplaza @app.on_event)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -198,6 +204,12 @@ if openai_direct_router is not None:
     logger.info("Router OpenAI Direct incluido bajo el prefijo: /api/v1")
 else:
     logger.warning("Router OpenAI Direct NO cargó; la app seguirá viva con endpoints de health.")
+
+if simple_assistant_router is not None:
+    app.include_router(simple_assistant_router, prefix="/api/v1")
+    logger.info("Router Simple Assistant incluido bajo el prefijo: /api/v1")
+else:
+    logger.warning("Router Simple Assistant NO cargó; la app seguirá viva con endpoints de health.")
 
 # Configurar archivos estáticos para la interfaz de chat
 try:

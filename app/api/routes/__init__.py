@@ -4,5 +4,6 @@
 # para los diferentes endpoints de la aplicación.
 
 from .whatsapp_webhook import router as whatsapp_webhook_router
+from .simple_assistant import router as simple_assistant_router
 
-__all__ = ["whatsapp_webhook_router"]
+__all__ = ["whatsapp_webhook_router", "simple_assistant_router"]
