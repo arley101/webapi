@@ -1,0 +1,172 @@
+{
+  "timestamp": "2025-08-15T00:24:44.573151",
+  "results": [
+    {
+      "test": "Import app.main",
+      "status": "PASS",
+      "message": "M\u00f3dulo importado correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572647"
+    },
+    {
+      "test": "Import app.core.config",
+      "status": "PASS",
+      "message": "M\u00f3dulo importado correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572663"
+    },
+    {
+      "test": "Import app.core.action_mapper",
+      "status": "PASS",
+      "message": "M\u00f3dulo importado correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572668"
+    },
+    {
+      "test": "Import app.core.auth_manager",
+      "status": "PASS",
+      "message": "M\u00f3dulo importado correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572672"
+    },
+    {
+      "test": "Import app.actions.correo_actions",
+      "status": "PASS",
+      "message": "M\u00f3dulo importado correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572676"
+    },
+    {
+      "test": "Import app.actions.calendar_actions",
+      "status": "PASS",
+      "message": "M\u00f3dulo importado correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572901"
+    },
+    {
+      "test": "Import app.memory.intelligent_assistant",
+      "status": "PASS",
+      "message": "M\u00f3dulo importado correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572908"
+    },
+    {
+      "test": "Config Load",
+      "status": "PASS",
+      "message": "Configuraci\u00f3n cargada correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572920"
+    },
+    {
+      "test": "Config OPENAI_API_KEY",
+      "status": "WARN",
+      "message": "Variable no configurada",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572932"
+    },
+    {
+      "test": "Config AZURE_CLIENT_ID",
+      "status": "WARN",
+      "message": "Variable no configurada",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572936"
+    },
+    {
+      "test": "Config AZURE_CLIENT_SECRET",
+      "status": "WARN",
+      "message": "Variable no configurada",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572939"
+    },
+    {
+      "test": "Config AZURE_TENANT_ID",
+      "status": "WARN",
+      "message": "Variable no configurada",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572942"
+    },
+    {
+      "test": "Config GOOGLE_CLIENT_ID",
+      "status": "WARN",
+      "message": "Variable no configurada",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572948"
+    },
+    {
+      "test": "ActionMapper Load",
+      "status": "PASS",
+      "message": "ACTION_MAP cargado con 476 acciones",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572954"
+    },
+    {
+      "test": "Action email_send_message",
+      "status": "PASS",
+      "message": "Acci\u00f3n disponible",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572958"
+    },
+    {
+      "test": "Action calendar_list_events",
+      "status": "PASS",
+      "message": "Acci\u00f3n disponible",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572960"
+    },
+    {
+      "test": "Action teams_send_message",
+      "status": "FAIL",
+      "message": "Acci\u00f3n no encontrada",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572963"
+    },
+    {
+      "test": "Action workflow_execute",
+      "status": "FAIL",
+      "message": "Acci\u00f3n no encontrada",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572966"
+    },
+    {
+      "test": "App Creation",
+      "status": "PASS",
+      "message": "Aplicaci\u00f3n FastAPI creada correctamente",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572972"
+    },
+    {
+      "test": "Route /api/v1/chatgpt",
+      "status": "PASS",
+      "message": "Ruta disponible",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572984"
+    },
+    {
+      "test": "Route /api/v1/dynamics",
+      "status": "PASS",
+      "message": "Ruta disponible",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572988"
+    },
+    {
+      "test": "Route /health",
+      "status": "PASS",
+      "message": "Ruta disponible",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.572993"
+    },
+    {
+      "test": "Memory System",
+      "status": "PASS",
+      "message": "Sistema de memoria funcionando",
+      "details": null,
+      "timestamp": "2025-08-15T00:24:44.573005"
+    }
+  ],
+  "summary": {
+    "total": 23,
+    "passed": 16,
+    "failed": 2,
+    "warnings": 5
+  }
+}
