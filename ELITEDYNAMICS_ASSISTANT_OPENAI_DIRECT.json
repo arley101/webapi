@@ -1,0 +1,271 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "EliteDynamicsAPI - OpenAI Direct",
+    "description": "API optimizada para asistentes OpenAI - Ruta directa sin validaciones problemáticas",
+    "version": "2.0"
+  },
+  "servers": [
+    {
+      "url": "https://elitedynamicsapi.azurewebsites.net",
+      "description": "Servidor de Producción"
+    }
+  ],
+  "paths": {
+    "/api/v1/openai": {
+      "post": {
+        "summary": "Ejecutar cualquier acción (Ruta OpenAI Direct)",
+        "description": "NUEVA RUTA OPTIMIZADA - Bypasea validaciones problemáticas. Acceso directo a las 476+ acciones.",
+        "operationId": "executeActionDirect",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["action"],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "description": "Nombre exacto de la acción a ejecutar",
+                    "examples": [
+                      "runway_list_models",
+                      "runway_generate_video",
+                      "runway_get_video_status", 
+                      "email_send_message",
+                      "calendario_create_event",
+                      "notion_create_page",
+                      "google_ads_get_campaigns",
+                      "meta_ads_get_insights",
+                      "wp_create_post",
+                      "hubspot_create_contact",
+                      "teams_send_message",
+                      "youtube_channel_get_videos",
+                      "powerbi_get_reports",
+                      "sharepoint_upload_file",
+                      "onedrive_upload_file",
+                      "todo_create_task",
+                      "planner_create_plan"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "description": "Parámetros para la acción - Varía según la acción elegida",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Acción ejecutada correctamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["success"]
+                    },
+                    "action": {
+                      "type": "string",
+                      "description": "Acción que se ejecutó"
+                    },
+                    "data": {
+                      "type": "object",
+                      "description": "Resultados de la acción ejecutada"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "Momento de ejecución"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error en los parámetros enviados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["error"]
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Descripción del error"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Acción no encontrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["error"]
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Acción no encontrada"
+                    },
+                    "available_actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Primeras 20 acciones disponibles"
+                    },
+                    "total_actions": {
+                      "type": "integer",
+                      "description": "Total de acciones disponibles"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Error interno del servidor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["error"]
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Descripción del error del servidor"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/openai/actions": {
+      "get": {
+        "summary": "Listar todas las acciones disponibles",
+        "description": "Obtiene la lista completa de las 476+ acciones disponibles, organizadas por categorías",
+        "operationId": "listAvailableActions",
+        "responses": {
+          "200": {
+            "description": "Lista de acciones obtenida correctamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["success"]
+                    },
+                    "total_actions": {
+                      "type": "integer",
+                      "description": "Número total de acciones disponibles"
+                    },
+                    "categories": {
+                      "type": "integer", 
+                      "description": "Número de categorías"
+                    },
+                    "actions_by_category": {
+                      "type": "object",
+                      "description": "Acciones organizadas por categoría",
+                      "additionalProperties": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "all_actions": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "Lista completa de todas las acciones"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/openai/test": {
+      "post": {
+        "summary": "Probar conexión OpenAI",
+        "description": "Endpoint de prueba para verificar que la comunicación funciona correctamente",
+        "operationId": "testOpenAIConnection",
+        "responses": {
+          "200": {
+            "description": "Conexión funcionando correctamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["success"]
+                    },
+                    "message": {
+                      "type": "string",
+                      "description": "Mensaje de confirmación"
+                    },
+                    "available_actions_count": {
+                      "type": "integer",
+                      "description": "Número de acciones disponibles"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {},
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token de autenticación Bearer (opcional para OpenAI Direct)"
+      }
+    }
+  }
+}
