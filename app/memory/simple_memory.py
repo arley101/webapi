@@ -237,3 +237,11 @@ def export_memory_summary(session_id: str, format_type: str = "json") -> Dict[st
         except Exception:
             pass
     return result
+
+
+# Alias para compatibilidad
+SimpleMemory = SimpleMemoryManager
+
+
+# Alias para compatibilidad
+SimpleMemory = SimpleMemoryManager

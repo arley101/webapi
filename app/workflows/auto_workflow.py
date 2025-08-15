@@ -10,11 +10,20 @@ from datetime import datetime, timedelta
 import json
 
 from app.core.auth_manager import get_auth_client
-from app.core.action_mapper import ACTION_MAP
+# REMOVED: from app.core.action_mapper import ACTION_MAP  # ❌ CAUSA IMPORT CIRCULAR
 from app.actions import gemini_actions
 from app.actions import resolver_actions
 
 logger = logging.getLogger(__name__)
+
+def get_action_map():
+    """Lazy loading del ACTION_MAP para evitar imports circulares"""
+    try:
+        from app.core.action_mapper import ACTION_MAP
+        return ACTION_MAP
+    except ImportError:
+        logger.error("No se pudo importar ACTION_MAP - posible import circular")
+        return {}
 
 class AutoWorkflowManager:
     """Gestor de workflows automáticos con IA integrada"""
@@ -125,6 +134,100 @@ class AutoWorkflowManager:
             }
         }
     
+    async def execute_predefined_workflow(self, workflow_id: str, params: Dict[str, Any], user) -> Dict[str, Any]:
+        """Ejecuta un workflow predefinido de forma asíncrona"""
+        
+        if workflow_id not in self.predefined_workflows:
+            return {
+                "success": False,
+                "error": f"Workflow '{workflow_id}' no encontrado",
+                "available_workflows": list(self.predefined_workflows.keys())
+            }
+        
+        workflow = self.predefined_workflows[workflow_id]
+        logger.info(f"Ejecutando workflow: {workflow['name']} para usuario {user.user_id}")
+        
+        try:
+            results = []
+            action_map = get_action_map()
+            
+            for i, step in enumerate(workflow["steps"]):
+                action_name = step["action"]
+                step_params = step.get("params", {})
+                
+                # Merge con parámetros del usuario
+                merged_params = {**step_params, **params}
+                
+                logger.info(f"Ejecutando paso {i+1}/{len(workflow['steps'])}: {action_name}")
+                
+                # Obtener función de acción
+                if action_name in action_map:
+                    action_func = action_map[action_name]
+                    
+                    try:
+                        # Ejecutar la acción
+                        result = await action_func(user, merged_params)
+                        
+                        step_result = {
+                            "step": i + 1,
+                            "action": action_name,
+                            "status": "success" if result.get("success", True) else "error",
+                            "result": result
+                        }
+                        
+                        results.append(step_result)
+                        
+                        # Si hay save_to, guardar resultado para siguientes pasos
+                        if "save_to" in step and result.get("success", True):
+                            # Aquí puedes implementar lógica para pasar resultados entre pasos
+                            pass
+                            
+                    except Exception as e:
+                        error_result = {
+                            "step": i + 1,
+                            "action": action_name,
+                            "status": "error",
+                            "error": str(e)
+                        }
+                        results.append(error_result)
+                        logger.error(f"Error en paso {i+1} ({action_name}): {e}")
+                        
+                        # Opcional: detener workflow en caso de error
+                        break
+                        
+                else:
+                    error_result = {
+                        "step": i + 1,
+                        "action": action_name,
+                        "status": "error",
+                        "error": f"Acción '{action_name}' no encontrada"
+                    }
+                    results.append(error_result)
+                    logger.error(f"Acción '{action_name}' no encontrada en ACTION_MAP")
+                    break
+            
+            # Determinar si el workflow fue exitoso
+            success = all(r["status"] == "success" for r in results)
+            
+            return {
+                "success": success,
+                "workflow_id": workflow_id,
+                "workflow_name": workflow["name"],
+                "total_steps": len(workflow["steps"]),
+                "completed_steps": len(results),
+                "results": results,
+                "execution_time": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Error ejecutando workflow {workflow_id}: {e}")
+            return {
+                "success": False,
+                "workflow_id": workflow_id,
+                "error": str(e),
+                "execution_time": datetime.now().isoformat()
+            }
+
     def execute_workflow(self, workflow_name: str, params: Dict[str, Any] = None) -> Dict[str, Any]:
         """Ejecuta un workflow predefinido"""
         
@@ -159,11 +262,11 @@ class AutoWorkflowManager:
                     resolved_params = self._resolve_variables(step.get("params", {}), context)
                     
                     # Ejecutar la acción
-                    if step["action"] in ACTION_MAP:
-                        action_function = ACTION_MAP[step["action"]]
+                    if step["action"] in get_action_map():
+                        action_function = get_action_map()[step["action"]]
                         result = action_function(auth_client, resolved_params)
                     else:
-                        # Si no está en ACTION_MAP, intentar con resolver
+                        # Si no está en get_action_map(), intentar con resolver
                         result = resolver_actions.resolve_dynamic_query(auth_client, {
                             "query": step["action"],
                             "params": resolved_params
@@ -252,7 +355,7 @@ class AutoWorkflowManager:
             gemini_result = gemini_actions.analyze_conversation_context(auth_client, {
                 "conversation_data": {
                     "request": natural_request,
-                    "available_actions": list(ACTION_MAP.keys()),
+                    "available_actions": list(get_action_map().keys()),
                     "context": "create_workflow",
                     "user_params": params or {}
                 }
@@ -299,8 +402,8 @@ class AutoWorkflowManager:
                 action_name = step.get("action")
                 step_params = self._resolve_variables(step.get("params", {}), context)
                 
-                if action_name in ACTION_MAP:
-                    action_function = ACTION_MAP[action_name]
+                if action_name in get_action_map():
+                    action_function = get_action_map()[action_name]
                     result = action_function(auth_client, step_params)
                     
                     if step.get("save_to"):
