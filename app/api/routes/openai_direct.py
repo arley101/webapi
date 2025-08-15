@@ -50,20 +50,10 @@ async def openai_direct_action(request: Request):
             if "action" in body:
                 action = body["action"]
                 params = body.get("params", {})
-                
-                # NUEVO: Si no hay params explícitos, tomar todos los otros campos como params
-                if not params:
-                    params = {k: v for k, v in body.items() if k != "action"}
-                    
             # Formato alternativo: {"message": "action_name", "params": {...}}
             elif "message" in body:
                 action = body["message"]
                 params = body.get("params", {})
-                
-                # NUEVO: Si no hay params explícitos, tomar todos los otros campos como params
-                if not params:
-                    params = {k: v for k, v in body.items() if k != "message"}
-                    
             # Formato directo: {"function_name": "...", "arguments": {...}}
             elif "function_name" in body:
                 action = body["function_name"]
@@ -86,9 +76,7 @@ async def openai_direct_action(request: Request):
                 }
             )
         
-        logger.info(f"OpenAI Direct: Executing action '{action}' with params: {params}")
-        logger.info(f"OpenAI Direct: Raw body received: {body}")
-        logger.info(f"OpenAI Direct: Extracted params keys: {list(params.keys())}")
+        logger.info(f"OpenAI Direct: Executing action '{action}' with params: {list(params.keys())}")
         
         # Obtener todas las acciones disponibles
         all_actions = get_all_actions()
