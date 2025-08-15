@@ -2,6 +2,7 @@
 Runway ML API Integration - Versión Unificada
 Integración completa con Runway ML para generación de contenido con IA
 Solo modo REAL - Sin simulaciones
+Actualizado: 15/08/2025 - Soporte para RUNWAYML_API_SECRET
 """
 import os
 import json
