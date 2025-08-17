@@ -266,3 +266,7 @@ SimpleMemory = SimpleMemoryManager
 
 # Alias para compatibilidad
 SimpleMemory = SimpleMemoryManager
+
+
+# Alias para compatibilidad
+SimpleMemory = SimpleMemoryManager

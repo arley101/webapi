@@ -1,166 +1,166 @@
 {
-  "timestamp": "2025-08-15T00:45:07.953803",
+  "timestamp": "2025-08-16T09:41:36.919010",
   "results": [
     {
       "test": "Import app.main",
       "status": "PASS",
       "message": "M\u00f3dulo importado correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953080"
+      "timestamp": "2025-08-16T09:41:36.916663"
     },
     {
       "test": "Import app.core.config",
       "status": "PASS",
       "message": "M\u00f3dulo importado correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953099"
+      "timestamp": "2025-08-16T09:41:36.916683"
     },
     {
       "test": "Import app.core.action_mapper",
       "status": "PASS",
       "message": "M\u00f3dulo importado correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953105"
+      "timestamp": "2025-08-16T09:41:36.916692"
     },
     {
       "test": "Import app.core.auth_manager",
       "status": "PASS",
       "message": "M\u00f3dulo importado correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953109"
+      "timestamp": "2025-08-16T09:41:36.916701"
     },
     {
       "test": "Import app.actions.correo_actions",
       "status": "PASS",
       "message": "M\u00f3dulo importado correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953113"
+      "timestamp": "2025-08-16T09:41:36.916713"
     },
     {
       "test": "Import app.actions.calendar_actions",
       "status": "PASS",
       "message": "M\u00f3dulo importado correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953336"
+      "timestamp": "2025-08-16T09:41:36.918402"
     },
     {
       "test": "Import app.memory.intelligent_assistant",
       "status": "PASS",
       "message": "M\u00f3dulo importado correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953344"
+      "timestamp": "2025-08-16T09:41:36.918456"
     },
     {
       "test": "Config Load",
       "status": "PASS",
       "message": "Configuraci\u00f3n cargada correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953354"
+      "timestamp": "2025-08-16T09:41:36.918500"
     },
     {
       "test": "Config OPENAI_API_KEY",
       "status": "WARN",
       "message": "Variable no configurada",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953365"
+      "timestamp": "2025-08-16T09:41:36.918536"
     },
     {
       "test": "Config AZURE_CLIENT_ID",
       "status": "WARN",
       "message": "Variable no configurada",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953369"
+      "timestamp": "2025-08-16T09:41:36.918553"
     },
     {
       "test": "Config AZURE_CLIENT_SECRET",
       "status": "WARN",
       "message": "Variable no configurada",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953372"
+      "timestamp": "2025-08-16T09:41:36.918570"
     },
     {
       "test": "Config AZURE_TENANT_ID",
       "status": "WARN",
       "message": "Variable no configurada",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953375"
+      "timestamp": "2025-08-16T09:41:36.918589"
     },
     {
       "test": "Config GOOGLE_CLIENT_ID",
       "status": "WARN",
       "message": "Variable no configurada",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953380"
+      "timestamp": "2025-08-16T09:41:36.918614"
     },
     {
       "test": "ActionMapper Load",
       "status": "PASS",
       "message": "ACTION_MAP cargado con 476 acciones",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953390"
+      "timestamp": "2025-08-16T09:41:36.918677"
     },
     {
       "test": "Action email_send_message",
       "status": "PASS",
       "message": "Acci\u00f3n disponible",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953393"
+      "timestamp": "2025-08-16T09:41:36.918686"
     },
     {
       "test": "Action calendar_list_events",
       "status": "PASS",
       "message": "Acci\u00f3n disponible",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953396"
+      "timestamp": "2025-08-16T09:41:36.918693"
     },
     {
       "test": "Action teams_send_channel_message",
       "status": "PASS",
       "message": "Acci\u00f3n disponible",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953399"
+      "timestamp": "2025-08-16T09:41:36.918700"
     },
     {
       "test": "Action execute_workflow",
       "status": "PASS",
       "message": "Acci\u00f3n disponible",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953403"
+      "timestamp": "2025-08-16T09:41:36.918707"
     },
     {
       "test": "App Creation",
       "status": "PASS",
       "message": "Aplicaci\u00f3n FastAPI creada correctamente",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953409"
+      "timestamp": "2025-08-16T09:41:36.918726"
     },
     {
       "test": "Route /api/v1/chatgpt",
       "status": "PASS",
       "message": "Ruta disponible",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953425"
+      "timestamp": "2025-08-16T09:41:36.918749"
     },
     {
       "test": "Route /api/v1/dynamics",
       "status": "PASS",
       "message": "Ruta disponible",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953429"
+      "timestamp": "2025-08-16T09:41:36.918758"
     },
     {
       "test": "Route /health",
       "status": "PASS",
       "message": "Ruta disponible",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953433"
+      "timestamp": "2025-08-16T09:41:36.918767"
     },
     {
       "test": "Memory System",
       "status": "PASS",
       "message": "Sistema de memoria funcionando",
       "details": null,
-      "timestamp": "2025-08-15T00:45:07.953449"
+      "timestamp": "2025-08-16T09:41:36.918796"
     }
   ],
   "summary": {
