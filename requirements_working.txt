@@ -4,7 +4,7 @@
 fastapi==0.111.1
 uvicorn[standard]==0.30.3
 # Nota: gunicorn solo necesario si usas workers multi-proceso en producción
-gunicorn==22.0.0
+gunicorn==23.0.0
 
 # Pydantic y configuración
 pydantic==2.11.4
@@ -16,9 +16,9 @@ annotated-types>=0.7,<1.0
 # HTTP & NETWORKING
 # ============================================================================
 httpx==0.27.0  # Solo si necesitas cliente HTTP async
-requests==2.32.3  # Para llamadas HTTP síncronas
+requests==2.32.4  # Para llamadas HTTP síncronas
 # aiohttp se puede eliminar si usas httpx
-python-multipart==0.0.9  # Para uploads de archivos
+python-multipart==0.0.18  # Para uploads de archivos
 
 # ============================================================================
 # AUTENTICACIÓN & OAUTH
@@ -42,7 +42,7 @@ google-generativeai==0.8.3
 # ============================================================================
 # MICROSOFT GRAPH & AZURE
 # ============================================================================
-azure-identity==1.17.1
+azure-identity==1.16.1
 azure-mgmt-resource==23.1.1
 azure-mgmt-logic==10.0.0
 azure-mgmt-web==7.2.0

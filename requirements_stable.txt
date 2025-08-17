@@ -10,12 +10,12 @@ python-dotenv>=1.0.0,<1.1.0
 python-multipart>=0.0.6,<0.1.0
 
 # === HTTP & API ===
-requests>=2.31.0,<2.32.0
-aiohttp>=3.8.0,<3.10.0
+requests>=2.31.0,<2.33.0
+aiohttp>=3.8.0,<3.13.0
 httpx>=0.25.0,<0.26.0
 
 # === MICROSOFT ECOSYSTEM ===
-azure-identity>=1.15.0,<1.16.0
+azure-identity>=1.15.0,<1.17.0
 azure-mgmt-resource>=23.0.0,<24.0.0
 azure-mgmt-logic>=10.0.0,<11.0.0
 azure-mgmt-web>=7.2.0,<8.0.0
@@ -67,4 +67,4 @@ passlib[bcrypt]>=1.7.4,<1.8.0
 loguru>=0.7.0,<0.8.0
 
 # === PRODUCTION ===
-gunicorn>=21.2.0,<22.0.0
+gunicorn>=21.2.0,<24.0.0
