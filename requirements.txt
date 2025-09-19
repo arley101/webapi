@@ -2,9 +2,9 @@
 # FRAMEWORK PRINCIPAL - FASTAPI & UVICORN
 # ============================================================================
 fastapi==0.111.1
-uvicorn[standard]==0.30.3
+uvicorn[standard]==0.31.0
 # Nota: gunicorn solo necesario si usas workers multi-proceso en producción
-gunicorn==22.0.0
+gunicorn==23.0.0
 
 # Pydantic y configuración
 pydantic==2.11.4
