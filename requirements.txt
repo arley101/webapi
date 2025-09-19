@@ -1,0 +1,101 @@
+# ============================================================================
+# FRAMEWORK PRINCIPAL - FASTAPI & UVICORN
+# ============================================================================
+fastapi==0.111.1
+uvicorn[standard]==0.30.3
+# Nota: gunicorn solo necesario si usas workers multi-proceso en producción
+gunicorn==22.0.0
+
+# Pydantic y configuración
+pydantic==2.11.4
+pydantic-settings==2.9.1
+python-dotenv==1.1.0
+typing-extensions>=4.13,<5.0
+annotated-types>=0.7,<1.0
+# ============================================================================
+# HTTP & NETWORKING
+# ============================================================================
+httpx==0.27.0  # Solo si necesitas cliente HTTP async
+requests==2.32.3  # Para llamadas HTTP síncronas
+# aiohttp se puede eliminar si usas httpx
+python-multipart==0.0.9  # Para uploads de archivos
+
+# ============================================================================
+# AUTENTICACIÓN & OAUTH
+# ============================================================================
+oauthlib>=3.3,<4.0
+msal>=1.25,<2.0
+python-jose[cryptography]==3.3.0  # Para JWT
+passlib[bcrypt]>=1.7,<2.0
+
+# ============================================================================
+# GOOGLE APIS & SERVICES - COMPATIBLE CON API v20+
+# ============================================================================
+google-api-python-client==2.134.0
+google-auth==2.32.0
+google-auth-oauthlib==1.2.1
+# ACTUALIZADO: Google Ads API v20+ compatible (agosto 2025)
+google-ads==28.0.0
+google-generativeai==0.8.3
+# google-api-core viene como dependencia transitiva
+
+# ============================================================================
+# MICROSOFT GRAPH & AZURE
+# ============================================================================
+azure-identity==1.17.1
+azure-mgmt-resource==23.1.1
+azure-mgmt-logic==10.0.0
+azure-mgmt-web==7.2.0
+msgraph-core==0.2.2
+
+# ============================================================================
+# SOCIAL MEDIA & ADS APIS
+# ============================================================================
+facebook-business>=23.0,<24.0
+twitter-ads>=11.0,<12.0
+tiktok-business-api>=1.9,<2.0
+linkedin-api>=2.2,<3.0
+
+# ============================================================================
+# CRM & BUSINESS TOOLS
+# ============================================================================
+hubspot-api-client==9.0.0  # Versión estable más reciente
+notion-client==2.2.1
+
+# ============================================================================
+# IA & MACHINE LEARNING
+# ============================================================================
+openai==1.40.8
+
+# ============================================================================
+# WEB RESEARCH & SCRAPING
+# ============================================================================
+beautifulsoup4>=4.12,<5.0
+lxml>=4.9,<6.0
+readability-lxml>=0.8,<1.0
+
+# ============================================================================
+# DATA PROCESSING & ANALYSIS
+# ============================================================================
+numpy>=2.3,<3.0
+pandas>=2.3,<3.0
+openpyxl>=3.1,<4.0
+xlsxwriter>=3.2,<4.0
+PyPDF2>=3.0,<4.0
+python-docx>=1.2,<2.0
+
+# ============================================================================
+# UTILITIES & HELPERS
+# ============================================================================
+python-dateutil>=2.8,<3.0
+pytz>=2023.3,<2024.0
+click>=8.1,<9.0
+jinja2>=3.1,<4.0
+loguru>=0.7.2,<1.0 
+python-slugify>=8.0,<9.0
+validators>=0.35,<1.0
+PyYAML>=6.0,<7.0
+
+# ============================================================================
+# TESTING & DEVELOPMENT: mover a requirements-dev.txt (pytest, pytest-asyncio, black, isort)
+# ============================================================================
