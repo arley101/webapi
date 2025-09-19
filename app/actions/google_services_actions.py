@@ -13,7 +13,42 @@ from typing import Dict, Any, Optional, List
 from datetime import datetime, timedelta
 import requests
 
-from app.services.auth.google_auth import get_google_client, format_gmail_message, format_calendar_event
+from app.core.unified_oauth_manager import unified_oauth
+
+# Funciones helper migradas desde google_auth
+def get_google_client(service="gmail", version="v1"):
+    """Obtener cliente Google usando OAuth unificado"""
+    token = unified_oauth.get_access_token("google")
+    if not token:
+        raise Exception("No se pudo obtener token de Google")
+    
+    from googleapiclient.discovery import build
+    from google.oauth2.credentials import Credentials
+    
+    credentials = Credentials(token=token)
+    return build(service, version, credentials=credentials)
+
+def format_gmail_message(message_data):
+    """Formatear mensaje de Gmail"""
+    return {
+        "id": message_data.get("id"),
+        "thread_id": message_data.get("threadId"),
+        "label_ids": message_data.get("labelIds", []),
+        "snippet": message_data.get("snippet"),
+        "size_estimate": message_data.get("sizeEstimate", 0)
+    }
+
+def format_calendar_event(event_data):
+    """Formatear evento de Calendar"""
+    return {
+        "id": event_data.get("id"),
+        "summary": event_data.get("summary"),
+        "description": event_data.get("description"),
+        "start": event_data.get("start"),
+        "end": event_data.get("end"),
+        "attendees": event_data.get("attendees", []),
+        "location": event_data.get("location")
+    }
 
 logger = logging.getLogger(__name__)
 

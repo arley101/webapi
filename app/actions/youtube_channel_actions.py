@@ -12,7 +12,38 @@ from googleapiclient.http import MediaFileUpload, MediaIoBaseUpload
 from googleapiclient.errors import HttpError
 
 from app.core.config import settings
-from app.services.auth.youtube_auth import get_youtube_client, format_video_metadata, validate_video_privacy
+from app.core.unified_oauth_manager import unified_oauth
+
+# Funciones helper migradas desde youtube_auth
+def get_youtube_client():
+    """Obtener cliente YouTube usando OAuth unificado"""
+    token = unified_oauth.get_access_token("youtube")
+    if not token:
+        raise Exception("No se pudo obtener token de YouTube")
+    
+    from googleapiclient.discovery import build
+    from google.oauth2.credentials import Credentials
+    
+    credentials = Credentials(token=token)
+    return build('youtube', 'v3', credentials=credentials)
+
+def validate_video_privacy(privacy):
+    """Validar configuración de privacidad del video"""
+    valid_options = ["private", "unlisted", "public"]
+    return privacy if privacy in valid_options else "private"
+
+def format_video_metadata(video_data):
+    """Formatear metadata del video"""
+    return {
+        "video_id": video_data.get("id"),
+        "title": video_data.get("snippet", {}).get("title"),
+        "description": video_data.get("snippet", {}).get("description"),
+        "channel_id": video_data.get("snippet", {}).get("channelId"),
+        "published_at": video_data.get("snippet", {}).get("publishedAt"),
+        "view_count": video_data.get("statistics", {}).get("viewCount", "0"),
+        "like_count": video_data.get("statistics", {}).get("likeCount", "0"),
+        "comment_count": video_data.get("statistics", {}).get("commentCount", "0")
+    }
 
 # Implementamos una función de validación local para evitar la dependencia externa
 def validate_date_format(date_str):
