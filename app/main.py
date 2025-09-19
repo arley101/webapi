@@ -95,6 +95,14 @@ except Exception as e:
     logger.warning("No se pudo cargar simple_assistant: %s", e)
     simple_assistant_router = None
 
+# 🚀 NUEVO: Importar el endpoint unificado de OpenAI
+try:
+    from app.api.routes.openai_unified import router as openai_unified_router
+    logger.info("✅ Router OpenAI Unificado cargado exitosamente")
+except Exception as e:
+    logger.warning("❌ No se pudo cargar openai_unified: %s", e)
+    openai_unified_router = None
+
 # Lifespan manager (reemplaza @app.on_event)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -210,6 +218,13 @@ if simple_assistant_router is not None:
     logger.info("Router Simple Assistant incluido bajo el prefijo: /api/v1")
 else:
     logger.warning("Router Simple Assistant NO cargó; la app seguirá viva con endpoints de health.")
+
+# 🌟 INCLUIR EL NUEVO ROUTER UNIFICADO DE OPENAI (PRIORIDAD MÁXIMA)
+if openai_unified_router is not None:
+    app.include_router(openai_unified_router, prefix="/api/v1", tags=["OpenAI Unified"])
+    logger.info("🚀 Router OpenAI Unificado incluido bajo el prefijo: /api/v1 - SISTEMA OAUTH AUTOMÁTICO ACTIVO")
+else:
+    logger.error("❌ CRÍTICO: Router OpenAI Unificado NO cargó - La integración con OpenAI tendrá problemas")
 
 # Configurar archivos estáticos para la interfaz de chat
 try:

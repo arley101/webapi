@@ -1,6 +1,9 @@
 """
-YouTube Data API v3 Authentication Module
-Módulo independiente para autenticación y cliente YouTube separado de Google core
+🚨 DEPRECATED: YouTube Data API v3 Authentication Module
+Este módulo está OBSOLETO desde la implementación del sistema OAuth unificado.
+Usar: app.core.unified_oauth_manager.unified_oauth.get_access_token("youtube")
+
+MANTENIDO TEMPORALMENTE SOLO PARA COMPATIBILIDAD CON CÓDIGO LEGACY.
 """
 
 import os

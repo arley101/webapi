@@ -61,16 +61,54 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         )
 
 class TokenManager:
-    """Gestor automático de tokens que regenera access tokens desde refresh tokens"""
+    """
+    🔧 GESTOR DE TOKENS LEGACY - AHORA USA EL SISTEMA UNIFICADO
+    Mantenido para compatibilidad con código existente
+    """
     
     def __init__(self):
+        # Importar el sistema unificado
+        from app.core.unified_oauth_manager import unified_oauth
+        self.unified_oauth = unified_oauth
+        
+        # Cache legacy para compatibilidad
         self._cached_tokens = {}
         self._token_expiry = {}
-        self._refresh_in_progress = {}  # Evitar múltiples refresh simultáneos
+        self._refresh_in_progress = {}
     
     def get_google_access_token(self, service: str = "google_ads") -> str:
-        """Genera automáticamente access token desde refresh token"""
+        """
+        ✅ REFACTORIZADO - Usa el sistema OAuth unificado
+        Mantiene la interfaz para compatibilidad con código existente
+        """
+        import asyncio
         
+        try:
+            # Mapear servicios legacy a nuevos nombres
+            service_map = {
+                "google_ads": "google",
+                "youtube": "youtube",
+                "google": "google"
+            }
+            
+            unified_service = service_map.get(service, "google")
+            
+            # Usar el sistema unificado
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            token = loop.run_until_complete(self.unified_oauth.get_access_token(unified_service))
+            loop.close()
+            
+            logger.info(f"✅ Token {service} obtenido desde sistema unificado")
+            return token
+            
+        except Exception as e:
+            logger.error(f"💥 Error obteniendo token {service} desde sistema unificado: {str(e)}")
+            # Fallback al método legacy (temporalmente)
+            return self._get_legacy_google_token(service)
+    
+    def _get_legacy_google_token(self, service: str) -> str:
+        """Método legacy como fallback temporal"""
         # Determinar qué refresh token usar
         if service == "youtube":
             client_id = settings.YOUTUBE_CLIENT_ID or settings.GOOGLE_ADS_CLIENT_ID
@@ -110,7 +148,7 @@ class TokenManager:
                 self._cached_tokens[cache_key] = access_token
                 self._token_expiry[cache_key] = datetime.now() + timedelta(seconds=expires_in - 600)
                 
-                logger.info(f"✅ Token {service} generado automáticamente")
+                logger.info(f"✅ Token {service} generado automáticamente (legacy)")
                 return access_token
             else:
                 logger.error(f"❌ Error generando token {service}: {response.text}")
@@ -256,7 +294,28 @@ class TokenManager:
         }
     
     def get_meta_access_token(self) -> str:
-        """Genera automáticamente access token para Meta desde refresh token"""
+        """
+        ✅ REFACTORIZADO - Usa el sistema OAuth unificado para Meta
+        """
+        import asyncio
+        
+        try:
+            # Usar el sistema unificado
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            token = loop.run_until_complete(self.unified_oauth.get_access_token("meta"))
+            loop.close()
+            
+            logger.info("✅ Token Meta obtenido desde sistema unificado")
+            return token
+            
+        except Exception as e:
+            logger.error(f"💥 Error obteniendo token Meta desde sistema unificado: {str(e)}")
+            # Fallback al método legacy
+            return self._get_legacy_meta_token()
+    
+    def _get_legacy_meta_token(self) -> str:
+        """Método legacy Meta como fallback"""
         cache_key = "meta_access_token"
         
         # Verificar si ya tenemos un token válido
@@ -306,7 +365,7 @@ class TokenManager:
                 self._cached_tokens[cache_key] = access_token
                 self._token_expiry[cache_key] = datetime.now() + timedelta(seconds=expires_in - 3600)
                 
-                logger.info("✅ Meta token renovado automáticamente")
+                logger.info("✅ Meta token renovado automáticamente (legacy)")
                 return access_token
             else:
                 logger.error(f"❌ Error renovando token Meta: {response.text}")
@@ -331,7 +390,35 @@ class TokenManager:
         return getattr(settings, "TIKTOK_ADS_ACCESS_TOKEN", None) or getattr(settings, "TIKTOK_ACCESS_TOKEN", None) or ""
     
     def refresh_all_tokens(self) -> Dict[str, bool]:
-        """Refresca todos los tokens disponibles"""
+        """
+        ✅ REFACTORIZADO - Usa el sistema OAuth unificado para refresh masivo
+        """
+        import asyncio
+        
+        try:
+            # Usar el sistema unificado para refresh automático
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            results = loop.run_until_complete(self.unified_oauth.refresh_all_tokens())
+            loop.close()
+            
+            # Agregar WordPress (que no está en el sistema unificado aún)
+            try:
+                self.get_wordpress_jwt_token()
+                results["wordpress"] = True
+            except:
+                results["wordpress"] = False
+            
+            logger.info(f"✅ Refresh masivo completado: {results}")
+            return results
+            
+        except Exception as e:
+            logger.error(f"💥 Error en refresh masivo desde sistema unificado: {str(e)}")
+            # Fallback al método legacy
+            return self._refresh_all_tokens_legacy()
+    
+    def _refresh_all_tokens_legacy(self) -> Dict[str, bool]:
+        """Método legacy para refresh masivo"""
         results = {}
         
         # Google (ya implementado)
