@@ -77,6 +77,13 @@ jobs:
         package: .
         clean: true
 
+    - name: Configure startup command
+      run: |
+        az webapp config set \
+          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+          --name ${{ env.AZURE_WEBAPP_NAME }} \
+          --startup-file "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
     - name: Post-deploy health check
       run: |
         echo "⏳ Esperando a que la app levante..."
