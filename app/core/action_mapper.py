@@ -239,12 +239,13 @@ def get_action_function(action_name: str) -> Optional[Callable]:
 
 def initialize_action_mapper():
     """
-    Inicialización básica y rápida del action mapper
-    Solo carga lo esencial para que la app inicie rápido
+    Inicialización rápida - ACTION_MAP se llena bajo demanda
     """
     logger.info("🚀 FAST STARTUP: Action Mapper inicializando con lazy loading...")
     
-    # Solo log básico de inicio
+    # ACTION_MAP está vacío al inicio - se llenará cuando se necesite
+    # Esto es para máxima velocidad de startup
+    
     logger.info("✅ Action Mapper listo - módulos se cargarán bajo demanda")
     logger.info("📊 Lazy loading habilitado para startup optimizado")
     
@@ -258,31 +259,40 @@ _total_time = time.time() - _startup_start
 logger.info(f"✅ ACTION_MAPPER: Inicialización completada en {_init_time:.3f}s, total {_total_time:.3f}s")
 
 # Export de funciones principales para compatibilidad
-def get_all_actions():
-    """Devuelve diccionario completo de acciones con lazy loading - SOLO USAR CUANDO SEA NECESARIO"""
-    logger.warning("⚠️ get_all_actions() llamado - esto cargará TODOS los módulos y puede ser lento")
+def _ensure_action_map_loaded():
+    """Asegura que ACTION_MAP esté cargado, lo carga si es necesario"""
     global ACTION_MAP
-    # Cargar todos los módulos bajo demanda
-    module_names = [
-        'azuremgmt_actions', 'bookings_actions', 'calendario_actions', 
-        'correo_actions', 'forms_actions', 'github_actions', 'googleads_actions',
-        'graph_actions', 'hubspot_actions', 'linkedin_enhanced_actions',
-        'metaads_actions', 'notion_actions', 'office_actions', 'onedrive_actions',
-        'openai_actions', 'planner_actions', 'power_automate_actions', 
-        'powerbi_actions', 'runway_actions', 'sharepoint_actions', 'stream_actions',
-        'teams_actions', 'tiktok_enhanced', 'todo_actions', 'userprofile_actions',
-        'users_actions', 'vivainsights_actions', 'youtube_channel_actions',
-        'gemini_actions', 'x_enhanced', 'webresearch_actions', 'wordpress_enhanced',
-        'whatsapp_actions', 'google_services_actions', 'email_optimized_actions'
-    ]
+    if ACTION_MAP is None:
+        logger.info("⚡ Cargando ACTION_MAP bajo demanda...")
+        ACTION_MAP = {}
+        
+        # Cargar todos los módulos solo cuando realmente se necesite
+        module_names = [
+            'azuremgmt_actions', 'bookings_actions', 'calendario_actions', 
+            'correo_actions', 'forms_actions', 'github_actions', 'googleads_actions',
+            'graph_actions', 'hubspot_actions', 'linkedin_enhanced_actions',
+            'metaads_actions', 'notion_actions', 'office_actions', 'onedrive_actions',
+            'openai_actions', 'planner_actions', 'power_automate_actions', 
+            'powerbi_actions', 'runway_actions', 'sharepoint_actions', 'stream_actions',
+            'teams_actions', 'tiktok_enhanced', 'todo_actions', 'userprofile_actions',
+            'users_actions', 'vivainsights_actions', 'youtube_channel_actions',
+            'gemini_actions', 'x_enhanced', 'webresearch_actions', 'wordpress_enhanced',
+            'whatsapp_actions', 'google_services_actions', 'email_optimized_actions'
+        ]
+        
+        for module_name in module_names:
+            try:
+                _load_action_module(module_name)
+            except Exception as e:
+                logger.warning(f"No se pudo cargar módulo {module_name}: {e}")
+        
+        logger.info(f"✅ ACTION_MAP cargado: {len(ACTION_MAP)} acciones disponibles")
     
-    for module_name in module_names:
-        try:
-            _load_action_module(module_name)
-        except Exception as e:
-            logger.warning(f"No se pudo cargar módulo {module_name}: {e}")
-    
-    return ACTION_MAP.copy()
+    return ACTION_MAP
+
+def get_all_actions():
+    """Devuelve diccionario completo de acciones con lazy loading"""
+    return _ensure_action_map_loaded().copy()
 
 def get_action_count():
     """Devuelve número aproximado de acciones sin cargar módulos"""
@@ -310,41 +320,8 @@ def get_action_names():
         # ... más acciones (las principales para mostrar en interfaces)
     ]
 
-# Crear un proxy object para ACTION_MAP que usa lazy loading
-class ActionMapProxy:
-    def __init__(self):
-        self._cache = None
-    
-    def keys(self):
-        if self._cache is None:
-            return get_action_names()  # Lista rápida sin imports
-        return self._cache.keys()
-    
-    def get(self, key, default=None):
-        func = get_action_function(key)
-        return func if func else default
-    
-    def __contains__(self, key):
-        return get_action_function(key) is not None
-    
-    def __getitem__(self, key):
-        func = get_action_function(key)
-        if func is None:
-            raise KeyError(f"Action '{key}' not found")
-        return func
-    
-    def __len__(self):
-        return get_action_count()
-    
-    def items(self):
-        # Solo cargar cuando realmente se necesite iteración completa
-        if self._cache is None:
-            logger.warning("⚠️ ACTION_MAP.items() - cargando todos los módulos")
-            self._cache = get_all_actions()
-        return self._cache.items()
-
-# Crear instancia global para compatibilidad
-ACTION_MAP = ActionMapProxy()
+# ACTION_MAP que se llena bajo demanda
+ACTION_MAP = None
 
 def get_action_categories():
     """Devuelve categorías básicas"""
