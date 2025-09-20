@@ -10,8 +10,7 @@ from datetime import datetime, timezone
 import os
 
 from app.api.schemas import ActionRequest, ErrorResponse 
-# Importación lazy del action_mapper - no importar ACTION_MAP directamente
-from app.core import action_mapper
+from app.core.action_mapper import ACTION_MAP
 
 # Configurar logger primero
 logger = logging.getLogger(__name__)
@@ -188,9 +187,9 @@ async def process_dynamic_action(
             details=str(auth_setup_ex)
         )
 
-    action_function = action_mapper.get_action_function(action_name)
+    action_function = ACTION_MAP.get(action_name)
     if not action_function:
-        logger.warning(f"{logging_prefix} Acción '{action_name}' no encontrada.")
+        logger.warning(f"{logging_prefix} Acción '{action_name}' no encontrada en ACTION_MAP.")
         return create_error_response(
             status_code=http_status_codes.HTTP_400_BAD_REQUEST,
             action=action_name,

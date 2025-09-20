@@ -259,11 +259,92 @@ logger.info(f"✅ ACTION_MAPPER: Inicialización completada en {_init_time:.3f}s
 
 # Export de funciones principales para compatibilidad
 def get_all_actions():
-    """Devuelve lista básica de acciones disponibles"""
-    return {
-        'status': 'lazy_loading_enabled',
-        'message': 'Actions loaded on demand for better performance'
-    }
+    """Devuelve diccionario completo de acciones con lazy loading - SOLO USAR CUANDO SEA NECESARIO"""
+    logger.warning("⚠️ get_all_actions() llamado - esto cargará TODOS los módulos y puede ser lento")
+    global ACTION_MAP
+    # Cargar todos los módulos bajo demanda
+    module_names = [
+        'azuremgmt_actions', 'bookings_actions', 'calendario_actions', 
+        'correo_actions', 'forms_actions', 'github_actions', 'googleads_actions',
+        'graph_actions', 'hubspot_actions', 'linkedin_enhanced_actions',
+        'metaads_actions', 'notion_actions', 'office_actions', 'onedrive_actions',
+        'openai_actions', 'planner_actions', 'power_automate_actions', 
+        'powerbi_actions', 'runway_actions', 'sharepoint_actions', 'stream_actions',
+        'teams_actions', 'tiktok_enhanced', 'todo_actions', 'userprofile_actions',
+        'users_actions', 'vivainsights_actions', 'youtube_channel_actions',
+        'gemini_actions', 'x_enhanced', 'webresearch_actions', 'wordpress_enhanced',
+        'whatsapp_actions', 'google_services_actions', 'email_optimized_actions'
+    ]
+    
+    for module_name in module_names:
+        try:
+            _load_action_module(module_name)
+        except Exception as e:
+            logger.warning(f"No se pudo cargar módulo {module_name}: {e}")
+    
+    return ACTION_MAP.copy()
+
+def get_action_count():
+    """Devuelve número aproximado de acciones sin cargar módulos"""
+    return 418  # Número conocido de acciones
+
+def get_action_names():
+    """Devuelve lista de nombres de acciones sin cargar módulos - para compatibilidad"""
+    # Lista estática de nombres de acciones para evitar imports pesados
+    return [
+        'create_booking', 'list_bookings', 'calendar_create_event', 'calendar_list_events',
+        'email_send', 'email_list', 'forms_create', 'forms_list', 'github_create_repo',
+        'github_list_repos', 'googleads_create_campaign', 'googleads_list_campaigns',
+        'graph_get_user', 'graph_list_users', 'hubspot_create_contact', 'hubspot_list_contacts',
+        'linkedin_create_post', 'linkedin_list_posts', 'meta_create_ad', 'meta_list_ads',
+        'notion_create_page', 'notion_list_pages', 'office_create_document', 'office_list_documents',
+        'onedrive_upload_file', 'onedrive_list_files', 'openai_chat_completion', 'openai_generate_image',
+        'planner_create_task', 'planner_list_tasks', 'powerautomate_create_flow', 'powerautomate_list_flows',
+        'powerbi_create_report', 'powerbi_list_reports', 'sharepoint_create_list', 'sharepoint_list_sites',
+        'stream_upload_video', 'stream_list_videos', 'teams_send_message', 'teams_list_chats',
+        'tiktok_create_ad', 'tiktok_list_ads', 'todo_create_task', 'todo_list_tasks',
+        'user_get_profile', 'user_update_profile', 'vivainsights_get_metrics', 'vivainsights_list_reports',
+        'youtube_upload_video', 'youtube_list_videos', 'gemini_generate_content', 'gemini_chat',
+        'x_create_tweet', 'x_list_tweets', 'webresearch_search', 'webresearch_analyze',
+        'wordpress_create_post', 'wordpress_list_posts', 'whatsapp_send_message', 'whatsapp_list_chats'
+        # ... más acciones (las principales para mostrar en interfaces)
+    ]
+
+# Crear un proxy object para ACTION_MAP que usa lazy loading
+class ActionMapProxy:
+    def __init__(self):
+        self._cache = None
+    
+    def keys(self):
+        if self._cache is None:
+            return get_action_names()  # Lista rápida sin imports
+        return self._cache.keys()
+    
+    def get(self, key, default=None):
+        func = get_action_function(key)
+        return func if func else default
+    
+    def __contains__(self, key):
+        return get_action_function(key) is not None
+    
+    def __getitem__(self, key):
+        func = get_action_function(key)
+        if func is None:
+            raise KeyError(f"Action '{key}' not found")
+        return func
+    
+    def __len__(self):
+        return get_action_count()
+    
+    def items(self):
+        # Solo cargar cuando realmente se necesite iteración completa
+        if self._cache is None:
+            logger.warning("⚠️ ACTION_MAP.items() - cargando todos los módulos")
+            self._cache = get_all_actions()
+        return self._cache.items()
+
+# Crear instancia global para compatibilidad
+ACTION_MAP = ActionMapProxy()
 
 def get_action_categories():
     """Devuelve categorías básicas"""
