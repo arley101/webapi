@@ -907,35 +907,12 @@ WEBRESEARCH_ACTIONS: Dict[str, Callable] = {
 # MAPEO DE ACCIONES - WORDPRESS & WOOCOMMERCE (25 acciones)
 # ============================================================================
 
-WORDPRESS_ACTIONS: Dict[str, Callable] = {
-    # WordPress Core Actions (14 acciones)
-    "wordpress_create_post": wordpress_actions.wordpress_create_post,
-    "wordpress_update_post": wordpress_actions.wordpress_update_post,
-    "wordpress_delete_post": wordpress_actions.wordpress_delete_post,
-    "wordpress_get_posts": wordpress_actions.wordpress_get_posts,
-    "wordpress_get_post": wordpress_actions.wordpress_get_post,
-    "wordpress_create_page": wordpress_actions.wordpress_create_page,
-    "wordpress_get_pages": wordpress_actions.wordpress_get_pages,
-    "wordpress_create_user": wordpress_actions.wordpress_create_user,
-    "wordpress_get_users": wordpress_actions.wordpress_get_users,
-    "wordpress_upload_media": wordpress_actions.wordpress_upload_media,
-    "wordpress_get_categories": wordpress_actions.wordpress_get_categories,
-    "wordpress_create_category": wordpress_actions.wordpress_create_category,
-    "wordpress_get_tags": wordpress_actions.wordpress_get_tags,
-    "wordpress_backup_content": wordpress_actions.wordpress_backup_content,
-    
-    # WooCommerce Actions (11 acciones)
-    "woocommerce_create_product": wordpress_actions.woocommerce_create_product,
-    "woocommerce_get_products": wordpress_actions.woocommerce_get_products,
-    "woocommerce_update_product": wordpress_actions.woocommerce_update_product,
-    "woocommerce_get_orders": wordpress_actions.woocommerce_get_orders,
-    "woocommerce_create_order": wordpress_actions.woocommerce_create_order,
-    "woocommerce_update_order_status": wordpress_actions.woocommerce_update_order_status,
-    "woocommerce_get_customers": wordpress_actions.woocommerce_get_customers,
-    "woocommerce_create_customer": wordpress_actions.woocommerce_create_customer,
-    "woocommerce_get_orders_by_customer": wordpress_actions.woocommerce_get_orders_by_customer,
-    "woocommerce_get_product_categories": wordpress_actions.woocommerce_get_product_categories,
-    "woocommerce_get_reports": wordpress_actions.woocommerce_get_reports,
+WORDPRESS_ENHANCED_ACTIONS: Dict[str, Callable] = {
+    "wordpress_create_advanced_post": wordpress_enhanced.wordpress_create_advanced_post,
+    "wordpress_manage_plugins_advanced": wordpress_enhanced.wordpress_manage_plugins_advanced,
+    "wordpress_optimize_performance": wordpress_enhanced.wordpress_optimize_performance,
+    "wordpress_manage_users_advanced": wordpress_enhanced.wordpress_manage_users_advanced,
+    "wordpress_backup_and_restore": wordpress_enhanced.wordpress_backup_and_restore,
 }
 
 # ============================================================================
@@ -1084,7 +1061,7 @@ ACTION_MAP: Dict[str, Callable] = {
     **USERS_ACTIONS,
     **VIVA_INSIGHTS_ACTIONS,
     **WHATSAPP_ACTIONS,          # ✅ NUEVA SECCIÓN
-    **WORDPRESS_ACTIONS,
+    **WORDPRESS_ENHANCED_ACTIONS,
     **WORDPRESS_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - GESTIÓN COMPLETA
     **X_ENHANCED_ACTIONS,
     **X_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - GESTIÓN AVANZADA
@@ -1141,7 +1118,7 @@ category_counts = {
     YOUTUBE_CATEGORY: len(YOUTUBE_CHANNEL_ACTIONS),
     X_ADS_CATEGORY: len(X_ENHANCED_ACTIONS),
     WEBRESEARCH_CATEGORY: len(WEBRESEARCH_ACTIONS),
-    WORDPRESS_CATEGORY + "/" + WOOCOMMERCE_CATEGORY: len(WORDPRESS_ACTIONS),
+    WORDPRESS_CATEGORY + "/" + WOOCOMMERCE_CATEGORY: len(WORDPRESS_ENHANCED_ACTIONS),
     WORKFLOW_CATEGORY: len(WORKFLOW_ACTIONS),  # ✅ AGREGADO
     MEMORY_CATEGORY: len(MEMORY_ACTIONS),      # ✅ AGREGADO
 }
@@ -1154,7 +1131,7 @@ category_counts = {
 for category, count in category_counts.items():
     logger.info(f"Categoría {category}: {count} acciones cargadas")
 
-num_wordpress_actions = len(WORDPRESS_ACTIONS)
+num_wordpress_actions = len(WORDPRESS_ENHANCED_ACTIONS)
 logger.info(f"WordPress/WooCommerce actions cargadas: {num_wordpress_actions} acciones")
 
 num_actions = len(ACTION_MAP)
@@ -1511,7 +1488,7 @@ class WorkflowExecutor:
             PLANNER_ACTIONS, POWER_AUTOMATE_ACTIONS, POWERBI_ACTIONS, RESOLVER_ACTIONS,
             SHAREPOINT_ACTIONS, STREAM_ACTIONS, TEAMS_ACTIONS, TIKTOK_ENHANCED_ACTIONS,
             TODO_ACTIONS, USER_PROFILE_ACTIONS, USERS_ACTIONS, VIVA_INSIGHTS_ACTIONS,
-            YOUTUBE_CHANNEL_ACTIONS, X_ENHANCED_ACTIONS, WEBRESEARCH_ACTIONS, WORDPRESS_ACTIONS
+            YOUTUBE_CHANNEL_ACTIONS, X_ENHANCED_ACTIONS, WEBRESEARCH_ACTIONS, WORDPRESS_ENHANCED_ACTIONS
         ]:
             complete_map.update(action_category)
         
@@ -1864,7 +1841,7 @@ def get_all_actions() -> Dict[str, Callable]:
         SHAREPOINT_ACTIONS,    # 46 funciones - SharePoint
         GOOGLEADS_ACTIONS,     # 40 funciones - Google Ads
         METAADS_ACTIONS,       # 33 funciones - Meta Ads
-        WORDPRESS_ACTIONS,     # 31 funciones - WordPress
+        WORDPRESS_ENHANCED_ACTIONS,     # 5 funciones - WordPress Enhanced
         
         # 💼 PROFESSIONAL APIS (15-29 funciones cada uno)
         HUBSPOT_ACTIONS,       # 24 funciones - CRM HubSpot
