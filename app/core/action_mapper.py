@@ -1,16 +1,16 @@
 import os
-import sys
-
-# AGREGAR ESTA LÍNEA AL INICIO
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-
 import json
 import logging
 from typing import Dict, Callable, Any, Optional, List
 from datetime import datetime
+import time
 
 # Configurar logging
 logger = logging.getLogger(__name__)
+
+# Timing para diagnosticar startup
+_startup_start = time.time()
+logger.info(f"🚀 ACTION_MAPPER: Iniciando carga optimizada lazy loading - {datetime.now()}")
 
 # ===============================================
 # LAZY LOADING OPTIMIZATION
@@ -251,7 +251,11 @@ def initialize_action_mapper():
     return True
 
 # Inicializar al importar el módulo
+_init_start = time.time()
 initialize_action_mapper()
+_init_time = time.time() - _init_start
+_total_time = time.time() - _startup_start
+logger.info(f"✅ ACTION_MAPPER: Inicialización completada en {_init_time:.3f}s, total {_total_time:.3f}s")
 
 # Export de funciones principales para compatibilidad
 def get_all_actions():
