@@ -18,15 +18,16 @@ logger = logging.getLogger(__name__)
 from app.actions import (
     azuremgmt_actions, bookings_actions, calendario_actions, correo_actions,
     forms_actions, github_actions, googleads_actions, graph_actions,
-    hubspot_actions, linkedin_ads_actions, metaads_actions, notion_actions,
+    hubspot_actions, linkedin_enhanced_actions, metaads_actions, notion_actions,
     office_actions, onedrive_actions, openai_actions, planner_actions,
     power_automate_actions, powerbi_actions, runway_actions, sharepoint_actions,
-    stream_actions, teams_actions, tiktok_ads_actions, todo_actions,
+    stream_actions, teams_actions, tiktok_enhanced, todo_actions,
     userprofile_actions, users_actions, vivainsights_actions,
-    youtube_channel_actions, gemini_actions, x_ads_actions, webresearch_actions, 
-    wordpress_actions, resolver_actions, intelligent_assistant_actions,
+    youtube_channel_actions, gemini_actions, x_enhanced, webresearch_actions, 
+    wordpress_enhanced, resolver_actions, intelligent_assistant_actions,
     whatsapp_actions, google_services_actions  # ✅ RUNWAY UNIFICADO EN runway_actions
 )
+# NOTA: Usando linkedin_enhanced_actions (que sí existe) en lugar de linkedin_ads_actions
 
 # Importar Enhanced Actions
 try:
@@ -393,31 +394,12 @@ HUBSPOT_ACTIONS: Dict[str, Callable] = {
 # MAPEO DE ACCIONES - LINKEDIN ADS (17 acciones) ✅ RESTAURADO
 # ============================================================================
 
-LINKEDIN_ADS_ACTIONS: Dict[str, Callable] = {
-    "linkedin_get_ad_accounts": linkedin_ads_actions.linkedin_get_ad_accounts,
-    "linkedin_list_campaigns": linkedin_ads_actions.linkedin_list_campaigns,
-    "linkedin_get_basic_report": linkedin_ads_actions.linkedin_get_basic_report,
-    "linkedin_create_campaign_group": linkedin_ads_actions.linkedin_create_campaign_group,
-    "linkedin_update_campaign_group_status": linkedin_ads_actions.linkedin_update_campaign_group_status,
-    "linkedin_get_campaign_analytics_by_day": linkedin_ads_actions.linkedin_get_campaign_analytics_by_day,
-    "linkedin_get_account_analytics_by_company": linkedin_ads_actions.linkedin_get_account_analytics_by_company,
-    "linkedin_create_campaign": linkedin_ads_actions.linkedin_create_campaign,
-    "linkedin_update_campaign": linkedin_ads_actions.linkedin_update_campaign,
-    "linkedin_delete_campaign": linkedin_ads_actions.linkedin_delete_campaign,
-    "linkedin_create_ad": linkedin_ads_actions.linkedin_create_ad,
-    "linkedin_update_ad": linkedin_ads_actions.linkedin_update_ad,
-    "linkedin_delete_ad": linkedin_ads_actions.linkedin_delete_ad,
-    "linkedin_get_creative_analytics": linkedin_ads_actions.linkedin_get_creative_analytics,
-    "linkedin_get_conversion_report": linkedin_ads_actions.linkedin_get_conversion_report,
-    # RESTAURAR las 2 que eliminé:
-    "linkedin_get_budget_usage": linkedin_ads_actions.linkedin_get_budget_usage,
-    "linkedin_get_audience_insights": linkedin_ads_actions.linkedin_get_audience_insights,
-    # RESTAURAR las 2 funciones faltantes originales:
-    "linkedin_get_campaign_demographics": linkedin_ads_actions.linkedin_get_campaign_demographics,
-    "linkedin_create_lead_gen_form": linkedin_ads_actions.linkedin_create_lead_gen_form,
-    # AGREGAR las 2 nuevas funciones restauradas:
-    "linkedin_ads_get_demographics": linkedin_ads_actions.linkedin_ads_get_demographics,
-    "linkedin_ads_generate_leads": linkedin_ads_actions.linkedin_ads_generate_leads,
+LINKEDIN_ENHANCED_ACTIONS: Dict[str, Callable] = {
+    "linkedin_post_update": linkedin_enhanced_actions.linkedin_post_update,
+    "linkedin_schedule_post": linkedin_enhanced_actions.linkedin_schedule_post,
+    "linkedin_get_engagement_metrics": linkedin_enhanced_actions.linkedin_get_engagement_metrics,
+    "linkedin_send_connection_requests": linkedin_enhanced_actions.linkedin_send_connection_requests,
+    "linkedin_message_new_connections": linkedin_enhanced_actions.linkedin_message_new_connections,
 }
 
 # ============================================================================
@@ -800,14 +782,12 @@ TEAMS_ACTIONS: Dict[str, Callable] = {
 # MAPEO DE ACCIONES - TIKTOK ADS (7 acciones) ✅ CORREGIDO
 # ============================================================================
 
-TIKTOK_ADS_ACTIONS: Dict[str, Callable] = {
-    "tiktok_get_ad_accounts": tiktok_ads_actions.tiktok_get_ad_accounts,
-    "tiktok_get_campaigns": tiktok_ads_actions.tiktok_get_campaigns,
-    "tiktok_get_analytics_report": tiktok_ads_actions.tiktok_get_analytics_report,
-    "tiktok_create_campaign": tiktok_ads_actions.tiktok_create_campaign,
-    "tiktok_update_campaign_status": tiktok_ads_actions.tiktok_update_campaign_status,
-    "tiktok_create_ad_group": tiktok_ads_actions.tiktok_create_ad_group,
-    "tiktok_create_ad": tiktok_ads_actions.tiktok_create_ad,
+TIKTOK_ENHANCED_ACTIONS: Dict[str, Callable] = {
+    "tiktok_post_advanced_video": tiktok_enhanced.tiktok_post_advanced_video,
+    "tiktok_trending_analytics_pro": tiktok_enhanced.tiktok_trending_analytics_pro,
+    "tiktok_audience_growth_suite": tiktok_enhanced.tiktok_audience_growth_suite,
+    "tiktok_campaign_automation_pro": tiktok_enhanced.tiktok_campaign_automation_pro,
+    "tiktok_viral_content_factory": tiktok_enhanced.tiktok_viral_content_factory,
 }
 
 # ============================================================================
@@ -897,12 +877,12 @@ YOUTUBE_CHANNEL_ACTIONS: Dict[str, Callable] = {
 # MAPEO DE ACCIONES - X (TWITTER) ADS (5 acciones)
 # ============================================================================
 
-X_ADS_ACTIONS: Dict[str, Callable] = {
-    "x_ads_get_campaigns": x_ads_actions.x_ads_get_campaigns,
-    "x_ads_create_campaign": x_ads_actions.x_ads_create_campaign,
-    "x_ads_update_campaign": x_ads_actions.x_ads_update_campaign,
-    "x_ads_delete_campaign": x_ads_actions.x_ads_delete_campaign,
-    "x_ads_get_analytics": x_ads_actions.x_ads_get_analytics,
+X_ENHANCED_ACTIONS: Dict[str, Callable] = {
+    "x_post_advanced_tweet": x_enhanced.x_post_advanced_tweet,
+    "x_audience_analytics_pro": x_enhanced.x_audience_analytics_pro,
+    "x_campaign_management_suite": x_enhanced.x_campaign_management_suite,
+    "x_community_management_pro": x_enhanced.x_community_management_pro,
+    "x_viral_content_optimizer": x_enhanced.x_viral_content_optimizer,
 }
 
 # ============================================================================
@@ -1082,7 +1062,7 @@ ACTION_MAP: Dict[str, Callable] = {
     **GRAPH_ACTIONS,
     **HUBSPOT_ACTIONS,
     **INTELLIGENT_ASSISTANT_ACTIONS,  # ✅ NUEVA SECCIÓN - ASISTENTE INTELIGENTE
-    **LINKEDIN_ADS_ACTIONS,
+    **LINKEDIN_ENHANCED_ACTIONS,
     **LINKEDIN_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - ACCIONES PROFESIONALES
     **METAADS_ACTIONS,
     **NOTION_ACTIONS,
@@ -1097,7 +1077,7 @@ ACTION_MAP: Dict[str, Callable] = {
     **SHAREPOINT_ACTIONS,
     **STREAM_ACTIONS,
     **TEAMS_ACTIONS,
-    **TIKTOK_ADS_ACTIONS,
+    **TIKTOK_ENHANCED_ACTIONS,
     **TIKTOK_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - CONTENIDO VIRAL
     **TODO_ACTIONS,
     **USER_PROFILE_ACTIONS,
@@ -1106,7 +1086,7 @@ ACTION_MAP: Dict[str, Callable] = {
     **WHATSAPP_ACTIONS,          # ✅ NUEVA SECCIÓN
     **WORDPRESS_ACTIONS,
     **WORDPRESS_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - GESTIÓN COMPLETA
-    **X_ADS_ACTIONS,
+    **X_ENHANCED_ACTIONS,
     **X_ENHANCED_ACTIONS,  # ✅ NUEVA SECCIÓN - GESTIÓN AVANZADA
     **WEBRESEARCH_ACTIONS,
     **YOUTUBE_CHANNEL_ACTIONS,    # Ahora incluye las nuevas acciones
@@ -1139,7 +1119,7 @@ category_counts = {
     GOOGLEADS_CATEGORY: len(GOOGLEADS_ACTIONS),
     GRAPH_CATEGORY: len(GRAPH_ACTIONS),
     HUBSPOT_CATEGORY: len(HUBSPOT_ACTIONS),
-    LINKEDIN_CATEGORY: len(LINKEDIN_ADS_ACTIONS),
+    LINKEDIN_CATEGORY: len(LINKEDIN_ENHANCED_ACTIONS),
     META_CATEGORY: len(METAADS_ACTIONS),
     NOTION_CATEGORY: len(NOTION_ACTIONS),
     OFFICE_CATEGORY: len(OFFICE_ACTIONS),
@@ -1153,13 +1133,13 @@ category_counts = {
     SHAREPOINT_CATEGORY: len(SHAREPOINT_ACTIONS),
     STREAM_CATEGORY: len(STREAM_ACTIONS),
     TEAMS_CATEGORY: len(TEAMS_ACTIONS),
-    TIKTOK_CATEGORY: len(TIKTOK_ADS_ACTIONS),
+    TIKTOK_CATEGORY: len(TIKTOK_ENHANCED_ACTIONS),
     TODO_CATEGORY: len(TODO_ACTIONS),
     USER_PROFILE_CATEGORY: len(USER_PROFILE_ACTIONS),
     USERS_CATEGORY: len(USERS_ACTIONS),
     VIVA_CATEGORY: len(VIVA_INSIGHTS_ACTIONS),
     YOUTUBE_CATEGORY: len(YOUTUBE_CHANNEL_ACTIONS),
-    X_ADS_CATEGORY: len(X_ADS_ACTIONS),
+    X_ADS_CATEGORY: len(X_ENHANCED_ACTIONS),
     WEBRESEARCH_CATEGORY: len(WEBRESEARCH_ACTIONS),
     WORDPRESS_CATEGORY + "/" + WOOCOMMERCE_CATEGORY: len(WORDPRESS_ACTIONS),
     WORKFLOW_CATEGORY: len(WORKFLOW_ACTIONS),  # ✅ AGREGADO
@@ -1526,12 +1506,12 @@ class WorkflowExecutor:
             AZURE_MGMT_ACTIONS, BOOKINGS_ACTIONS, CALENDAR_ACTIONS, EMAIL_ACTIONS,
             EMAIL_OPTIMIZED_ACTIONS,  # 🚀 NUEVA CATEGORÍA - ACCIONES OPTIMIZADAS
             FORMS_ACTIONS, GEMINI_ACTIONS, GITHUB_ACTIONS, GOOGLEADS_ACTIONS,
-            GRAPH_ACTIONS, HUBSPOT_ACTIONS, LINKEDIN_ADS_ACTIONS, METAADS_ACTIONS,
+            GRAPH_ACTIONS, HUBSPOT_ACTIONS, LINKEDIN_ENHANCED_ACTIONS, METAADS_ACTIONS,
             NOTION_ACTIONS, OFFICE_ACTIONS, ONEDRIVE_ACTIONS, OPENAI_ACTIONS,
             PLANNER_ACTIONS, POWER_AUTOMATE_ACTIONS, POWERBI_ACTIONS, RESOLVER_ACTIONS,
-            SHAREPOINT_ACTIONS, STREAM_ACTIONS, TEAMS_ACTIONS, TIKTOK_ADS_ACTIONS,
+            SHAREPOINT_ACTIONS, STREAM_ACTIONS, TEAMS_ACTIONS, TIKTOK_ENHANCED_ACTIONS,
             TODO_ACTIONS, USER_PROFILE_ACTIONS, USERS_ACTIONS, VIVA_INSIGHTS_ACTIONS,
-            YOUTUBE_CHANNEL_ACTIONS, X_ADS_ACTIONS, WEBRESEARCH_ACTIONS, WORDPRESS_ACTIONS
+            YOUTUBE_CHANNEL_ACTIONS, X_ENHANCED_ACTIONS, WEBRESEARCH_ACTIONS, WORDPRESS_ACTIONS
         ]:
             complete_map.update(action_category)
         
@@ -1890,7 +1870,7 @@ def get_all_actions() -> Dict[str, Callable]:
         HUBSPOT_ACTIONS,       # 24 funciones - CRM HubSpot
         WEBRESEARCH_ACTIONS,   # 22 funciones - Web Research
         YOUTUBE_CHANNEL_ACTIONS, # 21 funciones - YouTube
-        LINKEDIN_ADS_ACTIONS,  # 20 funciones - LinkedIn
+        LINKEDIN_ENHANCED_ACTIONS,  # 5 funciones - LinkedIn Enhanced
         NOTION_ACTIONS,        # 19 funciones - Notion
         TEAMS_ACTIONS,         # 18 funciones - Teams
         ONEDRIVE_ACTIONS,      # 18 funciones - OneDrive
@@ -1914,14 +1894,14 @@ def get_all_actions() -> Dict[str, Callable]:
         GOOGLE_SERVICES_ACTIONS,       # 10 funciones - Google Services  # ✅ NUEVO
         WHATSAPP_ACTIONS,             # 10 funciones - WhatsApp  # ✅ NUEVO
         TODO_ACTIONS,          # 9 funciones - To Do
-        TIKTOK_ADS_ACTIONS,    # 9 funciones - TikTok
+        TIKTOK_ENHANCED_ACTIONS,    # 5 funciones - TikTok Enhanced
         POWER_AUTOMATE_ACTIONS, # 9 funciones - Power Automate
         GEMINI_ACTIONS,        # 9 funciones - Gemini AI
         CALENDAR_ACTIONS,      # 9 funciones - Calendar
         BOOKINGS_ACTIONS,      # 9 funciones - Bookings
         STREAM_ACTIONS,        # 8 funciones - Stream
         POWERBI_ACTIONS,       # 8 funciones - Power BI
-        X_ADS_ACTIONS,         # 7 funciones - X Ads
+        X_ENHANCED_ACTIONS,         # 5 funciones - X Enhanced
         FORMS_ACTIONS,         # 7 funciones - Forms
         USER_PROFILE_ACTIONS,  # 6 funciones - Profile
         RUNWAY_ACTIONS,        # 6 funciones - Runway AI
