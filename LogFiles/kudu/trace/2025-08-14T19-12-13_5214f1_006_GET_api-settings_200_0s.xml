@@ -1,0 +1,6 @@
+<step title="Incoming Request" date="2025-08-14T19:12:13.588" instance="5214f1" url="/api/settings" method="GET" type="request" pid="768,1,17" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_643520fd8b0dbadc1bcffb7794bdf4ac31da966ffb770bc170b4b47978cd8d65" Authorization="Bea..." Content-Type="application/json; charset=utf-8" Content-Length="0" X-ARR-LOG-ID="677bf547-2d6d-4afb-a538-50671999461a" CLIENT-IP="172.171.254.149:28672" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/settings" X-Client-IP="172.171.254.149" X-Client-Port="28672" >
+  <step title="Cleanup Xml Logs" date="2025-08-14T19:12:13.592" >
+    <step title="Cleanup Infos" date="2025-08-14T19:12:13.692" totalFiles="3681" totalCleanup="3521" /><!-- duration: 13ms -->
+  </step><!-- duration: 120ms -->
+  <step title="Outgoing response" date="2025-08-14T19:12:13.719" type="response" statusCode="200" statusText="OK" /><!-- duration: 5ms -->
+</step><!-- duration: 140ms -->

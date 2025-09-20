@@ -1,0 +1,11 @@
+<step title="Incoming Request" date="2025-07-24T01:48:18.178" instance="0287b4" url="/api/deployments/latest?deployer=OneDeploy&amp;time=2025-07-24_01-47-15Z" method="GET" type="request" pid="768,1,14" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_643520fd8b0dbadc1bcffb7794bdf4ac31da966ffb770bc170b4b47978cd8d65" Authorization="Bea..." Content-Type="application/json; charset=utf-8" Cookie="ARRAffinity=0287b48c3b92a1523d1d1e5a3b87aabe3f59132afe82a4f682b66aa580cf298d;Path=/;HttpOnly;Secure;Domain=elitedynamicsapi.scm.azurewebsites.net; ARRAffinitySameSite=0287b48c3b92a1523d1d1e5a3b87aabe3f59132afe82a4f682b66aa580cf298d;Path=/;HttpOnly;SameSite=None;Secure;Domain=elitedynamicsapi.scm.azurewebsites.net" Content-Length="0" X-ARR-LOG-ID="accb3df8-1eef-415f-b209-369db59078b8" CLIENT-IP="145.132.99.96:43968" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/deployments/latest?deployer=OneDeploy&amp;time=2025-07-24_01-47-15Z" X-Client-IP="145.132.99.96" X-Client-Port="43968" >
+  <step title="Cleanup Xml Logs" date="2025-07-24T01:48:18.180" >
+    <step title="Cleanup Infos" date="2025-07-24T01:48:18.243" totalFiles="2069" totalCleanup="1909" /><!-- duration: 5ms -->
+  </step><!-- duration: 69ms -->
+  <step title="DeploymentService.GetResult" date="2025-07-24T01:48:18.257" >
+    <step title="DeploymentService.GetLatestDeployment" date="2025-07-24T01:48:18.258" >
+      <step title="DeploymentManager.GetResults" date="2025-07-24T01:48:18.259" /><!-- duration: 550ms -->
+    </step><!-- duration: 552ms -->
+  </step><!-- duration: 555ms -->
+  <step title="Outgoing response" date="2025-07-24T01:48:18.813" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 1ms -->
+</step><!-- duration: 637ms -->

@@ -1,0 +1,2 @@
+2025-09-19T20:48:21  Startup Request, url: /api/vfs/site/wwwroot/output.tar.gz, method: DELETE, type: request, pid: 769,1,7, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None, SCM_CLEAN_OUTPUTS: true
+2025-09-19T20:48:22    Outgoing response, type: response, statusCode: 409, statusText: Conflict

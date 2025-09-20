@@ -1,0 +1,34 @@
+<step title="Executing external process" date="2025-07-25T19:37:04.197" instance="0287b4" type="process" path="kudu.exe" arguments="/home/site /opt/Kudu/msbuild" >
+  <step title="Cleanup Xml Logs" date="2025-07-25T19:37:04.224" >
+    <step title="Cleanup Infos" date="2025-07-25T19:37:04.257" totalFiles="2539" totalCleanup="2379" /><!-- duration: 5ms -->
+  </step><!-- duration: 42ms -->
+  <step title="Deployment timer started" date="2025-07-25T19:37:04.277" >
+    <step title="Executing external process" date="2025-07-25T19:37:04.285" type="process" path="git" arguments="log -n 1 master --" /><!-- duration: 59ms -->
+    <step title="DeploymentManager.Deploy(id:4bfa645916fcee6e67bc28ab76f7fc7ddb33e7bd)" date="2025-07-25T19:37:04.349" >
+      <step title="Collecting changeset information" date="2025-07-25T19:37:04.367" /><!-- duration: 135ms -->
+      <step title="Updating to specific changeset" date="2025-07-25T19:37:04.506" >
+        <step title="Executing external process" date="2025-07-25T19:37:05.689" type="process" path="git" arguments="checkout master --force" /><!-- duration: 565ms -->
+      </step><!-- duration: 1750ms -->
+      <step title="Updating submodules" date="2025-07-25T19:37:06.258" /><!-- duration: 123ms -->
+      <step title="Determining deployment builder" date="2025-07-25T19:37:06.585" >
+        <step title="Builder is RunFromZipSiteBuilder" date="2025-07-25T19:37:06.591" /><!-- duration: 2ms -->
+      </step><!-- duration: 10ms -->
+      <step title="PreDeployment: context.CleanOutputPath False" date="2025-07-25T19:37:06.655" >
+        <step title="PreDeployment: context.OutputPath /home/site/wwwroot" date="2025-07-25T19:37:06.802" >
+          <step title="Building" date="2025-07-25T19:37:06.919" >
+            <step title="Triggering recycle (preview mode disabled)." date="2025-07-25T19:37:07.212" /><!-- duration: 2ms -->
+            <step title="Modified file to trigger a restart of the app container." date="2025-07-25T19:37:07.235" /><!-- duration: 2ms -->
+            <step title="Skip function trigger and logicapp sync because function is not enabled." date="2025-07-25T19:37:07.241" /><!-- duration: 2ms -->
+            <step title="Purge deployment items" date="2025-07-25T19:37:08.141" >
+              <step title="Remove 2b8d976a-, Success, received at 07/23/2025 22:38:23" date="2025-07-25T19:37:08.276" /><!-- duration: 4ms -->
+            </step><!-- duration: 142ms -->
+          </step><!-- duration: 1430ms -->
+        </step><!-- duration: 1551ms -->
+        <step title="Cleaning up temp files" date="2025-07-25T19:37:08.354" /><!-- duration: 4ms -->
+        <step title="Cleaning up temp files" date="2025-07-25T19:37:08.361" /><!-- duration: 507ms -->
+        <step title="Reloading status file with latest updates" date="2025-07-25T19:37:08.911" >
+          <step title="WebHooksManager.PublishEventAsync: PostDeployment" date="2025-07-25T19:37:08.915" /><!-- duration: 71ms -->
+        </step><!-- duration: 77ms -->
+        <step title="Executing external process" date="2025-07-25T19:37:09.003" type="process" path="git" arguments="log -n 1 master --" /><!-- duration: 77ms -->
+      </step><!-- duration: 2427ms -->
+      <step title="Perform deploy exiting successfully" date="2025-07-25T19:37:09.083" 

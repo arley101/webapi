@@ -1,0 +1,14 @@
+<step title="BackgroundTrace" date="2025-09-20T02:07:02.009" instance="cbdd36" url="/api/publish" method="POST" >
+  <step title="Creating temporary deployment - FetchDeploymentManager" date="2025-09-20T02:07:05.888" /><!-- duration: 19ms -->
+  <step title="Creating temporary deployment" date="2025-09-20T02:07:06.126" /><!-- duration: 819ms -->
+  <step title="Performing fetch based deployment" date="2025-09-20T02:07:07.548" >
+    <step title="Deployment timer started" date="2025-09-20T02:07:12.810" >
+      <step title="DeploymentManager.Deploy(id:7e2ed6ab-49fb-42e7-ad56-3664c3ade92b)" date="2025-09-20T02:07:12.850" >
+        <step title="Collecting changeset information" date="2025-09-20T02:07:13.010" /><!-- duration: 355ms -->
+        <step title="Updating submodules" date="2025-09-20T02:07:13.400" /><!-- duration: 1746ms -->
+        <step title="Determining deployment builder" date="2025-09-20T02:07:16.560" >
+          <step title="Builder is RunFromZipSiteBuilder" date="2025-09-20T02:07:16.624" /><!-- duration: 57ms -->
+        </step><!-- duration: 222ms -->
+        <step title="PreDeployment: context.CleanOutputPath False" date="2025-09-20T02:07:16.975" >
+          <step title="PreDeployment: context.OutputPath /home/site/wwwroot" date="2025-09-20T02:07:17.388" >
+            <step title="Building" date="2025-09-20T02:07:17.798" 

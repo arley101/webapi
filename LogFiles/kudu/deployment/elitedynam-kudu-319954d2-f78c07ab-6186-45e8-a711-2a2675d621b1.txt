@@ -1,0 +1,9 @@
+2025-07-25T19:37:05  Updating branch 'master'.
+2025-07-25T19:37:06  Updating submodules.
+2025-07-25T19:37:06  Preparing deployment for commit id '4bfa645916'.
+2025-07-25T19:37:06  PreDeployment: context.CleanOutputPath False
+2025-07-25T19:37:06  PreDeployment: context.OutputPath /home/site/wwwroot
+2025-07-25T19:37:07  Skipping build. Project type: Run-From-Zip
+2025-07-25T19:37:07  Skipping post build. Project type: Run-From-Zip
+2025-07-25T19:37:07  Triggering recycle (preview mode disabled).
+2025-07-25T19:37:07  Deployment successful. deployer =  deploymentPath =

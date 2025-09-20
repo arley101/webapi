@@ -1,0 +1,1 @@
+2025-08-15T15:14:47  Startup Request, url: /api/settings, method: GET, type: request, pid: 768,1,5, ScmType: None, SCM_DO_BUILD_DURING_DEPLOYMENT: true, SCM_CLEAN_OUTPUTS: true, SCM_BUILD_ARGS: --no-cache

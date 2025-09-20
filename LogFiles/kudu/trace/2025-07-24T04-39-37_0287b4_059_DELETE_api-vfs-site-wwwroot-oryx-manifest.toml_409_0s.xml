@@ -1,0 +1,6 @@
+<step title="Incoming Request" date="2025-07-24T04:39:37.063" instance="0287b4" url="/api/vfs/site/wwwroot/oryx-manifest.toml" method="DELETE" type="request" pid="768,1,68" Accept="*/*" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="curl/8.7.1" Authorization="Bas..." X-ARR-LOG-ID="20ee0afa-7cc9-42cd-ba6e-51754aee6800" CLIENT-IP="200.118.16.47:5442" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/vfs/site/wwwroot/oryx-manifest.toml" X-Client-IP="200.118.16.47" X-Client-Port="5442" >
+  <step title="Cleanup Xml Logs" date="2025-07-24T04:39:37.065" >
+    <step title="Cleanup Infos" date="2025-07-24T04:39:37.093" totalFiles="2127" totalCleanup="1967" /><!-- duration: 5ms -->
+  </step><!-- duration: 35ms -->
+  <step title="Outgoing response" date="2025-07-24T04:39:37.110" type="response" statusCode="409" statusText="Conflict" /><!-- duration: 2ms -->
+</step><!-- duration: 56ms -->

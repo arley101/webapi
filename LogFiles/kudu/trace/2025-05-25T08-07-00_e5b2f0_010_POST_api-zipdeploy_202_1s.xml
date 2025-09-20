@@ -1,0 +1,17 @@
+<step title="Incoming Request" date="2025-05-25T08:07:00.896" instance="e5b2f0" url="/api/zipdeploy?isAsync=true&amp;deployer=GITHUB_ZIP_DEPLOY&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%2284b630032a0e98e5160f11b4376a21bef5d3a21a%22%2C%22repoName%22%3A%22arley101%2FDynamisapi%22%2C%22actor%22%3A%22arley101%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Update%20deploy-to-azure.yml%5Cn%5Cnfin%22%7D" method="POST" type="request" pid="767,1,7" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_502b118239feff5144e04bec4a7e35da89dc0720631a87f693767b45e8318416" Authorization="Bea..." Content-Type="application/octet-stream" Cookie="ARRAffinity=e5b2f0c56c8978644a89201c51aa6defaad219d2630c06de29af1b3da2a26205;Path=/;HttpOnly;Secure;Domain=elitedynamicsapi.scm.azurewebsites.net; ARRAffinitySameSite=e5b2f0c56c8978644a89201c51aa6defaad219d2630c06de29af1b3da2a26205;Path=/;HttpOnly;SameSite=None;Secure;Domain=elitedynamicsapi.scm.azurewebsites.net" Transfer-Encoding="chunked" X-ARR-LOG-ID="1d450263-ff30-4a4c-b5b7-39d3a71c4b25" CLIENT-IP="52.155.62.2:50304" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/zipdeploy?isAsync=true&amp;deployer=GITHUB_ZIP_DEPLOY&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%2284b630032a0e98e5160f11b4376a21bef5d3a21a%22%2C%22repoName%22%3A%22arley101%2FDynamisapi%22%2C%22actor%22%3A%22arley101%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Update%20deploy-to-azure.yml%5Cn%5Cnfin%22%7D" X-Client-IP="52.155.62.2" X-Client-Port="50304" >
+  <step title="ZipPushDeploy" date="2025-05-25T08:07:00.902" >
+    <step title="ZipDeploy. Extract zip." date="2025-05-25T08:07:00.905" /><!-- duration: 1ms -->
+    <step title="Starting PushDeployAsync" date="2025-05-25T08:07:00.908" /><!-- duration: 1ms -->
+    <step title="Error occurred" date="2025-05-25T08:07:00.914" type="error" text="Error removing symlink: Path doesn&apos;t exist!" stackTrace="   at Mono.Unix.UnixFileSystemInfo.AssertValid()
+   at Mono.Unix.UnixFileSystemInfo.get_FileType()
+   at Kudu.Services.Deployment.PushDeploymentController.PushDeployAsync(ArtifactDeploymentInfo deploymentInfo, Boolean isAsync, HttpContext context, JObject requestJson) in /tmp/KuduLite/Kudu.Services/Deployment/PushDeploymentController.cs:line 740" /><!-- duration: 2ms -->
+    <step title="Writing artifact to /tmp/zipdeploy/8999b4de-6191-49b9-9af3-808ad27e55eb.zip" date="2025-05-25T08:07:00.920" >
+      <step title="Writing multipart request body to /tmp/zipdeploy/8999b4de-6191-49b9-9af3-808ad27e55eb.zip" date="2025-05-25T08:07:00.925" /><!-- duration: 4ms -->
+    </step><!-- duration: 474ms -->
+    <step title="Start deployment in the background" date="2025-05-25T08:07:01.398" >
+      <step title="Acquiring Deployment Lock" date="2025-05-25T08:07:01.405" /><!-- duration: 1ms -->
+      <step title="Acquired Deployment Lock" date="2025-05-25T08:07:01.434" /><!-- duration: 1ms -->
+    </step><!-- duration: 102ms -->
+  </step><!-- duration: 600ms -->
+  <step title="Outgoing response" date="2025-05-25T08:07:01.505" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 3ms -->
+</step><!-- duration: 617ms -->

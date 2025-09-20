@@ -1,0 +1,14 @@
+<step title="Incoming Request" date="2025-07-17T21:13:28.334" instance="646b38" url="/api/publish?async=true&amp;deployer=GITHUB_ONE_DEPLOY&amp;type=zip&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%22db76bef3f82441fbd78caed4c7ff71d828814797%22%2C%22repoName%22%3A%22arley101%2Fwebapi%22%2C%22actor%22%3A%22arley101%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Despliegue%20EliteDynamics%20actualizado%22%7D" method="POST" type="request" pid="768,1,35" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_643520fd8b0dbadc1bcffb7794bdf4ac31da966ffb770bc170b4b47978cd8d65" Authorization="Bas..." Content-Type="application/octet-stream" Cookie="ARRAffinity=646b384c303809fb15ead17cccf808d39ffdf34b4176f9c878e2d882b17de762;Path=/;HttpOnly;Secure;Domain=elitedynamicsapi.scm.azurewebsites.net; ARRAffinitySameSite=646b384c303809fb15ead17cccf808d39ffdf34b4176f9c878e2d882b17de762;Path=/;HttpOnly;SameSite=None;Secure;Domain=elitedynamicsapi.scm.azurewebsites.net" Transfer-Encoding="chunked" X-ARR-LOG-ID="f8721ab5-92a6-4db2-b003-0b5cbf9dfc38" CLIENT-IP="52.190.141.34:7184" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/publish?async=true&amp;deployer=GITHUB_ONE_DEPLOY&amp;type=zip&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%22db76bef3f82441fbd78caed4c7ff71d828814797%22%2C%22repoName%22%3A%22arley101%2Fwebapi%22%2C%22actor%22%3A%22arley101%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Despliegue%20EliteDynamics%20actualizado%22%7D" X-Client-IP="52.190.141.34" X-Client-Port="7184" >
+  <step title="OneDeploy" date="2025-07-17T21:13:28.340" >
+    <step title="Starting PushDeployAsync" date="2025-07-17T21:13:28.345" /><!-- duration: 1ms -->
+    <step title="Writing artifact to /tmp/zipdeploy/155e70c2-72ff-462d-acb3-95714b693059.zip" date="2025-07-17T21:13:28.353" >
+      <step title="Writing multipart request body to /tmp/zipdeploy/155e70c2-72ff-462d-acb3-95714b693059.zip" date="2025-07-17T21:13:28.357" /><!-- duration: 1ms -->
+    </step><!-- duration: 329ms -->
+    <step title="Removing previous build artifact&apos;s manifest file" date="2025-07-17T21:13:28.685" >
+      <step title="Start deployment in the background" date="2025-07-17T21:13:28.690" >
+        <step title="Acquiring Deployment Lock" date="2025-07-17T21:13:28.694" /><!-- duration: 21ms -->
+        <step title="Acquired Deployment Lock" date="2025-07-17T21:13:28.734" /><!-- duration: 2ms -->
+      </step><!-- duration: 82ms -->
+    </step><!-- duration: 89ms -->
+    <step title="Outgoing response" date="2025-07-17T21:13:28.775" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 1ms -->
+  </step><!-- duration: 437ms -->

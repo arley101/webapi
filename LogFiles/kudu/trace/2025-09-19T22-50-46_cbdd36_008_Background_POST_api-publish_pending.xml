@@ -1,0 +1,19 @@
+<step title="BackgroundTrace" date="2025-09-19T22:50:46.779" instance="cbdd36" url="/api/publish" method="POST" >
+  <step title="Cleanup Xml Logs" date="2025-09-19T22:50:46.800" >
+    <step title="Cleanup Infos" date="2025-09-19T22:50:48.074" totalFiles="4235" totalCleanup="4075" /><!-- duration: 294ms -->
+  </step><!-- duration: 1713ms -->
+  <step title="Creating temporary deployment - FetchDeploymentManager" date="2025-09-19T22:50:49.734" /><!-- duration: 92ms -->
+  <step title="Creating temporary deployment" date="2025-09-19T22:50:50.013" /><!-- duration: 1371ms -->
+  <step title="Performing fetch based deployment" date="2025-09-19T22:50:52.949" >
+    <step title="Deployment timer started" date="2025-09-19T22:50:58.874" >
+      <step title="DeploymentManager.Deploy(id:69ba449f-1a96-431f-8516-c53c5168e066)" date="2025-09-19T22:50:58.897" >
+        <step title="Collecting changeset information" date="2025-09-19T22:50:59.474" /><!-- duration: 704ms -->
+        <step title="Updating submodules" date="2025-09-19T22:51:00.359" /><!-- duration: 1983ms -->
+        <step title="Determining deployment builder" date="2025-09-19T22:51:03.585" >
+          <step title="Builder is RunFromZipSiteBuilder" date="2025-09-19T22:51:03.702" /><!-- duration: 19ms -->
+        </step><!-- duration: 146ms -->
+        <step title="PreDeployment: context.CleanOutputPath False" date="2025-09-19T22:51:03.939" >
+          <step title="PreDeployment: context.OutputPath /home/site/wwwroot" date="2025-09-19T22:51:04.575" >
+            <step title="Building" date="2025-09-19T22:51:05.092" >
+              <step title="Modified file to trigger a restart of the app container." date="2025-09-19T22:51:06.070" /><!-- duration: 68ms -->
+              <step title="Skip function trigger and logicapp sync because function is not enabled." date="2025-09-19T22:51:06.159" /><!-- duration: 39ms -->

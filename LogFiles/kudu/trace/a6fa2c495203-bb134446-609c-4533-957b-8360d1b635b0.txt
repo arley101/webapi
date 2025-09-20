@@ -1,0 +1,1 @@
+2025-08-03T06:03:38  Startup Request, url: /api/logstream/, method: GET, type: request, pid: 768,1,20, SCM_CLEAN_OUTPUTS: true, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None

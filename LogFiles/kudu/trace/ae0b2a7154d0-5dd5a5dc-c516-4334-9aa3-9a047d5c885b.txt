@@ -1,0 +1,2 @@
+2025-07-29T04:16:28  Startup Request, url: /api/vfs/site/wwwroot/oryx-manifest.toml, method: DELETE, type: request, pid: 767,1,31, SCM_CLEAN_OUTPUTS: true, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None
+2025-07-29T04:16:28    Outgoing response, type: response, statusCode: 409, statusText: Conflict

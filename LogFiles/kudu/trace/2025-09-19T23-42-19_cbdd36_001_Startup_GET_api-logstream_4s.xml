@@ -1,0 +1,5 @@
+<step title="Startup Request" date="2025-09-19T23:42:19.933" instance="cbdd36" url="/api/logstream/" method="GET" type="request" pid="770,1,7" ScmType="None" SCM_CLEAN_OUTPUTS="true" SCM_DO_BUILD_DURING_DEPLOYMENT="true" >
+  <step title="Cleanup Xml Logs" date="2025-09-19T23:42:19.984" >
+    <step title="Cleanup Infos" date="2025-09-19T23:42:23.136" totalFiles="4265" totalCleanup="4105" /><!-- duration: 280ms -->
+  </step><!-- duration: 3463ms -->
+</step><!-- duration: 3571ms -->

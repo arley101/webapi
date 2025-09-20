@@ -1,0 +1,6 @@
+<step title="Incoming Request" date="2025-07-24T04:42:32.655" instance="0287b4" url="/api/vfs/site/wwwroot/oryx-manifest.toml" method="DELETE" type="request" pid="768,1,75" Accept="*/*" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="curl/8.7.1" Authorization="Bas..." If-Match="*" X-ARR-LOG-ID="5ee102f9-0a1e-4f2a-8d53-1aed3e4a96d8" CLIENT-IP="200.118.16.47:3527" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/vfs/site/wwwroot/oryx-manifest.toml" X-Client-IP="200.118.16.47" X-Client-Port="3527" >
+  <step title="Cleanup Xml Logs" date="2025-07-24T04:42:32.657" >
+    <step title="Cleanup Infos" date="2025-07-24T04:42:32.680" totalFiles="2132" totalCleanup="1972" /><!-- duration: 3ms -->
+  </step><!-- duration: 27ms -->
+  <step title="Outgoing response" date="2025-07-24T04:42:32.686" type="response" statusCode="404" statusText="NotFound" /><!-- duration: 1ms -->
+</step><!-- duration: 36ms -->

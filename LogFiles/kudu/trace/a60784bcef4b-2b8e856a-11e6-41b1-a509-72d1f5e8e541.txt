@@ -1,0 +1,1 @@
+2025-08-17T16:58:56  Startup Request, url: /wwwroot/, method: GET, type: request, pid: 770,1,29, ScmType: None, SCM_DO_BUILD_DURING_DEPLOYMENT: true, SCM_CLEAN_OUTPUTS: true

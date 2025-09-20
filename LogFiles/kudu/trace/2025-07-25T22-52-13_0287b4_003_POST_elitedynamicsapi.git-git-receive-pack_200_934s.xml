@@ -1,0 +1,14 @@
+<step title="Incoming Request" date="2025-07-25T22:52:13.558" instance="0287b4" url="/elitedynamicsapi.git/git-receive-pack" method="POST" type="request" pid="768,1,74" Accept="application/x-git-receive-pack-result" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="git/2.39.5 (Apple Git-154)" Accept-Encoding="deflate, gzip" Authorization="Bas..." Content-Type="application/x-git-receive-pack-request" Content-Length="3884" X-ARR-LOG-ID="7d636020-4d01-4873-b4eb-221f0aa33d7d" CLIENT-IP="200.118.16.47:12876" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/elitedynamicsapi.git/git-receive-pack" X-Client-IP="200.118.16.47" X-Client-Port="12876" >
+  <step title="RpcService.ReceivePack" date="2025-07-25T22:52:13.576" >
+    <step title="Executing external process" date="2025-07-25T22:52:13.579" type="process" path="git" arguments="rev-parse --git-dir" /><!-- duration: 10ms -->
+    <step title="Assuming git repository at /home/site/repository" date="2025-07-25T22:52:13.590" /><!-- duration: 1ms -->
+    <step title="Acquiring Deployment Lock" date="2025-07-25T22:52:13.595" /><!-- duration: 1ms -->
+    <step title="Acquired Deployment Lock" date="2025-07-25T22:52:13.622" /><!-- duration: 1ms -->
+    <step title="Creating temporary deployment" date="2025-07-25T22:52:13.625" /><!-- duration: 76ms -->
+    <step title="GitExeServer.Receive" date="2025-07-25T22:52:13.703" >
+      <step title="Executing external process" date="2025-07-25T22:52:13.704" type="process" path="git" arguments="receive-pack --stateless-rpc &quot;/home/site/repository&quot;" /><!-- duration: 933780ms -->
+    </step><!-- duration: 933786ms -->
+    <step title="Releasing Deployment Lock" date="2025-07-25T23:07:47.576" /><!-- duration: 2ms -->
+  </step><!-- duration: 934007ms -->
+  <step title="Outgoing response" date="2025-07-25T23:07:47.585" type="response" statusCode="200" statusText="OK" /><!-- duration: 1ms -->
+</step><!-- duration: 934030ms -->

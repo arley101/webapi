@@ -1,0 +1,12 @@
+<step title="Incoming Request" date="2025-06-20T07:22:58.995" instance="187c39" url="/api/deployments/latest?deployer=OneDeploy&amp;time=2025-06-20_07-22-04Z" method="GET" type="request" pid="767,1,5" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="GITHUBACTIONS_DeployWebAppToAzure_643520fd8b0dbadc1bcffb7794bdf4ac31da966ffb770bc170b4b47978cd8d65" Authorization="Bas..." Content-Type="application/json; charset=utf-8" Cookie="ARRAffinity=187c39888e58310c97254fdec6f9dedbf6a2a1ce59124592bb303bc7f3fe2446;Path=/;HttpOnly;Secure;Domain=elitedynamicsapi.scm.azurewebsites.net; ARRAffinitySameSite=187c39888e58310c97254fdec6f9dedbf6a2a1ce59124592bb303bc7f3fe2446;Path=/;HttpOnly;SameSite=None;Secure;Domain=elitedynamicsapi.scm.azurewebsites.net" Content-Length="0" X-ARR-LOG-ID="4ae422b0-a0e9-4c4f-912c-c4cca0840dba" CLIENT-IP="52.234.47.186:31809" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/deployments/latest?deployer=OneDeploy&amp;time=2025-06-20_07-22-04Z" X-Client-IP="52.234.47.186" X-Client-Port="31809" >
+  <step title="Cleanup Xml Logs" date="2025-06-20T07:22:58.998" >
+    <step title="Cleanup Infos" date="2025-06-20T07:22:59.009" totalFiles="663" totalCleanup="503" /><!-- duration: 2ms -->
+  </step><!-- duration: 16ms -->
+  <step title="DeploymentService.GetResult" date="2025-06-20T07:22:59.017" >
+    <step title="DeploymentService.GetLatestDeployment" date="2025-06-20T07:22:59.020" >
+      <step title="DeploymentManager.GetResults" date="2025-06-20T07:22:59.022" /><!-- duration: 290ms -->
+      <step title="Deployment 7883c0bf-f624-466d-a661-889fc73c633b is Building" date="2025-06-20T07:22:59.314" /><!-- duration: 1ms -->
+    </step><!-- duration: 296ms -->
+  </step><!-- duration: 300ms -->
+  <step title="Outgoing response" date="2025-06-20T07:22:59.321" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 2ms -->
+</step><!-- duration: 329ms -->
