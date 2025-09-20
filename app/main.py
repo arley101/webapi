@@ -53,11 +53,8 @@ except Exception as e:
     logger.warning("No se pudo cargar chatgpt_proxy: %s", e)
     chatgpt_router = None
 
-try:
-    from app.api.routes.intelligent_assistant_router import router as intelligent_assistant_router
-except Exception as e:
-    logger.warning("No se pudo cargar intelligent_assistant_router: %s", e)
-    intelligent_assistant_router = None
+# Intelligent assistant router removido - archivo no existe
+intelligent_assistant_router = None
 
 try:
     from app.api.routes.workflow_manager import router as workflow_router
