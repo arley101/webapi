@@ -149,7 +149,7 @@ class Settings(BaseSettings):
     # WooCommerce REST API (para e-commerce)
     WC_CONSUMER_KEY: Optional[str] = None
     WC_CONSUMER_SECRET: Optional[str] = None
-    
+
     # NUEVO: Validator para mostrar el estado de configuración
     def model_post_init(self, __context) -> None:
         """Post-initialization para logging de configuración."""
