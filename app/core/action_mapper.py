@@ -268,21 +268,41 @@ def _ensure_action_map_loaded():
         
         # Cargar todos los módulos solo cuando realmente se necesite
         module_names = [
-            'azuremgmt_actions', 'bookings_actions', 'calendario_actions', 
-            'correo_actions', 'forms_actions', 'github_actions', 'googleads_actions',
-            'graph_actions', 'hubspot_actions', 'linkedin_enhanced_actions',
-            'metaads_actions', 'notion_actions', 'office_actions', 'onedrive_actions',
-            'openai_actions', 'planner_actions', 'power_automate_actions', 
-            'powerbi_actions', 'runway_actions', 'sharepoint_actions', 'stream_actions',
-            'teams_actions', 'tiktok_enhanced', 'todo_actions', 'userprofile_actions',
-            'users_actions', 'vivainsights_actions', 'youtube_channel_actions',
-            'gemini_actions', 'x_enhanced', 'webresearch_actions', 'wordpress_enhanced',
-            'whatsapp_actions', 'google_services_actions', 'email_optimized_actions'
+            'azuremgmt_actions', 'bookings_actions', 'calendar_actions', 'calendario_actions',
+            'correo_actions', 'email_optimized_actions', 'forms_actions', 'gemini_actions',
+            'github_actions', 'google_marketing_enhanced', 'google_services_actions', 
+            'googleads_actions', 'graph_actions', 'hubspot_actions', 'intelligent_assistant_actions',
+            'linkedin_enhanced_actions', 'metaads_actions', 
+            'notion_actions', 'office_actions', 'onedrive_actions', 'openai_actions',
+            'planner_actions', 'power_automate_actions', 'powerbi_actions', 'resolver_actions',
+            'runway_actions', 'runway_unified', 'sharepoint_actions', 'stream_actions',
+            'teams_actions', 'tiktok_enhanced', 'todo_actions',
+            'userprofile_actions', 'users_actions', 'vivainsights_actions', 'webresearch_actions',
+            'whatsapp_actions', 'wordpress_enhanced', 'x_enhanced',
+            'youtube_channel_actions'
         ]
         
         for module_name in module_names:
             try:
-                _load_action_module(module_name)
+                module = _load_action_module(module_name)
+                if module:
+                    # Registrar las funciones del módulo que empiecen con el prefijo apropiado
+                    for attr_name in dir(module):
+                        if not attr_name.startswith('_'):
+                            try:
+                                attr = getattr(module, attr_name)
+                                # Solo registrar funciones que sean realmente acciones definidas en este módulo
+                                if (callable(attr) and 
+                                    hasattr(attr, '__module__') and
+                                    hasattr(attr, '__name__') and
+                                    attr.__module__ and module_name in attr.__module__ and
+                                    not attr_name.startswith('get_auth') and
+                                    not attr_name in ['Any', 'Dict', 'List', 'Optional', 'Union', 'Callable']):
+                                    ACTION_MAP[attr_name] = attr
+                                    logger.debug(f"Registrando acción: {attr_name} de {attr.__module__}")
+                            except Exception as e:
+                                logger.debug(f"Saltando atributo {attr_name}: {e}")
+                                
             except Exception as e:
                 logger.warning(f"No se pudo cargar módulo {module_name}: {e}")
         

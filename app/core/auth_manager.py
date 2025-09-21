@@ -68,8 +68,20 @@ class TokenManager:
     
     def __init__(self):
         # Importar el sistema unificado
-        from app.core.unified_oauth_manager import unified_oauth
-        self.unified_oauth = unified_oauth
+        try:
+            from app.core.unified_oauth_manager import unified_oauth
+            self.unified_oauth = unified_oauth
+        except ImportError:
+            logger.warning("⚠️ Sistema unificado no disponible, usando legacy")
+            self.unified_oauth = None
+        
+        # Importar el sistema de refresh de tokens
+        try:
+            from app.core.token_refresh_manager import token_refresh_manager
+            self.token_refresh_manager = token_refresh_manager
+        except ImportError:
+            logger.warning("⚠️ Sistema de refresh no disponible")
+            self.token_refresh_manager = None
         
         # Cache legacy para compatibilidad
         self._cached_tokens = {}
@@ -450,6 +462,90 @@ class TokenManager:
             results["wordpress"] = False
         
         return results
+    
+    def get_token_with_auto_refresh(self, service: str, user_id: str = "default") -> Optional[str]:
+        """
+        🔄 NUEVO - Obtiene token con refresh automático
+        Usa el sistema de refresh de tokens para obtener un token válido
+        """
+        if not self.token_refresh_manager:
+            logger.warning("⚠️ Sistema de refresh no disponible, usando método legacy")
+            return self.get_google_access_token(service)
+        
+        try:
+            import asyncio
+            
+            # Obtener token válido del sistema de refresh
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            token_info = loop.run_until_complete(
+                self.token_refresh_manager.get_valid_token(service, user_id)
+            )
+            loop.close()
+            
+            if token_info:
+                logger.info(f"✅ Token {service} obtenido con refresh automático")
+                return token_info.access_token
+            else:
+                logger.warning(f"⚠️ No se encontró token {service}, usando método legacy")
+                return self.get_google_access_token(service)
+                
+        except Exception as e:
+            logger.error(f"💥 Error obteniendo token con refresh automático: {e}")
+            return self.get_google_access_token(service)
+    
+    def save_oauth_token(self, service: str, access_token: str, refresh_token: str = None, 
+                        expires_in: int = 3600, user_id: str = "default") -> bool:
+        """
+        💾 NUEVO - Guarda token en el sistema de refresh automático
+        Permite guardar tokens OAuth para renovación automática
+        """
+        if not self.token_refresh_manager:
+            logger.warning("⚠️ Sistema de refresh no disponible")
+            return False
+        
+        try:
+            import asyncio
+            from app.core.token_refresh_manager import TokenInfo
+            
+            # Crear TokenInfo
+            token_info = TokenInfo(
+                service=service,
+                user_id=user_id,
+                access_token=access_token,
+                refresh_token=refresh_token,
+                expires_at=datetime.now() + timedelta(seconds=expires_in),
+                token_type="Bearer"
+            )
+            
+            # Guardar usando el sistema de refresh
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self.token_refresh_manager.save_token(token_info))
+            loop.close()
+            
+            logger.info(f"✅ Token {service} guardado en sistema de refresh automático")
+            return True
+            
+        except Exception as e:
+            logger.error(f"💥 Error guardando token en sistema de refresh: {e}")
+            return False
+    
+    def start_token_refresh_system(self):
+        """
+        🚀 NUEVO - Inicia el sistema de refresh automático
+        """
+        if not self.token_refresh_manager:
+            logger.warning("⚠️ Sistema de refresh no disponible")
+            return False
+        
+        try:
+            self.token_refresh_manager.start_automatic_refresh(interval_minutes=15)
+            logger.info("✅ Sistema de refresh automático iniciado desde TokenManager")
+            return True
+        except Exception as e:
+            logger.error(f"💥 Error iniciando sistema de refresh: {e}")
+            return False
 
 # Instancia global
 token_manager = TokenManager()

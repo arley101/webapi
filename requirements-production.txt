@@ -1,0 +1,13 @@
+# EliteDynamicsAPI - Production Requirements v2.0
+# Optimized for Azure Web App Service with Python 3.11
+
+# Core Framework
+fastapi==0.117.0
+uvicorn[standard]==0.36.0
+gunicorn==23.0.0
+
+# Core Dependencies
+pydantic==2.11.9
+python-dotenv==1.1.0
+
+# Essential only - other dependencies installed on demand
