@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<deployment>
+  <id>4f1e3a44a44d8a1d7b6a6079af67097a1b83dcea</id>
+  <author>Arley Galn</author>
+  <deployer>GitHub</deployer>
+  <authorEmail>arleygalan@MacBook-Pro-de-Arley-6602.local</authorEmail>
+  <message>🔧 Fix: Agregar runtime.txt para forzar Python 3.11 en Azure
+    
+    - Especifica python-3.11 para consistencia con logs de Azure
+    - Resolve incompatibilidad entre Python 3.11.13 (Azure) vs 3.13 (local)
+    - Mejora compatibilidad entre entornos</message>
+  <progress></progress>
+  <status>Success</status>
+  <statusText></statusText>
+  <lastSuccessEndTime>2025-09-21T16:07:46.1555411Z</lastSuccessEndTime>
+  <receivedTime>2025-09-21T16:07:42.9562121Z</receivedTime>
+  <startTime>2025-09-21T16:07:44.6406546Z</startTime>
+  <endTime>2025-09-21T16:07:46.1555411Z</endTime>
+  <complete>True</complete>
+  <is_temp>False</is_temp>
+  <is_readonly>False</is_readonly>
+  <buildSummary />
+</deployment>

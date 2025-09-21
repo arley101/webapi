@@ -1,0 +1,33 @@
+<step title="BackgroundTrace" date="2025-09-20T18:58:27.163" instance="cbdd36" url="/api/publish" method="POST" >
+  <step title="Cleanup Xml Logs" date="2025-09-20T18:58:27.172" >
+    <step title="Cleanup Infos" date="2025-09-20T18:58:30.456" totalFiles="4633" totalCleanup="4473" /><!-- duration: 569ms -->
+  </step><!-- duration: 3962ms -->
+  <step title="Creating temporary deployment - FetchDeploymentManager" date="2025-09-20T18:58:33.211" /><!-- duration: 57ms -->
+  <step title="Creating temporary deployment" date="2025-09-20T18:58:33.388" /><!-- duration: 1175ms -->
+  <step title="Performing fetch based deployment" date="2025-09-20T18:58:36.203" >
+    <step title="Deployment timer started" date="2025-09-20T18:58:43.254" >
+      <step title="DeploymentManager.Deploy(id:f170ea74-5b53-48bb-9ba5-f1e42ab3c3d9)" date="2025-09-20T18:58:43.536" >
+        <step title="Collecting changeset information" date="2025-09-20T18:58:44.078" /><!-- duration: 1018ms -->
+        <step title="Updating submodules" date="2025-09-20T18:58:45.296" /><!-- duration: 3204ms -->
+        <step title="Determining deployment builder" date="2025-09-20T18:58:49.616" >
+          <step title="Builder is RunFromZipSiteBuilder" date="2025-09-20T18:58:49.764" /><!-- duration: 47ms -->
+        </step><!-- duration: 206ms -->
+        <step title="PreDeployment: context.CleanOutputPath False" date="2025-09-20T18:58:50.024" >
+          <step title="PreDeployment: context.OutputPath /home/site/wwwroot" date="2025-09-20T18:58:50.382" >
+            <step title="Building" date="2025-09-20T18:58:50.750" >
+              <step title="Modified file to trigger a restart of the app container." date="2025-09-20T18:58:52.385" /><!-- duration: 59ms -->
+              <step title="Skip function trigger and logicapp sync because function is not enabled." date="2025-09-20T18:58:52.530" /><!-- duration: 37ms -->
+              <step title="Purge deployment items" date="2025-09-20T18:58:55.881" >
+                <step title="Remove 7d632d9e-, Failed, received at 09/20/2025 15:51:20" date="2025-09-20T18:58:56.165" /><!-- duration: 22ms -->
+                <step title="Remove e1d24470-, Success, received at 09/19/2025 23:55:49" date="2025-09-20T18:58:56.349" /><!-- duration: 20ms -->
+              </step><!-- duration: 498ms -->
+            </step><!-- duration: 5807ms -->
+          </step><!-- duration: 6215ms -->
+          <step title="Cleaning up temp files" date="2025-09-20T18:58:56.648" /><!-- duration: 60ms -->
+          <step title="Cleaning up temp files" date="2025-09-20T18:58:56.746" /><!-- duration: 592ms -->
+          <step title="Reloading status file with latest updates" date="2025-09-20T18:58:57.543" >
+            <step title="WebHooksManager.PublishEventAsync: PostDeployment" date="2025-09-20T18:58:57.582" /><!-- duration: 578ms -->
+          </step><!-- duration: 677ms -->
+          <step title="Cleaning up temporary deployment - fetch deployment was successful" date="2025-09-20T18:58:58.279" /><!-- duration: 13ms -->
+        </step><!-- duration: 8486ms -->
+      </step><!-- duration: 15524ms -->

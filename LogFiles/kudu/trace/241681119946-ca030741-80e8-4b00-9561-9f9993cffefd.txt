@@ -1,0 +1,2 @@
+2025-09-20T18:56:25  Startup Request, url: /api/vfs/site/wwwroot/oryx-manifest.toml, method: DELETE, type: request, pid: 770,1,48, SCM_DO_BUILD_DURING_DEPLOYMENT: true, ScmType: None, SCM_CLEAN_OUTPUTS: true
+2025-09-20T18:56:27    Outgoing response, type: response, statusCode: 404, statusText: NotFound

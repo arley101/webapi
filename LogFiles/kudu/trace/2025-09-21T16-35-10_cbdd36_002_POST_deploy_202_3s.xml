@@ -1,0 +1,15 @@
+<step title="Incoming Request" date="2025-09-21T16:35:10.916" instance="cbdd36" url="/deploy?scmType=ExternalGit&amp;isAsync=true" method="POST" type="request" pid="770,1,5" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="Azure-WebSites-Controller/105.0.7.92" Authorization="Bas..." Expect="100-continue" Content-Length="74" x-ms-request-id="7e888090-a412-4407-9eff-8a18776b2d28" X-ARR-LOG-ID="7e888090-a412-4407-9eff-8a18776b2d28" CLIENT-IP="104.41.63.108:19906" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-MS-PLATFORM-INTERNAL="True" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/deploy?scmType=ExternalGit&amp;isAsync=true" X-Client-IP="104.41.63.108" X-Client-Port="19906" >
+  <step title="FetchHandler" date="2025-09-21T16:35:11.215" >
+    <step title="Executing external process" date="2025-09-21T16:35:11.416" type="process" path="git" arguments="rev-parse --git-dir" /><!-- duration: 205ms -->
+    <step title="Executing external process" date="2025-09-21T16:35:11.670" type="process" path="git" arguments="rev-parse --git-dir" /><!-- duration: 104ms -->
+    <step title="Executing external process" date="2025-09-21T16:35:11.815" type="process" path="git" arguments="log -n 1 production --" /><!-- duration: 370ms -->
+    <step title="Start deployment in the background" date="2025-09-21T16:35:12.221" >
+      <step title="Executing external process" date="2025-09-21T16:35:12.396" type="process" path="git" arguments="rev-parse --git-dir" /><!-- duration: 87ms -->
+      <step title="Executing external process" date="2025-09-21T16:35:12.525" type="process" path="git" arguments="rev-parse --git-dir" /><!-- duration: 105ms -->
+      <step title="Executing external process" date="2025-09-21T16:35:12.650" type="process" path="git" arguments="log -n 1 production --" /><!-- duration: 533ms -->
+      <step title="Acquiring Deployment Lock" date="2025-09-21T16:35:13.243" /><!-- duration: 70ms -->
+      <step title="Acquired Deployment Lock" date="2025-09-21T16:35:13.485" /><!-- duration: 28ms -->
+    </step><!-- duration: 1736ms -->
+  </step><!-- duration: 2781ms -->
+  <step title="Outgoing response" date="2025-09-21T16:35:14.027" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 11ms -->
+</step><!-- duration: 3161ms -->

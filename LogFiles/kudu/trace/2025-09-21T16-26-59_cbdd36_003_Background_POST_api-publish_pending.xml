@@ -1,0 +1,33 @@
+<step title="BackgroundTrace" date="2025-09-21T16:26:59.003" instance="cbdd36" url="/api/publish" method="POST" >
+  <step title="Cleanup Xml Logs" date="2025-09-21T16:26:59.021" >
+    <step title="Cleanup Infos" date="2025-09-21T16:26:59.624" totalFiles="4714" totalCleanup="4554" /><!-- duration: 163ms -->
+  </step><!-- duration: 832ms -->
+  <step title="Creating temporary deployment - FetchDeploymentManager" date="2025-09-21T16:27:00.376" /><!-- duration: 13ms -->
+  <step title="Creating temporary deployment" date="2025-09-21T16:27:00.406" /><!-- duration: 246ms -->
+  <step title="Performing fetch based deployment" date="2025-09-21T16:27:01.216" >
+    <step title="Deployment timer started" date="2025-09-21T16:27:06.058" >
+      <step title="DeploymentManager.Deploy(id:bcc40b79-d4b9-4f75-8cd4-8798f3f01328)" date="2025-09-21T16:27:06.111" >
+        <step title="Collecting changeset information" date="2025-09-21T16:27:06.158" /><!-- duration: 236ms -->
+        <step title="Updating submodules" date="2025-09-21T16:27:06.408" /><!-- duration: 1300ms -->
+        <step title="Determining deployment builder" date="2025-09-21T16:27:07.988" >
+          <step title="Builder is RunFromZipSiteBuilder" date="2025-09-21T16:27:08.000" /><!-- duration: 24ms -->
+        </step><!-- duration: 43ms -->
+        <step title="PreDeployment: context.CleanOutputPath False" date="2025-09-21T16:27:08.097" >
+          <step title="PreDeployment: context.OutputPath /home/site/wwwroot" date="2025-09-21T16:27:08.281" >
+            <step title="Building" date="2025-09-21T16:27:08.520" >
+              <step title="Modified file to trigger a restart of the app container." date="2025-09-21T16:27:09.085" /><!-- duration: 13ms -->
+              <step title="Skip function trigger and logicapp sync because function is not enabled." date="2025-09-21T16:27:09.111" /><!-- duration: 12ms -->
+              <step title="Purge deployment items" date="2025-09-21T16:27:10.801" >
+                <step title="Remove temp-62fc, Failed, received at 09/21/2025 16:24:19" date="2025-09-21T16:27:10.859" /><!-- duration: 5ms -->
+                <step title="Remove fda64c83-, Success, received at 09/20/2025 02:41:22" date="2025-09-21T16:27:10.938" /><!-- duration: 5ms -->
+              </step><!-- duration: 147ms -->
+            </step><!-- duration: 2541ms -->
+          </step><!-- duration: 2848ms -->
+          <step title="Cleaning up temp files" date="2025-09-21T16:27:11.140" /><!-- duration: 19ms -->
+          <step title="Cleaning up temp files" date="2025-09-21T16:27:11.206" /><!-- duration: 519ms -->
+          <step title="Reloading status file with latest updates" date="2025-09-21T16:27:12.055" >
+            <step title="WebHooksManager.PublishEventAsync: PostDeployment" date="2025-09-21T16:27:12.068" /><!-- duration: 152ms -->
+          </step><!-- duration: 178ms -->
+          <step title="Cleaning up temporary deployment - fetch deployment was successful" date="2025-09-21T16:27:12.242" /><!-- duration: 10ms -->
+        </step><!-- duration: 4234ms -->
+      </step><!-- duration: 6289ms -->

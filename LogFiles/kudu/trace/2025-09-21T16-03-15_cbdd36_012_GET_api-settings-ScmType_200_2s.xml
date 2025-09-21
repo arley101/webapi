@@ -1,0 +1,6 @@
+<step title="Incoming Request" date="2025-09-21T16:03:15.605" instance="cbdd36" url="/api/settings/ScmType" method="GET" type="request" pid="769,1,31" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="Azure-WebSites-Controller/105.0.7.92" Authorization="Bas..." x-ms-request-id="49d3fb29-ed2a-4a72-bd46-eace0c061d16" X-ARR-LOG-ID="49d3fb29-ed2a-4a72-bd46-eace0c061d16" CLIENT-IP="104.41.63.108:18049" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-MS-PLATFORM-INTERNAL="True" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/settings/ScmType" X-Client-IP="104.41.63.108" X-Client-Port="18049" >
+  <step title="Cleanup Xml Logs" date="2025-09-21T16:03:15.644" >
+    <step title="Cleanup Infos" date="2025-09-21T16:03:17.007" totalFiles="4661" totalCleanup="4501" /><!-- duration: 97ms -->
+  </step><!-- duration: 1480ms -->
+  <step title="Outgoing response" date="2025-09-21T16:03:17.205" type="response" statusCode="200" statusText="OK" /><!-- duration: 37ms -->
+</step><!-- duration: 1658ms -->

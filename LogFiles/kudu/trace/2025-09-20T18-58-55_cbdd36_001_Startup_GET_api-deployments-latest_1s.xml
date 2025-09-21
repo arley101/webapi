@@ -1,0 +1,5 @@
+<step title="Startup Request" date="2025-09-20T18:58:55.931" instance="cbdd36" url="/api/deployments/latest?deployer=OneDeploy&amp;time=2025-09-20_18-58-34Z" method="GET" type="request" pid="776,1,15" SCM_DO_BUILD_DURING_DEPLOYMENT="true" ScmType="None" SCM_BUILD_ARGS="--no-cache" SCM_CLEAN_OUTPUTS="true" >
+  <step title="Cleanup Xml Logs" date="2025-09-20T18:58:55.988" >
+    <step title="Cleanup Infos" date="2025-09-20T18:58:56.973" totalFiles="4635" totalCleanup="4475" /><!-- duration: 138ms -->
+  </step><!-- duration: 1150ms -->
+</step><!-- duration: 1226ms -->

@@ -1,0 +1,5 @@
+<step title="Startup Request" date="2025-09-21T16:49:54.650" instance="cbdd36" url="/dump" method="GET" type="request" pid="771,1,5" SCM_DO_BUILD_DURING_DEPLOYMENT="true" SCM_CLEAN_OUTPUTS="true" ScmType="ExternalGit" >
+  <step title="Cleanup Xml Logs" date="2025-09-21T16:49:54.779" >
+    <step title="Cleanup Infos" date="2025-09-21T16:49:56.965" totalFiles="4744" totalCleanup="4584" /><!-- duration: 561ms -->
+  </step><!-- duration: 2866ms -->
+</step><!-- duration: 3015ms -->

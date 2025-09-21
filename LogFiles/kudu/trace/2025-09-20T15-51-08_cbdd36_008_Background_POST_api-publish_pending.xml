@@ -1,0 +1,16 @@
+<step title="BackgroundTrace" date="2025-09-20T15:51:08.711" instance="cbdd36" url="/api/publish" method="POST" >
+  <step title="Cleanup Xml Logs" date="2025-09-20T15:51:08.889" >
+    <step title="Cleanup Infos" date="2025-09-20T15:51:11.802" totalFiles="4420" totalCleanup="4260" /><!-- duration: 260ms -->
+  </step><!-- duration: 3570ms -->
+  <step title="Creating temporary deployment - FetchDeploymentManager" date="2025-09-20T15:51:13.324" /><!-- duration: 16ms -->
+  <step title="Creating temporary deployment" date="2025-09-20T15:51:13.409" /><!-- duration: 1309ms -->
+  <step title="Performing fetch based deployment" date="2025-09-20T15:51:15.093" >
+    <step title="Deployment timer started" date="2025-09-20T15:51:20.445" >
+      <step title="DeploymentManager.Deploy(id:7d632d9e-143e-49ee-a71c-7fa3a1d9c77c)" date="2025-09-20T15:51:20.493" >
+        <step title="Collecting changeset information" date="2025-09-20T15:51:20.575" /><!-- duration: 250ms -->
+        <step title="Updating submodules" date="2025-09-20T15:51:20.904" /><!-- duration: 1400ms -->
+        <step title="Determining deployment builder" date="2025-09-20T15:51:22.746" >
+          <step title="Builder is RunFromZipSiteBuilder" date="2025-09-20T15:51:22.769" /><!-- duration: 23ms -->
+        </step><!-- duration: 66ms -->
+        <step title="PreDeployment: context.CleanOutputPath False" date="2025-09-20T15:51:22.985" >
+          <step title="PreDeployment: context.OutputPath /home/site/wwwroot" date="2025-09-20T15:51:23.510" 

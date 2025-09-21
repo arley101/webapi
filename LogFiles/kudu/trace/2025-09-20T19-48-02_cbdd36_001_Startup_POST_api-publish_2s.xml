@@ -1,0 +1,5 @@
+<step title="Startup Request" date="2025-09-20T19:48:02.472" instance="cbdd36" url="/api/publish?async=true&amp;deployer=GITHUB_ONE_DEPLOY&amp;type=zip&amp;clean=true&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%224f1e3a44a44d8a1d7b6a6079af67097a1b83dcea%22%2C%22repoName%22%3A%22arley101%2Fwebapi%22%2C%22actor%22%3A%22arley101%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22%F0%9F%94%A7%20Fix%3A%20Agregar%20runtime.txt%20para%20forzar%20Python%203.11%20en%20Azure%5Cn%5Cn-%20Especifica%20python-3.11%20para%20consistencia%20con%20logs%20de%20Azure%5Cn-%20Resolve%20incompatibilidad%20entre%20Python%203.11.13%20(Azure)%20vs%203.13%20(local)%5Cn-%20Mejora%20compatibilidad%20entre%20entornos%22%7D" method="POST" type="request" pid="770,1,17" ScmType="None" SCM_DO_BUILD_DURING_DEPLOYMENT="true" SCM_BUILD_ARGS="--no-cache" SCM_CLEAN_OUTPUTS="true" >
+  <step title="Cleanup Xml Logs" date="2025-09-20T19:48:02.650" >
+    <step title="Cleanup Infos" date="2025-09-20T19:48:04.221" totalFiles="4644" totalCleanup="4484" /><!-- duration: 172ms -->
+  </step><!-- duration: 1877ms -->
+</step><!-- duration: 2086ms -->
