@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    logger.info("Iniciando EliteDynamicsAPI v1.1...")
+    logger.info("Iniciando EliteDynamicsAPI v1.2...")
     logger.info(f"Nivel de Logging configurado: {settings.LOG_LEVEL.upper()}")
     logger.info(f"Entorno: {settings.ENVIRONMENT}")
     yield
@@ -39,13 +39,12 @@ async def lifespan(app: FastAPI):
 
 # Crear la instancia de la aplicación FastAPI con lifespan
 app = FastAPI(
-    title="EliteDynamicsAPI",
-    description="API de Elite Dynamics para acciones empresariales",
-    version="1.1",
-    docs_url="/api/v1/docs",
-    redoc_url="/api/v1/redoc",
-    openapi_url="/api/v1/openapi.json",
-    lifespan=lifespan  # Usar lifespan en lugar de on_event
+    title="EliteDynamics Pro API v1.2",
+    version="1.2",
+    description="Sistema empresarial profesional - FastAPI + Azure + OpenAI + 9 Routers",
+    openapi_url="/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc"
 )
 
 # Incluir todos los routers con sus prefijos

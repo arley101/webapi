@@ -34,29 +34,18 @@ jobs:
         tenant-id: ${{ secrets.AZURE_TENANT_ID }}
         subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    # ======= FORZAR REBUILD LIMPIO =======
-    - name: Force clean Oryx cache & old files
+    # ======= CONFIGURAR STARTUP COMMAND ANTES DEL DEPLOY =======
+    # CRÍTICO: Configurar ANTES del deploy para evitar container restarts durante deployment
+    - name: Configure startup command (BEFORE deploy)
       run: |
-        echo "🔥 Cleaning Oryx artifacts and wwwroot..."
-        CREDS=$(az webapp deployment list-publishing-credentials \
-          --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }})
-        USER=$(echo $CREDS | jq -r '.publishingUserName')
-        PASS=$(echo $CREDS | jq -r '.publishingPassword')
-
-        # Borrar manifest y paquete
-        for path in /site/wwwroot/oryx-manifest.toml /site/wwwroot/output.tar.gz /tmp/oryx /site/wwwroot/* ; do
-          curl -s -X DELETE "https://${{ env.AZURE_WEBAPP_NAME }}.scm.azurewebsites.net/api/vfs${path}" \
-            -u "$USER:$PASS" || true
-        done
-
-        # Variables temporales para obligar rebuild
-        az webapp config appsettings set \
+        echo "📝 Configurando startup command ANTES del deploy..."
+        az webapp config set \
           --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
           --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --settings DEPLOYMENT_TIMESTAMP=$(date +%s) \
-                    SCM_BUILD_ARGS="--no-cache" \
-                    ORYX_DISABLE_CACHE=true
+          --startup-file "gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app"
+        
+        echo "⏳ Esperando 15 segundos para que se aplique la configuración..."
+        sleep 15
 
     - name: Validate repo structure
       run: |
@@ -76,37 +65,44 @@ jobs:
         app-name: ${{ env.AZURE_WEBAPP_NAME }}
         package: .
         clean: true
+        slot-name: production
 
-    - name: Configure startup command
-      run: |
-        az webapp config set \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --startup-file "gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app"
+    - name: Deploy with Oryx/ZipDeploy
+      uses: azure/webapps-deploy@v3
+      with:
+        app-name: ${{ env.AZURE_WEBAPP_NAME }}
+        package: .
+        clean: true
+        slot-name: production
 
+    # ======= POST-DEPLOY: ESPERAR Y VERIFICAR =======
     - name: Post-deploy health check
       run: |
-        echo "⏳ Esperando a que la app levante..."
-        sleep 120
-        for i in {1..6}; do
-          echo "Intento $i..."
+        echo "⏳ Esperando 180 segundos a que la app complete el startup..."
+        sleep 180
+        
+        echo "🔍 Verificando health endpoint..."
+        for i in {1..10}; do
+          echo "Intento $i de 10..."
           code=$(curl -k -s -o /dev/null -w "%{http_code}" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health")
           if [ "$code" = "200" ]; then
-            echo "✅ Health OK"
-            break
+            echo "✅ Health OK - La app está respondiendo correctamente"
+            
+            # Verificar versión
+            version=$(curl -s "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/" | jq -r '.version')
+            echo "📦 Versión desplegada: $version"
+            
+            # Probar endpoint de dynamics
+            echo "🧪 Probando /api/v1/dynamics..."
+            curl -s -X POST "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics" \
+              -H "Content-Type: application/json" \
+              -d '{"action":"list_all_actions","params":{}}' || true
+            
+            exit 0
           fi
-          sleep 20
+          echo "⏳ Esperando 30 segundos más..."
+          sleep 30
         done
-
-        echo "Probando /api/v1/dynamics..."
-        curl -s -X POST "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics" \
-          -H "Content-Type: application/json" \
-          -d '{"action":"gemini_suggest_action","params":{"query":"test"}}' || true
-
-    - name: Cleanup temp settings
-      if: always()
-      run: |
-        az webapp config appsettings delete \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --setting-names SCM_BUILD_ARGS ORYX_DISABLE_CACHE || true
+        
+        echo "❌ La app no respondió después de 10 intentos"
+        exit 1
