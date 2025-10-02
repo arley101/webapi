@@ -1,0 +1,110 @@
+# ZIPs de logs y deployments (58MB basura)
+app-logs.zip
+deploy-token-refresh-fix.zip
+deploy-google.zip
+deployment-logs.zip
+deployment.zip
+deploy-clean.zip
+deploy-token-refresh-system.zip
+latest-logs.zip
+newest_logs.zip
+deploy-debug2.zip
+deploy-final.zip
+current_logs.zip
+deploy-debug.zip
+deploy-definitivo.zip
+deploy-v2.zip
+latest_logs.zip
+deploy-definitivo-v2.zip
+final_logs.zip
+recent_logs.zip
+deploy-actions-optimizado.zip
+
+# Scripts de prueba Google Ads (root)
+audit_actions.py
+bypass_account_restrictions.py
+CODIGO_SCRIPT_SIMPLE.js
+crear_campanas_implantes.py
+crear_campanas_simple.py
+create_complete_pmax.py
+create_meta_ads_alternative.py
+create_pmax_campaign.py
+create_tiktok_ads.py
+endpoint_campana_simple.py
+fix_campaign_creation.py
+generate_google_ads_token.py
+list_campaigns.py
+solucion_bidding_strategy.py
+solucion_definitiva_correcta.py
+SOLUCION_FINAL_COMPLETA.py
+solucion_final_eu_political.py
+solucion_inmediata.py
+solucion_restriccion_eu_political.py
+solucion_tecnica_exhaustiva.py
+
+# CSVs de prueba
+FORMATO_EDITOR_LIMPIO.csv
+GOOGLE_ADS_EDITOR_COMPATIBLE.csv
+GOOGLE_ADS_SIMPLE.csv
+IMPORTAR_GOOGLE_ADS.csv
+MINIMO_ABSOLUTO.csv
+PASO1_CREAR_CAMPANA_FORMATO_OFICIAL.csv
+PASO1_CREAR_CAMPANA_SEARCH.csv
+PASO1_CREAR_CAMPANA.csv
+PASO2_AGREGAR_KEYWORDS.csv
+PERFECTO_SIN_ERRORES.csv
+PMAX_COMPLETA_ROBUSTA.csv
+PMAX_FORMATO_EDITOR.csv
+TARGETING_CORRECTO.csv
+
+# JS de prueba Google Ads Scripts
+GOOGLE_ADS_SCRIPT_AUTOMATICO.js
+GOOGLE_ADS_SCRIPTS_REAL.js
+GOOGLE_APPS_SCRIPT_SOLUCION.js
+METODO_DIRECTO_SIMPLE.js
+PMAX_SCRIPT_ROBUSTO_COMPLETO.js
+SOLUCION_AUTOMATICA_SCRIPTS.js
+SOLUCION_DEFINITIVA_CSV.js
+
+# HTMLs de prueba
+IMPLANTES_CIGOMATICOS_LANDING_FINAL.html
+SOLUCION_WORDPRESS_INMEDIATA.html
+wordpress_content.html
+
+# Markdown de documentación temporal
+CAMPAIGN_DEPLOYMENT_REPORT.md
+CAMPAÑAS_IMPLANTES_CIGOMATICOS_ESPECIFICACIONES.md
+CONFIGURACION_CREDENCIALES_APIS.md
+DOCUMENTACION_CAMPAÑA_ROBUSTA.txt
+GUIA_CAMPANAS_SIMPLES.md
+GUIA_GOOGLE_ADS_EDITOR.txt
+GUIA_PASO_A_PASO_SCRIPTS.md
+INSTRUCCIONES_MANUAL_GOOGLE_ADS.md
+MANIFIESTO_COMPLETO_PMAX_IMPLANTES_CIGOMATICOS.md
+METODO_DIRECTO_GOOGLE_ADS.txt
+PUBLICACION_CONFIG.md
+SOLUCION_DEFINITIVA.md
+TARGETING_EXPLICACION.txt
+TEMPLATE_MANUAL_3MIN.md
+UBICACION_SCRIPTS_EXACTA.md
+
+# Backups innecesarios
+app/main_backup.py
+requirements.backup.txt
+
+# CSS de prueba
+CSS_FIX_WORDPRESS.css
+
+# JSONs de prueba WordPress
+wordpress_css_fix_request.json
+wordpress_page_fix.json
+wordpress_update_final.json
+
+# Main.py root (no se usa)
+main.py
+
+# Archivos HTML en static que son prueba
+static/implantes-cigomaticos.html
+
+# Python scripts en app/actions que son prueba
+MAQUETAS_Y_TEMPLATES_COMPLETOS.py

@@ -111,4 +111,7 @@ isort>=6.0
 # pandas>=2.3,<3.0  # Para exportación de datos
 # openpyxl>=3.1,<4.0  # Para Excel
 
+# System monitoring
+psutil>=5.9.0
+
 # NO CAMBIAR las versiones existentes a menos que haya un error específico

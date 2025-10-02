@@ -36,6 +36,44 @@ Thumbs.db
 logs/
 temp/
 tmp/
+*.zip
+deploy-*.zip
+*-logs.zip
+
+# Archivos de prueba
+*.csv
+!requirements.txt
+!pyproject.toml
+crear_*.py
+create_*.py
+solucion_*.py
+fix_*.py
+test_*.py
+prueba_*.py
+audit_*.py
+bypass_*.py
+endpoint_*.py
+generate_*.py
+list_*.py
+
+# Documentación temporal
+GUIA_*.md
+INSTRUCCIONES_*.md
+TEMPLATE_*.md
+MANIFIESTO_*.md
+DOCUMENTACION_*.txt
+METODO_*.txt
+*.instructions.md
+
+# Assets de prueba
+*.html
+!app/templates/**/*.html
+!static/**/*.html
+wordpress_*.json
+wordpress_*.html
+*.CSS
+*.css
+!app/static/**/*.css
 
 # Environment
 .env.*
@@ -58,3 +96,4 @@ Untitled*
 .env
 .env
 .env
+app/Credenciales Globales.md
