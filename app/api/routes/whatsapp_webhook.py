@@ -18,7 +18,7 @@ from app.actions.whatsapp_actions import whatsapp_send_text, whatsapp_send_inter
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/webhooks", tags=["webhooks"])
+router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 
 # ============================================================================
 # WEBHOOK VERIFICATION (GET)

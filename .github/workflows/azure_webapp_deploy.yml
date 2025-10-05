@@ -2,7 +2,7 @@ name: Deploy Python App to Azure App Service (Oryx, no Docker)
 
 on:
   push:
-    branches: [ production ]
+    branches: [production]
   workflow_dispatch:
 
 permissions:
@@ -12,97 +12,97 @@ permissions:
 env:
   AZURE_WEBAPP_NAME: elitedynamicsapi
   AZURE_RESOURCE_GROUP: Memorycognitiva
-  PYTHON_VERSION: '3.11'
+  PYTHON_VERSION: "3.11"
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout
-      uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ env.PYTHON_VERSION }}
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
-    - name: Azure Login (OIDC)
-      uses: azure/login@v2
-      with:
-        client-id: ${{ secrets.AZURE_CLIENT_ID }}
-        tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-        subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-    # ======= CONFIGURAR STARTUP COMMAND ANTES DEL DEPLOY =======
-    # CRÍTICO: Configurar ANTES del deploy para evitar container restarts durante deployment
-    - name: Configure startup command (BEFORE deploy)
-      run: |
-        echo "📝 Configurando startup command ANTES del deploy..."
-        az webapp config set \
-          --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-          --name ${{ env.AZURE_WEBAPP_NAME }} \
-          --startup-file "gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app"
-        
-        echo "⏳ Esperando 15 segundos para que se aplique la configuración..."
-        sleep 15
+      # ======= CONFIGURAR STARTUP COMMAND ANTES DEL DEPLOY =======
+      # CRÍTICO: Configurar ANTES del deploy para evitar container restarts durante deployment
+      - name: Configure startup command (BEFORE deploy)
+        run: |
+          echo "📝 Configurando startup command ANTES del deploy..."
+          az webapp config set \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --name ${{ env.AZURE_WEBAPP_NAME }} \
+            --startup-file "gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind=0.0.0.0:8000 app.main:app"
 
-    - name: Validate repo structure
-      run: |
-        test -f app/main.py || (echo "main.py no encontrado" && exit 1)
-        test -f requirements.txt || (echo "requirements.txt no encontrado" && exit 1)
-        echo "Estructura OK:"
-        find app -maxdepth 2 -name "*.py" | head -30
+          echo "⏳ Esperando 15 segundos para que se aplique la configuración..."
+          sleep 15
 
-    - name: Install dependencies (just to fail early)
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Validate repo structure
+        run: |
+          test -f app/main.py || (echo "main.py no encontrado" && exit 1)
+          test -f requirements.txt || (echo "requirements.txt no encontrado" && exit 1)
+          echo "Estructura OK:"
+          find app -maxdepth 2 -name "*.py" | head -30
 
-    - name: Deploy with Oryx/ZipDeploy
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME }}
-        package: .
-        clean: true
-        slot-name: production
+      - name: Install dependencies (just to fail early)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: Deploy with Oryx/ZipDeploy
-      uses: azure/webapps-deploy@v3
-      with:
-        app-name: ${{ env.AZURE_WEBAPP_NAME }}
-        package: .
-        clean: true
-        slot-name: production
+      - name: Deploy with Oryx/ZipDeploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: .
+          clean: true
+          slot-name: production
 
-    # ======= POST-DEPLOY: ESPERAR Y VERIFICAR =======
-    - name: Post-deploy health check
-      run: |
-        echo "⏳ Esperando 180 segundos a que la app complete el startup..."
-        sleep 180
-        
-        echo "🔍 Verificando health endpoint..."
-        for i in {1..10}; do
-          echo "Intento $i de 10..."
-          code=$(curl -k -s -o /dev/null -w "%{http_code}" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health")
-          if [ "$code" = "200" ]; then
-            echo "✅ Health OK - La app está respondiendo correctamente"
-            
-            # Verificar versión
-            version=$(curl -s "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/" | jq -r '.version')
-            echo "📦 Versión desplegada: $version"
-            
-            # Probar endpoint de dynamics
-            echo "🧪 Probando /api/v1/dynamics..."
-            curl -s -X POST "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics" \
-              -H "Content-Type: application/json" \
-              -d '{"action":"list_all_actions","params":{}}' || true
-            
-            exit 0
-          fi
-          echo "⏳ Esperando 30 segundos más..."
-          sleep 30
-        done
-        
-        echo "❌ La app no respondió después de 10 intentos"
-        exit 1
+      - name: Deploy with Oryx/ZipDeploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: .
+          clean: true
+          slot-name: production
+
+      # ======= POST-DEPLOY: ESPERAR Y VERIFICAR =======
+      - name: Post-deploy health check
+        run: |
+          echo "⏳ Esperando 180 segundos a que la app complete el startup..."
+          sleep 180
+
+          echo "🔍 Verificando health endpoint..."
+          for i in {1..10}; do
+            echo "Intento $i de 10..."
+            code=$(curl -k -s -o /dev/null -w "%{http_code}" "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/health")
+            if [ "$code" = "200" ]; then
+              echo "✅ Health OK - La app está respondiendo correctamente"
+              
+              # Verificar versión
+              version=$(curl -s "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/" | jq -r '.version')
+              echo "📦 Versión desplegada: $version"
+              
+              # Probar endpoint de dynamics
+              echo "🧪 Probando /api/v1/dynamics..."
+              curl -s -X POST "https://${{ env.AZURE_WEBAPP_NAME }}.azurewebsites.net/api/v1/dynamics" \
+                -H "Content-Type: application/json" \
+                -d '{"action":"list_all_actions","params":{}}' || true
+              
+              exit 0
+            fi
+            echo "⏳ Esperando 30 segundos más..."
+            sleep 30
+          done
+
+          echo "❌ La app no respondió después de 10 intentos"
+          exit 1
