@@ -139,53 +139,67 @@ async def process_dynamic_action(
 
     logger.info(f"{logging_prefix} Petición recibida. Claves de parámetros: {list(params_req.keys())}")
 
-    try:
-        credential = DefaultAzureCredential()
+    # ✅ MEJORA: Solo autenticar con Azure si la acción lo requiere
+    # Acciones de Google Ads, TikTok, Meta no necesitan Azure credentials
+    azure_free_actions = [
+        "googleads_", "tiktok_", "meta_", "linkedin_", "twitter_",
+        "list_all_actions", "ping", "echo"
+    ]
+    
+    requires_azure = not any(action_name.startswith(prefix) for prefix in azure_free_actions)
+    
+    if requires_azure:
         try:
-            token_scopes = _resolve_graph_scopes()
-            if not token_scopes or not token_scopes[0]:
-                raise ValueError("Alcance(s) de Graph no configurado(s). Configure GRAPH_API_DEFAULT_SCOPE o GRAPH_SCOPE_DEFAULT en settings.")
+            credential = DefaultAzureCredential()
+            try:
+                token_scopes = _resolve_graph_scopes()
+                if not token_scopes or not token_scopes[0]:
+                    raise ValueError("Alcance(s) de Graph no configurado(s). Configure GRAPH_API_DEFAULT_SCOPE o GRAPH_SCOPE_DEFAULT en settings.")
 
-            token_info = credential.get_token(*token_scopes)
-            logger.debug(
-                f"{logging_prefix} DefaultAzureCredential validada. Token para '{token_scopes[0]}' expira en (UTC): {token_info.expires_on}"
-            )
-        except CredentialUnavailableError as cred_err:
-            logger.error(f"{logging_prefix} Credencial de Azure no disponible (Managed Identity o variables de entorno podrían estar mal configuradas): {cred_err}")
-            return create_error_response(
-                status_code=http_status_codes.HTTP_500_INTERNAL_SERVER_ERROR,
-                action=action_name,
-                message="Error de autenticación del servidor: Credencial de Azure no disponible.",
-                details=f"CredentialUnavailableError: {str(cred_err)}"
-            )
-        except ClientAuthenticationError as client_auth_err: 
-            logger.error(f"{logging_prefix} Error de autenticación del cliente con Azure (problema con Service Principal o identidad): {client_auth_err}")
-            return create_error_response(
-                status_code=http_status_codes.HTTP_500_INTERNAL_SERVER_ERROR,
-                action=action_name,
-                message="Error de autenticación del servidor: Fallo al autenticar el cliente de Azure.",
-                details=f"ClientAuthenticationError: {str(client_auth_err)}"
-            )
-        except Exception as token_ex: 
-            logger.error(f"{logging_prefix} Error inesperado al obtener token de prueba inicial: {token_ex}", exc_info=True)
-            return create_error_response(
-                status_code=http_status_codes.HTTP_500_INTERNAL_SERVER_ERROR,
-                action=action_name,
-                message="Error de autenticación del servidor: Fallo inesperado al obtener token de prueba.",
-                details=str(token_ex)
-            )
-            
-        auth_http_client = AuthenticatedHttpClient(credential=credential)
-        logger.debug(f"{logging_prefix} AuthenticatedHttpClient inicializado y listo.")
+                token_info = credential.get_token(*token_scopes)
+                logger.debug(
+                    f"{logging_prefix} DefaultAzureCredential validada. Token para '{token_scopes[0]}' expira en (UTC): {token_info.expires_on}"
+                )
+            except CredentialUnavailableError as cred_err:
+                logger.error(f"{logging_prefix} Credencial de Azure no disponible (Managed Identity o variables de entorno podrían estar mal configuradas): {cred_err}")
+                return create_error_response(
+                    status_code=http_status_codes.HTTP_500_INTERNAL_SERVER_ERROR,
+                    action=action_name,
+                    message="Error de autenticación del servidor: Credencial de Azure no disponible.",
+                    details=f"CredentialUnavailableError: {str(cred_err)}"
+                )
+            except ClientAuthenticationError as client_auth_err: 
+                logger.error(f"{logging_prefix} Error de autenticación del cliente con Azure (problema con Service Principal o identidad): {client_auth_err}")
+                return create_error_response(
+                    status_code=http_status_codes.HTTP_500_INTERNAL_SERVER_ERROR,
+                    action=action_name,
+                    message="Error de autenticación del servidor: Fallo al autenticar el cliente de Azure.",
+                    details=f"ClientAuthenticationError: {str(client_auth_err)}"
+                )
+            except Exception as token_ex: 
+                logger.error(f"{logging_prefix} Error inesperado al obtener token de prueba inicial: {token_ex}", exc_info=True)
+                return create_error_response(
+                    status_code=http_status_codes.HTTP_500_INTERNAL_SERVER_ERROR,
+                    action=action_name,
+                    message="Error de autenticación del servidor: Fallo inesperado al obtener token de prueba.",
+                    details=str(token_ex)
+                )
+                
+            auth_http_client = AuthenticatedHttpClient(credential=credential)
+            logger.debug(f"{logging_prefix} AuthenticatedHttpClient inicializado y listo.")
 
-    except Exception as auth_setup_ex: 
-        logger.exception(f"{logging_prefix} Excepción crítica durante la configuración de autenticación: {auth_setup_ex}")
-        return create_error_response(
-            status_code=http_status_codes.HTTP_503_SERVICE_UNAVAILABLE, 
-            action=action_name,
-            message="Error interno crítico: Fallo en la configuración de autenticación del servidor.",
-            details=str(auth_setup_ex)
-        )
+        except Exception as auth_setup_ex: 
+            logger.exception(f"{logging_prefix} Excepción crítica durante la configuración de autenticación: {auth_setup_ex}")
+            return create_error_response(
+                status_code=http_status_codes.HTTP_503_SERVICE_UNAVAILABLE, 
+                action=action_name,
+                message="Error interno crítico: Fallo en la configuración de autenticación del servidor.",
+                details=str(auth_setup_ex)
+            )
+    else:
+        # Para acciones que no requieren Azure (Google Ads, TikTok, Meta, etc.)
+        logger.debug(f"{logging_prefix} Acción no requiere autenticación de Azure")
+        auth_http_client = None  # No needed for these actions
 
     action_function = ACTION_MAP.get(action_name)
     if not action_function:

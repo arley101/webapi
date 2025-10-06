@@ -705,7 +705,9 @@ def googleads_list_accessible_customers(client: Any, params: Dict[str, Any]) -> 
         gads_client = get_google_ads_client()
         customer_service = gads_client.get_service("CustomerService")
         accessible_customers = customer_service.list_accessible_customers()
-        return {"success": True, "data": {"resource_names": accessible_customers.resource_names}}
+        # Convertir resource_names a lista para que sea JSON serializable
+        resource_names_list = [str(name) for name in accessible_customers.resource_names]
+        return {"success": True, "data": {"resource_names": resource_names_list}}
     except GoogleAdsException as ex:
         return _handle_google_ads_api_error(ex, action_name)
     except Exception as e:
