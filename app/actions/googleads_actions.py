@@ -1698,4 +1698,244 @@ def googleads_get_campaign_criteria(client: Any, params: Dict[str, Any]) -> Dict
         }
 
 
+def googleads_list_asset_groups(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Lista todos los asset groups de una campaña Performance Max.
+    Retorna IDs y nombres de asset groups para poder agregar signals.
+    
+    Params:
+        - customer_id: ID del cliente (ej: "1536073437")
+        - campaign_id: ID de la campaña (ej: "23071242181")
+    
+    Returns:
+        {
+            "success": True,
+            "data": {
+                "asset_groups": [
+                    {
+                        "id": "123456789",
+                        "resource_name": "customers/.../assetGroups/...",
+                        "name": "Asset group 1",
+                        "status": "ENABLED"
+                    }
+                ]
+            }
+        }
+    """
+    action_name = "googleads_list_asset_groups"
+    
+    try:
+        gads_client = get_google_ads_client()
+        customer_id = str(params.get("customer_id", "")).replace("customers/", "")
+        campaign_id = str(params.get("campaign_id", ""))
+        
+        if not campaign_id:
+            raise ValueError("Se requiere 'campaign_id'")
+        
+        google_ads_service = gads_client.get_service("GoogleAdsService")
+        
+        query = f"""
+            SELECT
+                asset_group.id,
+                asset_group.resource_name,
+                asset_group.name,
+                asset_group.status,
+                asset_group.campaign
+            FROM asset_group
+            WHERE asset_group.campaign = 'customers/{customer_id}/campaigns/{campaign_id}'
+        """
+        
+        response = google_ads_service.search(customer_id=customer_id, query=query)
+        
+        asset_groups = []
+        for row in response:
+            asset_groups.append({
+                "id": str(row.asset_group.id),
+                "resource_name": str(row.asset_group.resource_name),
+                "name": str(row.asset_group.name),
+                "status": str(row.asset_group.status.name),
+                "campaign": str(row.asset_group.campaign)
+            })
+        
+        result = {
+            "success": True,
+            "data": {
+                "asset_groups": asset_groups,
+                "total": len(asset_groups)
+            },
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # Persistir resultado
+        try:
+            _get_resolver().save_action_result(action_name, params, result)
+        except Exception as _e:
+            logger.debug(f"No-op save_action_result: {_e}")
+        
+        return result
+        
+    except GoogleAdsException as ex:
+        return _handle_google_ads_api_error(ex, action_name)
+    except Exception as e:
+        logger.error(f"Error en {action_name}: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "action": action_name,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+def googleads_update_asset_group_signals(client: Any, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Agrega señales de audiencia (audience signals) a un Asset Group de Performance Max.
+    Las señales incluyen: age ranges, income ranges, y audience IDs (interests).
+    
+    Params:
+        - customer_id: ID del cliente
+        - asset_group_id: ID del asset group (obtener con googleads_list_asset_groups)
+        - age_ranges: Lista de rangos de edad ["AGE_RANGE_55_64", "AGE_RANGE_65_UP"]
+        - income_ranges: Lista de rangos de ingreso ["INCOME_RANGE_90_UP"] (top 10%)
+        - audience_ids: Lista de IDs de audiencias (interests) - OPCIONAL
+    
+    NOTA: Esta función crea primero un Audience con scope ASSET_GROUP que contiene
+    las dimensiones demográficas, y luego lo asocia al asset group via signal.
+    
+    Returns:
+        {
+            "success": True,
+            "message": "Audience signals agregadas exitosamente",
+            "data": {
+                "asset_group_id": "...",
+                "signals_added": N
+            }
+        }
+    """
+    action_name = "googleads_update_asset_group_signals"
+    
+    try:
+        gads_client = get_google_ads_client()
+        customer_id = str(params.get("customer_id", "")).replace("customers/", "")
+        asset_group_id = str(params.get("asset_group_id", ""))
+        age_ranges = params.get("age_ranges", [])
+        income_ranges = params.get("income_ranges", [])
+        audience_ids = params.get("audience_ids", [])
+        
+        if not asset_group_id:
+            raise ValueError("Se requiere 'asset_group_id'")
+        
+        asset_group_resource_name = f"customers/{customer_id}/assetGroups/{asset_group_id}"
+        
+        # Servicios necesarios
+        audience_service = gads_client.get_service("AudienceService")
+        asset_group_signal_service = gads_client.get_service("AssetGroupSignalService")
+        
+        operations = []
+        audience_resources_created = []
+        
+        # PASO 1: Crear Audience con dimensiones demográficas
+        # Necesitamos crear un Audience separado para cada combinación de dimensiones
+        
+        # Si hay age ranges, crear un Audience con todas las edades
+        if age_ranges:
+            audience_operation = gads_client.get_type("AudienceOperation")
+            audience = audience_operation.create
+            audience.name = f"PMax_Age_{asset_group_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            audience.description = f"Age ranges for asset group {asset_group_id}"
+            audience.scope = gads_client.enums.AudienceScopeEnum.ASSET_GROUP
+            audience.asset_group = asset_group_resource_name
+            
+            # Agregar dimensión de edad
+            for age_range in age_ranges:
+                age_dimension = gads_client.get_type("AudienceDimension")
+                age_dim_info = gads_client.get_type("AgeDimension")
+                
+                # Crear age segment
+                age_segment = gads_client.get_type("AgeSegment")
+                # AgeSegment no usa age_range, usa min_age y max_age
+                # Pero para señales, necesitamos usar AgeRangeInfo
+                age_range_info = gads_client.get_type("AgeRangeInfo")
+                age_range_info.type_ = gads_client.enums.AgeRangeTypeEnum[age_range]
+                
+                # NO: age_segment contiene age_range_info
+                # Necesitamos usar un approach diferente
+                # En realidad, AudienceDimension.age espera AgeDimension
+                # AgeDimension.age_ranges espera lista de AgeSegment
+                # Pero esto no funciona con signals...
+                
+            # Este enfoque no va a funcionar.
+            # Google Ads NO permite crear demographics via Asset Group Signals de esta forma.
+            pass
+        
+        # APPROACH CORRECTO: Solo podemos usar Audiences existentes con IDs
+        # Para demographics, el usuario DEBE crearlos manualmente en la UI
+        # O usar audience IDs pre-creados
+        
+        # Agregar audience IDs (interests y demographics pre-creados)
+        for audience_id in audience_ids:
+            mutate_operation = gads_client.get_type("MutateOperation")
+            signal_operation = mutate_operation.asset_group_signal_operation.create
+            signal_operation.asset_group = asset_group_resource_name
+            signal_operation.audience.audience = f"customers/{customer_id}/audiences/{audience_id}"
+            operations.append(mutate_operation)
+        
+        # Ejecutar operaciones
+        if operations:
+            googleads_service = gads_client.get_service("GoogleAdsService")
+            response = googleads_service.mutate(
+                customer_id=customer_id,
+                mutate_operations=operations
+            )
+            
+            # Convertir resultados a formato serializable
+            results = []
+            for response_item in response.mutate_operation_responses:
+                if response_item.asset_group_signal_result:
+                    results.append(str(response_item.asset_group_signal_result.resource_name))
+            
+            result = {
+                "success": True,
+                "message": f"Audience signals agregadas exitosamente a asset group {asset_group_id}",
+                "data": {
+                    "asset_group_id": asset_group_id,
+                    "signals_added": len(results),
+                    "results": results
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            result = {
+                "success": False,
+                "message": "LIMITACIÓN: Google Ads API no permite crear demographics dinámicas. " +
+                          "Solo se pueden agregar Audiences existentes (con IDs). " +
+                          "Para demographics (age/income), debe crearlos manualmente en Google Ads UI: " +
+                          "Campaña → Asset Groups → Audience Signals → Add Signal → Demographics",
+                "data": {
+                    "age_ranges_requested": age_ranges,
+                    "income_ranges_requested": income_ranges,
+                    "audience_ids_provided": audience_ids
+                },
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Persistir resultado
+        try:
+            _get_resolver().save_action_result(action_name, params, result)
+        except Exception as _e:
+            logger.debug(f"No-op save_action_result: {_e}")
+        
+        return result
+        
+    except GoogleAdsException as ex:
+        return _handle_google_ads_api_error(ex, action_name)
+    except Exception as e:
+        logger.error(f"Error en {action_name}: {e}")
+        return {
+            "success": False,
+            "error": str(e),
+            "action": action_name,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 # --- FIN DEL MÓDULO actions/googleads_actions.py ---

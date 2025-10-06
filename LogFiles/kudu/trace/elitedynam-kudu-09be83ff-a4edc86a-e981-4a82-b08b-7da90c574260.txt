@@ -1,1 +1,0 @@
-2025-05-24T08:56:44  Startup Request, url: /api/siteextensions/Microsoft.ApplicationInsights.AzureWebSites?api-version=2014-11-01, method: DELETE, type: request, pid: 768,1,5, ScmType: GitHubAction

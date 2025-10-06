@@ -1,5 +1,0 @@
-<step title="Incoming Request" date="2025-07-23T19:43:04.333" instance="0287b4" url="/logstream" method="GET" type="request" pid="768,1,23" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="AZURECLI/2.75.0 (HOMEBREW)" Accept-Encoding="identity" Authorization="Bas..." x-ms-client-request-id="2cbd1b76-67fd-11f0-afde-02f1c3633e86" X-ARR-LOG-ID="2cbd1b76-67fd-11f0-afde-02f1c3633e86" CLIENT-IP="200.118.16.47:6229" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/logstream" X-Client-IP="200.118.16.47" X-Client-Port="6229" >
-  <step title="Cleanup Xml Logs" date="2025-07-23T19:43:04.339" >
-    <step title="Cleanup Infos" date="2025-07-23T19:43:04.382" totalFiles="1966" totalCleanup="1806" /><!-- duration: 3ms -->
-  </step><!-- duration: 47ms -->
-  <step title="LogStreamHandlerMiddleware.Invoke" date="2025-07-23T19:43:04.391" /><!-- duration: 455ms -->

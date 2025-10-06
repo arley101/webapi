@@ -1,5 +1,0 @@
-<step title="Startup Request" date="2025-08-14T19:13:50.549" instance="5214f1" url="/api/deployments/4477f8e9-4c8a-4d86-8dbd-842e04730408" method="GET" type="request" pid="769,1,14" SCM_DO_BUILD_DURING_DEPLOYMENT="true" SCM_CLEAN_OUTPUTS="true" ScmType="None" >
-  <step title="Cleanup Xml Logs" date="2025-08-14T19:13:50.557" >
-    <step title="Cleanup Infos" date="2025-08-14T19:13:50.703" totalFiles="3706" totalCleanup="3546" /><!-- duration: 32ms -->
-  </step><!-- duration: 206ms -->
-</step><!-- duration: 222ms -->

@@ -1,3 +1,0 @@
-<step title="Startup Request" date="2025-05-25T07:43:46.331" instance="1b06fe" url="/webssh/webssh2.css" method="GET" type="request" pid="767,1,5" ScmType="GitHubAction" >
-  <step title="Cleanup Xml Logs" date="2025-05-25T07:43:46.338" /><!-- duration: 9ms -->
-</step><!-- duration: 18ms -->

@@ -1,5 +1,0 @@
-<step title="Startup Request" date="2025-09-21T16:40:50.079" instance="cbdd36" url="/deploy?scmType=ExternalGit&amp;isAsync=true" method="POST" type="request" pid="768,1,18" ScmType="ExternalGit" SCM_CLEAN_OUTPUTS="true" SCM_DO_BUILD_DURING_DEPLOYMENT="true" >
-  <step title="Cleanup Xml Logs" date="2025-09-21T16:40:50.105" >
-    <step title="Cleanup Infos" date="2025-09-21T16:40:50.473" totalFiles="4722" totalCleanup="4562" /><!-- duration: 148ms -->
-  </step><!-- duration: 548ms -->
-</step><!-- duration: 583ms -->

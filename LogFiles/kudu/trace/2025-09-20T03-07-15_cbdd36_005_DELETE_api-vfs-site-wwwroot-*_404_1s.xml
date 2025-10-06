@@ -1,6 +1,0 @@
-<step title="Incoming Request" date="2025-09-20T03:07:15.867" instance="cbdd36" url="/api/vfs/site/wwwroot/*" method="DELETE" type="request" pid="770,1,7" Accept="*/*" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="curl/8.5.0" Authorization="Bas..." X-ARR-LOG-ID="cc49b532-446c-49dc-9071-5ab86439e0d6" CLIENT-IP="52.159.244.186:22571" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/vfs/site/wwwroot/*" X-Client-IP="52.159.244.186" X-Client-Port="22571" >
-  <step title="Cleanup Xml Logs" date="2025-09-20T03:07:15.992" >
-    <step title="Cleanup Infos" date="2025-09-20T03:07:17.032" totalFiles="4365" totalCleanup="4205" /><!-- duration: 55ms -->
-  </step><!-- duration: 1102ms -->
-  <step title="Outgoing response" date="2025-09-20T03:07:17.106" type="response" statusCode="404" statusText="NotFound" /><!-- duration: 5ms -->
-</step><!-- duration: 1252ms -->

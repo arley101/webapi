@@ -1,5 +1,0 @@
-<step title="Startup Request" date="2025-09-21T16:26:05.385" instance="cbdd36" url="/api/publish?async=true&amp;deployer=GITHUB_ONE_DEPLOY&amp;type=zip&amp;clean=true&amp;message=%7B%22type%22%3A%22deployment%22%2C%22sha%22%3A%2230d651ba91a95d22f8529a16ae31ab8c434a6191%22%2C%22repoName%22%3A%22arley101%2Fwebapi%22%2C%22actor%22%3A%22arley101%22%2C%22slotName%22%3A%22production%22%2C%22commitMessage%22%3A%22Fix%3A%20ACTION_MAP%20restored%20to%20465%2B%20functions%2C%20dependencies%20fixed%22%7D" method="POST" type="request" pid="770,1,7" ScmType="ExternalGit" SCM_DO_BUILD_DURING_DEPLOYMENT="true" SCM_BUILD_ARGS="--no-cache" SCM_CLEAN_OUTPUTS="true" >
-  <step title="Cleanup Xml Logs" date="2025-09-21T16:26:05.414" >
-    <step title="Cleanup Infos" date="2025-09-21T16:26:07.189" totalFiles="4712" totalCleanup="4552" /><!-- duration: 150ms -->
-  </step><!-- duration: 2004ms -->
-</step><!-- duration: 2134ms -->

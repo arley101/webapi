@@ -1,6 +1,0 @@
-<step title="Incoming Request" date="2025-09-20T03:39:29.373" instance="cbdd36" url="/api/vfs/site/wwwroot/output.tar.gz" method="DELETE" type="request" pid="768,1,16" Accept="*/*" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="curl/8.5.0" Authorization="Bas..." X-ARR-LOG-ID="10e46ee0-188f-499e-9df3-8941a2c56f68" CLIENT-IP="172.182.200.150:47145" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/vfs/site/wwwroot/output.tar.gz" X-Client-IP="172.182.200.150" X-Client-Port="47145" >
-  <step title="Cleanup Xml Logs" date="2025-09-20T03:39:29.381" >
-    <step title="Cleanup Infos" date="2025-09-20T03:39:31.395" totalFiles="4377" totalCleanup="4217" /><!-- duration: 198ms -->
-  </step><!-- duration: 2231ms -->
-  <step title="Outgoing response" date="2025-09-20T03:39:31.814" type="response" statusCode="409" statusText="Conflict" /><!-- duration: 48ms -->
-</step><!-- duration: 2556ms -->

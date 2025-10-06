@@ -1,5 +1,0 @@
-<step title="Startup Request" date="2025-08-14T18:57:47.424" instance="5214f1" url="/api/vfs/site/wwwroot/oryx-manifest.toml" method="DELETE" type="request" pid="768,1,19" SCM_DO_BUILD_DURING_DEPLOYMENT="true" ScmType="None" SCM_CLEAN_OUTPUTS="true" >
-  <step title="Cleanup Xml Logs" date="2025-08-14T18:57:47.428" >
-    <step title="Cleanup Infos" date="2025-08-14T18:57:47.554" totalFiles="3656" totalCleanup="3496" /><!-- duration: 30ms -->
-  </step><!-- duration: 166ms -->
-</step><!-- duration: 175ms -->

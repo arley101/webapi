@@ -1,12 +1,18 @@
 # app/core/config.py
 import os
 import logging  # ← YA TIENES ESTE IMPORT CORRECTO
+from pathlib import Path
 from typing import List, Optional, Union 
 from pydantic import HttpUrl, field_validator, Field 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from dotenv import load_dotenv
 
-load_dotenv() 
+# Cargar .env desde el directorio app/ (207 líneas COMPLETO)
+# __file__ = /path/to/app/core/config.py
+# .parent = /path/to/app/core/
+# .parent.parent = /path/to/app/ ✅
+env_path = Path(__file__).parent.parent / '.env'
+load_dotenv(dotenv_path=env_path) 
 
 class GoogleAdsCredentials(BaseSettings):
     CLIENT_ID: Optional[str] = None

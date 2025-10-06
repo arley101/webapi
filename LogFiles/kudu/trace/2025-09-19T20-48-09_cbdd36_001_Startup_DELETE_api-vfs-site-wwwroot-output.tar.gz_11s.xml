@@ -1,5 +1,0 @@
-<step title="Startup Request" date="2025-09-19T20:48:09.925" instance="cbdd36" url="/api/vfs/site/wwwroot/output.tar.gz" method="DELETE" type="request" pid="769,1,7" SCM_DO_BUILD_DURING_DEPLOYMENT="true" ScmType="None" SCM_CLEAN_OUTPUTS="true" >
-  <step title="Cleanup Xml Logs" date="2025-09-19T20:48:10.314" >
-    <step title="Cleanup Infos" date="2025-09-19T20:48:21.145" totalFiles="4118" totalCleanup="3958" /><!-- duration: 64ms -->
-  </step><!-- duration: 11029ms -->
-</step><!-- duration: 11466ms -->

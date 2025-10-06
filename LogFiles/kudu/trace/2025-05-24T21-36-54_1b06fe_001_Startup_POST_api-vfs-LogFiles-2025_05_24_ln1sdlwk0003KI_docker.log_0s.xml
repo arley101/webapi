@@ -1,3 +1,0 @@
-<step title="Startup Request" date="2025-05-24T21:36:54.410" instance="1b06fe" url="/api/vfs/LogFiles/2025_05_24_ln1sdlwk0003KI_docker.log" method="POST" type="request" pid="768,1,14" ScmType="GitHubAction" >
-  <step title="Cleanup Xml Logs" date="2025-05-24T21:36:54.426" /><!-- duration: 8ms -->
-</step><!-- duration: 27ms -->

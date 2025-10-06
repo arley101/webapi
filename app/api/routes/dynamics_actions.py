@@ -142,7 +142,7 @@ async def process_dynamic_action(
     # ✅ MEJORA: Solo autenticar con Azure si la acción lo requiere
     # Acciones de Google Ads, TikTok, Meta no necesitan Azure credentials
     azure_free_actions = [
-        "googleads_", "tiktok_", "meta_", "linkedin_", "twitter_",
+        "googleads_", "tiktok_", "meta_", "metaads_", "linkedin_", "twitter_",
         "list_all_actions", "ping", "echo"
     ]
     
@@ -229,7 +229,12 @@ async def process_dynamic_action(
     logger.info(f"{logging_prefix} Ejecutando función mapeada '{action_function.__name__}' del módulo '{action_function.__module__}'")
     
     try:
-        result = action_function(auth_http_client, params_req)
+        # ✅ SOPORTE PARA FUNCIONES ASYNC Y SYNC
+        import inspect
+        if inspect.iscoroutinefunction(action_function):
+            result = await action_function(auth_http_client, params_req)
+        else:
+            result = action_function(auth_http_client, params_req)
 
         if isinstance(result, bytes):
             logger.info(f"{logging_prefix} Acción devolvió datos binarios ({len(result)} bytes).")

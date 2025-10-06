@@ -349,6 +349,9 @@ GOOGLEADS_ACTIONS: Dict[str, Callable] = {
     "googleads_update_campaign_locations": googleads_actions.googleads_update_campaign_locations,
     "googleads_update_campaign_audiences": googleads_actions.googleads_update_campaign_audiences,
     "googleads_get_campaign_criteria": googleads_actions.googleads_get_campaign_criteria,
+    # ✨ FUNCIONES PARA ASSET GROUP SIGNALS (Audiencias en PMax)
+    "googleads_list_asset_groups": googleads_actions.googleads_list_asset_groups,
+    "googleads_update_asset_group_signals": googleads_actions.googleads_update_asset_group_signals,
 }
 
 # ============================================================================

@@ -97,3 +97,7 @@ Untitled*
 .env
 .env
 app/Credenciales Globales.md
+
+# Azure deployment cache
+deployments/
+LogFiles/

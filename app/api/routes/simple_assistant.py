@@ -6,6 +6,7 @@ Solo texto plano - Sin parámetros complicados - Sin errores de formato
 import logging
 import json
 import re
+import inspect  # Para detectar funciones async
 from typing import Dict, Any, Optional, List
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
@@ -311,9 +312,23 @@ async def simple_assistant(request: Request):
         # PASO 3: Ejecutar acción
         action_function = all_actions[action]
         
+        # Verificar si la acción necesita Azure o usa APIs externas
+        azure_free_actions = [
+            "googleads_", "tiktok_", "meta_", "metaads_", "linkedin_", 
+            "twitter_", "x_", "list_all_actions", "ping", "echo"
+        ]
+        
+        needs_azure = not any(action.startswith(prefix) for prefix in azure_free_actions)
+        
         try:
-            credential = DefaultAzureCredential()
-            auth_client = AuthenticatedHttpClient(credential=credential)
+            if needs_azure:
+                # Servicios Microsoft requieren Azure credentials
+                credential = DefaultAzureCredential()
+                auth_client = AuthenticatedHttpClient(credential=credential)
+            else:
+                # APIs externas (Meta, LinkedIn, TikTok, X) usan sus propios tokens desde .env
+                logger.info(f"🌐 Acción {action} usa API externa, bypass Azure")
+                auth_client = AuthenticatedHttpClient(credential=None)
         except Exception as auth_error:
             logger.error(f"Authentication error: {auth_error}")
             return JSONResponse(
@@ -327,7 +342,13 @@ async def simple_assistant(request: Request):
         # Ejecutar función
         try:
             logger.info(f"Simple Assistant: Executing {action} with params: {params}")
-            result = action_function(auth_client, params)
+            
+            # Detectar si la función es async y ejecutar apropiadamente
+            if inspect.iscoroutinefunction(action_function):
+                logger.info(f"🔄 Acción {action} es async, usando await")
+                result = await action_function(auth_client, params)
+            else:
+                result = action_function(auth_client, params)
             
             # PASO 4: Convertir respuesta técnica a texto claro
             human_response = format_response_for_human(result, action, mensaje)

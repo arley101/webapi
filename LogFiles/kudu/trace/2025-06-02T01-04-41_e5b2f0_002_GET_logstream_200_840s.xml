@@ -1,8 +1,0 @@
-<step title="Incoming Request" date="2025-06-02T01:04:41.860" instance="e5b2f0" url="/logstream" method="GET" type="request" pid="768,1,56" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="AZURECLI/2.73.0 (HOMEBREW)" Accept-Encoding="identity" Authorization="Bas..." x-ms-client-request-id="8ba4d292-3f4d-11f0-945f-02f1c3633e85" X-ARR-LOG-ID="8ba4d292-3f4d-11f0-945f-02f1c3633e85" CLIENT-IP="200.118.16.48:1135" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/logstream" X-Client-IP="200.118.16.48" X-Client-Port="1135" >
-  <step title="Cleanup Xml Logs" date="2025-06-02T01:04:41.862" >
-    <step title="Cleanup Infos" date="2025-06-02T01:04:41.871" totalFiles="237" totalCleanup="77" /><!-- duration: 2ms -->
-  </step><!-- duration: 13ms -->
-  <step title="LogStreamHandlerMiddleware.Invoke" date="2025-06-02T01:04:41.880" /><!-- duration: 38ms -->
-  <step title="Error occurred" date="2025-06-02T01:18:41.941" type="error" text="LogStreamManager: ProcessRequest end" /><!-- duration: 8ms -->
-  <step title="Outgoing response" date="2025-06-02T01:18:41.955" type="response" statusCode="200" statusText="OK" /><!-- duration: 2ms -->
-</step><!-- duration: 840099ms -->

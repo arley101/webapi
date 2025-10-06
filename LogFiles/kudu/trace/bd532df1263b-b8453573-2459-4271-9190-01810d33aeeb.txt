@@ -1,1 +1,0 @@
-2025-09-21T16:04:25  Startup Request, url: /api/settings/ScmType, method: GET, type: request, pid: 770,1,5, ScmType: ExternalGit, SCM_CLEAN_OUTPUTS: true, SCM_DO_BUILD_DURING_DEPLOYMENT: true

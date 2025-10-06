@@ -1,5 +1,0 @@
-<step title="Startup Request" date="2025-07-25T19:32:51.846" instance="0287b4" url="/elitedynamicsapi.git/info/refs?service=git-receive-pack" method="GET" type="request" pid="768,1,26" SCM_DO_BUILD_DURING_DEPLOYMENT="true" ScmType="None" >
-  <step title="Cleanup Xml Logs" date="2025-07-25T19:32:51.851" >
-    <step title="Cleanup Infos" date="2025-07-25T19:32:51.883" totalFiles="2535" totalCleanup="2375" /><!-- duration: 10ms -->
-  </step><!-- duration: 46ms -->
-</step><!-- duration: 51ms -->

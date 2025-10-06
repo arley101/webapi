@@ -1,5 +1,0 @@
-<step title="Startup Request" date="2025-07-23T20:25:07.166" instance="0287b4" url="/webssh/webssh2.css" method="GET" type="request" pid="768,1,14" ScmType="GitHubAction" SCM_DO_BUILD_DURING_DEPLOYMENT="true" >
-  <step title="Cleanup Xml Logs" date="2025-07-23T20:25:07.170" >
-    <step title="Cleanup Infos" date="2025-07-23T20:25:07.216" totalFiles="1968" totalCleanup="1808" /><!-- duration: 4ms -->
-  </step><!-- duration: 60ms -->
-</step><!-- duration: 67ms -->

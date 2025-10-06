@@ -1,8 +1,0 @@
-<step title="Incoming Request" date="2025-05-30T21:24:23.976" instance="e5b2f0" url="/api/deployments/latest" method="GET" type="request" pid="768,1,49" Accept="*/*" Host="elitedynamicsapi.scm.azurewebsites.net" User-Agent="AZURECLI/2.73.0 (HOMEBREW)" Accept-Encoding="gzip, deflate" Authorization="Bas..." x-ms-client-request-id="67bd68ce-3d9c-11f0-a816-02f1c3633e85" X-ARR-LOG-ID="67bd68ce-3d9c-11f0-a816-02f1c3633e85" CLIENT-IP="200.118.16.48:3580" X-SITE-DEPLOYMENT-ID="elitedynamicsapi" WAS-DEFAULT-HOSTNAME="elitedynamicsapi.scm.azurewebsites.net" X-Forwarded-Proto="https" X-AppService-Proto="https" X-Forwarded-TlsVersion="1.3" X-WAWS-Unencoded-URL="/api/deployments/latest" X-Client-IP="200.118.16.48" X-Client-Port="3580" >
-  <step title="DeploymentService.GetResult" date="2025-05-30T21:24:24.107" >
-    <step title="DeploymentService.GetLatestDeployment" date="2025-05-30T21:24:24.128" >
-      <step title="DeploymentManager.GetResults" date="2025-05-30T21:24:24.130" /><!-- duration: 413ms -->
-    </step><!-- duration: 418ms -->
-  </step><!-- duration: 442ms -->
-  <step title="Outgoing response" date="2025-05-30T21:24:24.572" type="response" statusCode="202" statusText="Accepted" /><!-- duration: 1ms -->
-</step><!-- duration: 598ms -->
