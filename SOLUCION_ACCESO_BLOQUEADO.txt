@@ -1,0 +1,166 @@
+╔════════════════════════════════════════════════════════════════╗
+║   🚨 PROBLEMA: "Acceso bloqueado" - Aplicación no verificada  ║
+╚════════════════════════════════════════════════════════════════╝
+
+📋 ERROR IDENTIFICADO:
+   "Acceso bloqueado: la solicitud de Dynamicselitepro no es válida"
+
+🔍 CAUSA RAÍZ:
+   Google Cloud Console está bloqueando tu aplicación porque:
+   1. La aplicación no está en modo "Producción"
+   2. O no está verificada por Google
+   3. O falta configurar los "Usuarios de prueba"
+
+═══════════════════════════════════════════════════════════════
+
+🔧 SOLUCIÓN PASO A PASO:
+
+1️⃣  IR A GOOGLE CLOUD CONSOLE:
+    https://console.cloud.google.com/
+
+2️⃣  SELECCIONAR TU PROYECTO:
+    - Busca "Dynamicselitepro" o el proyecto actual
+    - Si no existe, crea uno nuevo
+
+3️⃣  CONFIGURAR PANTALLA DE CONSENTIMIENTO OAUTH:
+    
+    Ve a: APIs y servicios > Pantalla de consentimiento de OAuth
+    
+    A. Si está en modo "Externo":
+       - Cambia a tipo "Interno" (si es posible)
+       - O agrega tu email como "Usuario de prueba"
+    
+    B. Configuración requerida:
+       ✅ Tipo de aplicación: Interno (recomendado)
+          O: Externo con usuarios de prueba
+       
+       ✅ Nombre de la aplicación: DynamicsElitePro
+       
+       ✅ Correo de asistencia: TU_EMAIL@gmail.com
+       
+       ✅ Alcances (Scopes):
+          - https://www.googleapis.com/auth/adwords
+       
+       ✅ Usuarios de prueba (si es Externo):
+          - Agregar tu email de Google Ads
+          - Agregar emails adicionales que necesiten acceso
+
+4️⃣  VERIFICAR CREDENCIALES OAUTH 2.0:
+    
+    Ve a: APIs y servicios > Credenciales
+    
+    A. Verificar que existe:
+       Client ID: 1048351991771-ttrnpm1hsk95sarvu9beuquko6vud4q8...
+    
+    B. Si NO existe, crear uno nuevo:
+       - Clic en "Crear credenciales"
+       - Seleccionar "ID de cliente de OAuth 2.0"
+       - Tipo de aplicación: "Aplicación de escritorio"
+       - Nombre: "Google Ads API Client"
+       - Guardar CLIENT_ID y CLIENT_SECRET
+
+5️⃣  ACTUALIZAR VARIABLES DE ENTORNO:
+    
+    Si creaste nuevas credenciales, actualiza tu .env:
+    
+    GOOGLE_ADS_CLIENT_ID=nuevo_client_id
+    GOOGLE_ADS_CLIENT_SECRET=nuevo_client_secret
+
+═══════════════════════════════════════════════════════════════
+
+🚀 MÉTODO ALTERNATIVO - USAR APLICACIÓN INTERNA:
+
+Si tienes acceso a Google Workspace (cuenta empresarial):
+
+1. Ve a Google Cloud Console
+2. Pantalla de consentimiento de OAuth
+3. Cambia a tipo "Interno"
+4. Guarda los cambios
+5. Intenta nuevamente generar el token
+
+═══════════════════════════════════════════════════════════════
+
+🎯 MÉTODO RÁPIDO - AGREGAR USUARIO DE PRUEBA:
+
+1. Google Cloud Console > APIs y servicios
+2. Pantalla de consentimiento de OAuth
+3. Sección "Usuarios de prueba"
+4. Clic en "AGREGAR USUARIOS"
+5. Ingresa tu email de Google (el que usas para Google Ads)
+6. Guardar
+
+Después de esto, vuelve a ejecutar:
+   python3 generar_token_automatico.py
+
+═══════════════════════════════════════════════════════════════
+
+📱 OPCIÓN MANUAL (SIN SCRIPT):
+
+Si prefieres hacerlo manualmente:
+
+1. Ve a esta URL en tu navegador (reemplaza CLIENT_ID):
+
+https://accounts.google.com/o/oauth2/auth?client_id=1048351991771-ttrnpm1hsk95sarvu9beuquko6vud4q8.apps.googleusercontent.com&redirect_uri=urn:ietf:wg:oauth:2.0:oob&scope=https://www.googleapis.com/auth/adwords&response_type=code&access_type=offline&prompt=consent
+
+2. Inicia sesión y autoriza (si agregaste tu email como usuario de prueba)
+
+3. Copia el CÓDIGO que aparece
+
+4. Ejecuta este comando (reemplaza CODIGO_AQUI):
+
+python3 << 'EOF'
+from google.oauth2.credentials import Credentials
+from google.auth.transport.requests import Request
+import requests
+
+CLIENT_ID = "1048351991771-ttrnpm1hsk95sarvu9beuquko6vud4q8.apps.googleusercontent.com"
+CLIENT_SECRET = "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"
+CODE = "CODIGO_AQUI"  # Pega aquí el código que copiaste
+
+# Intercambiar código por refresh token
+response = requests.post(
+    'https://oauth2.googleapis.com/token',
+    data={
+        'code': CODE,
+        'client_id': CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
+        'redirect_uri': 'urn:ietf:wg:oauth:2.0:oob',
+        'grant_type': 'authorization_code'
+    }
+)
+
+result = response.json()
+if 'refresh_token' in result:
+    print(f"\n✅ REFRESH TOKEN:\n{result['refresh_token']}\n")
+else:
+    print(f"\n❌ Error: {result}\n")
+EOF
+
+═══════════════════════════════════════════════════════════════
+
+⚠️  IMPORTANTE:
+
+Si tu cuenta NO es de Google Workspace:
+- Debes usar tipo "Externo"
+- Agregar usuarios de prueba es OBLIGATORIO
+- Máximo 100 usuarios de prueba mientras la app no esté verificada
+
+Si quieres verificar la app (proceso largo):
+- Google requiere revisión manual
+- Puede tomar semanas
+- Solo necesario si quieres >100 usuarios
+
+═══════════════════════════════════════════════════════════════
+
+🔗 ENLACES ÚTILES:
+
+Google Cloud Console:
+https://console.cloud.google.com/
+
+Pantalla de consentimiento OAuth:
+https://console.cloud.google.com/apis/credentials/consent
+
+Credenciales:
+https://console.cloud.google.com/apis/credentials
+
+═══════════════════════════════════════════════════════════════

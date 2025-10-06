@@ -345,6 +345,10 @@ GOOGLEADS_ACTIONS: Dict[str, Callable] = {
     "googleads_create_conversion_action": googleads_actions.googleads_create_conversion_action,
     "googleads_get_conversion_metrics": googleads_actions.googleads_get_conversion_metrics,
     "googleads_get_conversion_actions": googleads_actions.googleads_get_conversion_actions,
+    # ✨ NUEVAS FUNCIONES PARA PLAN DE RESCATE PMAX
+    "googleads_update_campaign_locations": googleads_actions.googleads_update_campaign_locations,
+    "googleads_update_campaign_audiences": googleads_actions.googleads_update_campaign_audiences,
+    "googleads_get_campaign_criteria": googleads_actions.googleads_get_campaign_criteria,
 }
 
 # ============================================================================
