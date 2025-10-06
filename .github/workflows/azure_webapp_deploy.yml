@@ -67,14 +67,6 @@ jobs:
           clean: true
           slot-name: production
 
-      - name: Deploy with Oryx/ZipDeploy
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
-          package: .
-          clean: true
-          slot-name: production
-
       # ======= POST-DEPLOY: ESPERAR Y VERIFICAR =======
       - name: Post-deploy health check
         run: |

@@ -10,44 +10,54 @@ from google.protobuf import json_format
 
 from app.core.config import settings
 
-# Logger del módulo y caché del cliente
+# Logger del módulo
 logger = logging.getLogger(__name__)
-_google_ads_client_instance: Optional[GoogleAdsClient] = None
 
-# ✅ IMPORTACIÓN DIRECTA DEL RESOLVER PARA EVITAR CIRCULARIDAD
-def get_google_ads_client() -> GoogleAdsClient:
-    """
-    Inicializa y devuelve el cliente de Google Ads de forma robusta.
-    CORRECCIÓN: Carga la configuración directamente desde el objeto settings,
-    eliminando la dependencia del auth_manager para mayor estabilidad.
-    """
-    global _google_ads_client_instance
-    if _google_ads_client_instance:
-        return _google_ads_client_instance
+# ✅ IMPORTAR EL NUEVO SISTEMA DE AUTENTICACIÓN AUTOMÁTICA
+try:
+    from app.services.auth.google_ads_auth import get_google_ads_client
+    logger.info("✅ Sistema de autenticación automática de Google Ads cargado")
+except ImportError as e:
+    logger.warning(f"⚠️  No se pudo cargar el sistema de autenticación automática: {e}")
+    logger.warning("⚠️  Usando método de autenticación legacy")
+    
+    # Fallback al método anterior si no existe el nuevo sistema
+    _google_ads_client_instance: Optional[GoogleAdsClient] = None
+    
+    def get_google_ads_client() -> GoogleAdsClient:
+        """
+        Método legacy de inicialización del cliente de Google Ads
+        DEPRECADO: Usar app.services.auth.google_ads_auth.get_google_ads_client()
+        """
+        global _google_ads_client_instance
+        if _google_ads_client_instance:
+            return _google_ads_client_instance
 
-    try:
-        # Configuración compatible con Google Ads Client (v20) usando load_from_dict
-        config_dict = {
-            "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
-            "login_customer_id": str(settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID else None,
-            "use_proto_plus": True,
-            "oauth2": {
+        try:
+            config_dict = {
+                "developer_token": settings.GOOGLE_ADS_DEVELOPER_TOKEN,
+                "login_customer_id": str(settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace("-", "") if settings.GOOGLE_ADS_LOGIN_CUSTOMER_ID else None,
+                "use_proto_plus": True,
                 "client_id": settings.GOOGLE_ADS_CLIENT_ID,
                 "client_secret": settings.GOOGLE_ADS_CLIENT_SECRET,
                 "refresh_token": settings.GOOGLE_ADS_REFRESH_TOKEN,
-            },
-        }
-        # Validación
-        oauth_ok = all(config_dict["oauth2"].get(k) for k in ("client_id", "client_secret", "refresh_token"))
-        if not (config_dict.get("developer_token") and oauth_ok):
-            raise ValueError("Faltan credenciales de Google Ads (developer_token / oauth2). Verifique variables de entorno GOOGLE_ADS_*.") 
+            }
+            
+            oauth_ok = all([
+                config_dict.get("client_id"),
+                config_dict.get("client_secret"),
+                config_dict.get("refresh_token")
+            ])
+            
+            if not (config_dict.get("developer_token") and oauth_ok):
+                raise ValueError("Faltan credenciales de Google Ads. Verifique variables de entorno GOOGLE_ADS_*.") 
 
-        logger.info("Inicializando Google Ads Client con configuración directa desde settings (load_from_dict).")
-        _google_ads_client_instance = GoogleAdsClient.load_from_dict(config_dict)
-        return _google_ads_client_instance
-    except Exception as e:
-        logger.error(f"Error crítico inicializando el cliente de Google Ads: {e}")
-        raise ValueError(f"La inicialización del cliente de Google Ads falló: {str(e)}")
+            logger.info("Inicializando Google Ads Client (método legacy)")
+            _google_ads_client_instance = GoogleAdsClient.load_from_dict(config_dict)
+            return _google_ads_client_instance
+        except Exception as e:
+            logger.error(f"Error crítico inicializando el cliente de Google Ads: {e}")
+            raise ValueError(f"La inicialización del cliente de Google Ads falló: {str(e)}")
 
 
 # Acceso seguro al resolver (no-op si no está disponible)
