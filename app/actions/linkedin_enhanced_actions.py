@@ -38,8 +38,17 @@ async def linkedin_post_update(client: AuthenticatedHttpClient, params: Dict[str
         
         # Configurar LinkedIn API
         import requests
+        from app.core.unified_oauth_manager import unified_oauth
         
-        access_token = os.getenv("LINKEDIN_ACCESS_TOKEN")
+        # ✅ Obtener token desde UnifiedOAuthManager (auto-refresh)
+        try:
+            access_token = await unified_oauth.get_access_token("linkedin")
+            logger.debug("✅ Token LinkedIn obtenido desde UnifiedOAuthManager")
+        except Exception as e:
+            # Fallback a token estático si UnifiedOAuthManager falla
+            logger.warning(f"⚠️ Fallback a token estático LinkedIn: {e}")
+            access_token = os.getenv("LINKEDIN_ACCESS_TOKEN")
+        
         if not access_token:
             return {
                 "status": "error",

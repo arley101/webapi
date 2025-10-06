@@ -33,7 +33,12 @@ async def lifespan(app: FastAPI):
     logger.info("Iniciando EliteDynamicsAPI v1.2...")
     logger.info(f"Nivel de Logging configurado: {settings.LOG_LEVEL.upper()}")
     logger.info(f"Entorno: {settings.ENVIRONMENT}")
+    
+    # 🔄 UnifiedOAuthManager se auto-inicia en primera llamada
+    logger.info("✅ UnifiedOAuthManager configurado - Auto-refresh activo al primer uso")
+    
     yield
+    
     # Shutdown
     logger.info("Apagando EliteDynamicsAPI...")
 

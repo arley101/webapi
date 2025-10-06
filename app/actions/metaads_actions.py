@@ -38,10 +38,36 @@ logger = logging.getLogger(__name__)
 
 # --- SDK INITIALIZATION AND HELPERS ---
 
+def _get_meta_access_token() -> str:
+    """
+    Obtiene token Meta con UnifiedOAuthManager (auto-refresh) o fallback a estático
+    """
+    from app.core.unified_oauth_manager import unified_oauth
+    import asyncio
+    
+    try:
+        # Intentar obtener token desde UnifiedOAuthManager
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # Si ya hay un loop, crear tarea
+            token = loop.run_until_complete(unified_oauth.get_access_token("meta"))
+        else:
+            # Si no hay loop, crear uno nuevo
+            token = asyncio.run(unified_oauth.get_access_token("meta"))
+        logger.debug("✅ Token Meta obtenido desde UnifiedOAuthManager")
+        return token
+    except Exception as e:
+        # Fallback a token estático
+        logger.warning(f"⚠️ Fallback a token estático Meta: {e}")
+        return settings.META_ADS.ACCESS_TOKEN
+
 def _get_meta_ads_api_client(params: Dict[str, Any]) -> FacebookAdsApi:
-    access_token = settings.META_ADS.ACCESS_TOKEN
+    """
+    Obtiene cliente Meta Ads API con token auto-refrescado
+    """
     app_id = settings.META_ADS.APP_ID
     app_secret = settings.META_ADS.APP_SECRET
+    access_token = _get_meta_access_token()
 
     if not all([app_id, app_secret, access_token]):
         raise ValueError("Credenciales de Meta Ads (APP_ID, APP_SECRET, ACCESS_TOKEN) deben estar configuradas.")
